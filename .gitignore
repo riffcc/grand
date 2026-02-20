@@ -1,0 +1,19 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Lean build artifacts
+lean/.lake/build/
+lean/lakefile.lake
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor
+.claude/
+*.swp
+.DS_Store
+/tmp/

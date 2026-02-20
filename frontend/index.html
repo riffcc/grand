@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GUTOE</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <style>body { background: #0a0a0f; }</style>
+</head>
+<body>
+    <div id="app">
+        <nav v-if="view !== 'home'" class="flex gap-2 p-3 bg-gray-900 border-b border-gray-800">
+            <button @click="view = 'home'" class="px-4 py-2 text-sm bg-gray-800 text-gray-400 rounded hover:text-white">← Home</button>
+            <button v-for="v in tabs" @click="view = v" :class="view === v ? 'bg-cyan-400 text-black' : 'bg-gray-800 text-cyan-400'" class="px-4 py-2 text-sm rounded border border-gray-700">{{ v }}</button>
+        </nav>
+
+        <!-- HOME -->
+        <div v-if="view === 'home'" class="p-8">
+            <h1 class="text-5xl text-cyan-400 mb-4">GUTOE</h1>
+            <p class="text-gray-500 mb-8">Quantum experiments from void.</p>
+            <div class="grid grid-cols-2 gap-4 max-w-xl">
+                <div v-for="desc, name in experiments" @click="view = name" class="bg-gray-900 border border-gray-800 p-4 rounded-lg cursor-pointer hover:border-cyan-400">
+                    <h3 class="text-cyan-400">{{ desc.title }}</h3>
+                    <p class="text-gray-500 text-sm">{{ desc.desc }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- DOUBLE SLIT -->
+        <div v-if="view === 'double-slit'" class="p-5">
+            <h2 class="text-2xl text-cyan-400 mb-2">Double Slit</h2>
+            <p class="text-gray-500 text-sm mb-4">Particles → two slits → interference pattern.</p>
+            <canvas id="ds-canvas" width="800" height="400" class="bg-black border border-gray-800 w-full max-w-3xl"></canvas>
+            <div class="mt-4 flex gap-3">
+                <button @click="ds.running = !ds.running" class="px-5 py-2 bg-cyan-400 text-black font-bold rounded">{{ ds.running ? '⏸' : '▶' }} Fire</button>
+                <button @click="dsClear()" class="px-5 py-2 bg-gray-800 text-cyan-400 border border-gray-700 rounded">Clear</button>
+            </div>
+            <p class="mt-2 text-gray-500 text-sm">Particles: {{ ds.count }}</p>
+        </div>
+
+        <!-- ENTANGLEMENT -->
+        <div v-if="view === 'entanglement'" class="p-5">
+            <h2 class="text-2xl text-cyan-400 mb-2">Entanglement</h2>
+            <p class="text-gray-500 text-sm mb-4">Correlated pairs - measure one, other matches.</p>
+            <canvas id="en-canvas" width="800" height="400" class="bg-black border border-gray-800 w-full max-w-3xl"></canvas>
+            <div class="mt-4 flex gap-3">
+                <button @click="enCreatePair()" class="px-5 py-2 bg-cyan-400 text-black font-bold rounded">Create Pair</button>
+                <button @click="enMeasure()" class="px-5 py-2 bg-gray-800 text-cyan-400 border border-gray-700 rounded">Measure</button>
+                <button @click="enClear()" class="px-5 py-2 bg-gray-800 text-cyan-400 border border-gray-700 rounded">Clear</button>
+            </div>
+            <p class="mt-2 text-gray-500 text-sm">Pairs: {{ en.pairs.length }}</p>
+        </div>
+
+        <!-- TUNNELING -->
+        <div v-if="view === 'tunneling'" class="p-5">
+            <h2 class="text-2xl text-cyan-400 mb-2">Tunneling</h2>
+            <p class="text-gray-500 text-sm mb-4">~30% tunnel through barrier.</p>
+            <canvas id="tu-canvas" width="800" height="300" class="bg-black border border-gray-800 w-full max-w-3xl"></canvas>
+            <div class="mt-4 flex gap-3">
+                <button @click="tuFire()" class="px-5 py-2 bg-cyan-400 text-black font-bold rounded">Fire</button>
+                <button @click="tuClear()" class="px-5 py-2 bg-gray-800 text-cyan-400 border border-gray-700 rounded">Clear</button>
+            </div>
+            <p class="mt-2 text-gray-500 text-sm">Fired: {{ tu.fired }} | Tunneled: {{ tu.tunneled }}</p>
+        </div>
+
+        <!-- LATTICE - Three.js -->
+        <div v-if="view === 'lattice'" class="p-5">
+            <h2 class="text-2xl text-cyan-400 mb-2">3D Lattice</h2>
+            <p class="text-gray-500 text-sm mb-4">Drag to rotate. Scroll to zoom.</p>
+            <div id="lat-container" class="bg-black border border-gray-800 w-full max-w-3xl" style="height: 400px;"></div>
+            <div class="mt-4 flex gap-3">
+                <button @click="latAddNode()" class="px-5 py-2 bg-cyan-400 text-black font-bold rounded">Add Node</button>
+                <button @click="latRandom()" class="px-5 py-2 bg-gray-800 text-cyan-400 border border-gray-700 rounded">Random</button>
+                <button @click="latClear()" class="px-5 py-2 bg-gray-800 text-cyan-400 border border-gray-700 rounded">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, reactive, onMounted, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const view = reactive('double-slit');
+                const tabs = ['double-slit', 'entanglement', 'tunneling', 'lattice'];
+                const experiments = {
+                    'double-slit': { title: 'Double Slit', desc: 'Wave interference' },
+                    'entanglement': { title: 'Entanglement', desc: 'Spooky action' },
+                    'tunneling': { title: 'Tunneling', desc: 'Through barriers' },
+                    'lattice': { title: '3D Lattice', desc: '21 neighbors' }
+                };
+
+                const ds = reactive({ running: false, count: 0, particles: [], pattern: new Array(100).fill(0) });
+                const en = reactive({ pairs: [] });
+                const tu = reactive({ fired: 0, tunneled: 0, particles: [] });
+                const lat = reactive({ scene: null, camera: null, renderer: null, nodes: [], lines: [] });
+
+                // Double Slit
+                function dsClear() { ds.particles = []; ds.pattern = new Array(100).fill(0); ds.count = 0; }
+
+                // Entanglement
+                function enCreatePair() {
+                    const c = document.getElementById('en-canvas');
+                    if (!c) return;
+                    en.pairs.push({
+                        a: {x: c.width/2, y: c.height/2, vx: -2, vy: -1},
+                        b: {x: c.width/2, y: c.height/2, vx: 2, vy: 1},
+                        measured: false, color: Math.random() > 0.5 ? '#0af' : '#f0a'
+                    });
+                }
+                function enMeasure() { en.pairs.forEach(p => { p.measured = true; p.resultA = Math.random()>0.5?'up':'down'; p.resultB = p.resultA==='up'?'down':'up'; }); }
+                function enClear() { en.pairs = []; }
+
+                // Tunneling
+                function tuFire() {
+                    const c = document.getElementById('tu-canvas');
+                    if (!c) return;
+                    tu.fired++;
+                    tu.particles.push({x: 30, y: c.height/2, vx: 5});
+                }
+                function tuClear() { tu.particles = []; tu.fired = 0; tu.tunneled = 0; }
+
+                // Lattice with Three.js
+                function initThree() {
+                    const container = document.getElementById('lat-container');
+                    if (!container || lat.scene) return;
+
+                    lat.scene = new THREE.Scene();
+                    lat.camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+                    lat.camera.position.z = 200;
+
+                    lat.renderer = new THREE.WebGLRenderer({ antialias: true });
+                    lat.renderer.setSize(container.clientWidth, container.clientHeight);
+                    container.appendChild(lat.renderer.domElement);
+
+                    // Orbit controls via mouse
+                    let isDragging = false, prevX = 0;
+                    lat.renderer.domElement.addEventListener('mousedown', e => { isDragging = true; prevX = e.clientX; });
+                    window.addEventListener('mouseup', () => isDragging = false);
+                    window.addEventListener('mousemove', e => {
+                        if (isDragging) {
+                            lat.scene.rotation.y += (e.clientX - prevX) * 0.01;
+                            prevX = e.clientX;
+                        }
+                    });
+                    lat.renderer.domElement.addEventListener('wheel', e => {
+                        lat.camera.position.z += e.deltaY * 0.1;
+                        e.preventDefault();
+                    });
+
+                    // Add some initial nodes
+                    for(let i=0; i<12; i++) latAddNode();
+
+                    function animate() {
+                        requestAnimationFrame(animate);
+                        lat.renderer.render(lat.scene, lat.camera);
+                    }
+                    animate();
+                }
+
+                function latAddNode() {
+                    if (!lat.scene) { initThree(); return; }
+                    const layer = Math.floor(Math.random() * 3) - 1;
+                    const angle = Math.random() * Math.PI * 2;
+                    const r = 40 + Math.random() * 60;
+                    const x = Math.cos(angle) * r;
+                    const y = layer * 40;
+                    const z = Math.sin(angle) * r;
+
+                    const geo = new THREE.SphereGeometry(5, 16, 16);
+                    const mat = new THREE.MeshBasicMaterial({ color: 0x00ffaa });
+                    const sphere = new THREE.Mesh(geo, mat);
+                    sphere.position.set(x, y, z);
+                    sphere.userData = { x, y, z };
+                    lat.scene.add(sphere);
+                    lat.nodes.push(sphere);
+                }
+
+                function latRandom() {
+                    latClear();
+                    for(let i=0; i<15; i++) latAddNode();
+                }
+
+                function latClear() {
+                    if (!lat.scene) return;
+                    lat.nodes.forEach(n => lat.scene.remove(n));
+                    lat.nodes = [];
+                }
+
+                onMounted(() => {
+                    // Double Slit
+                    const dsC = document.getElementById('ds-canvas');
+                    const dsCtx = dsC.getContext('2d');
+                    function drawDS() {
+                        const w = dsC.width, h = dsC.height;
+                        dsCtx.fillStyle = '#000'; dsCtx.fillRect(0,0,w,h);
+                        const bx = w*0.4;
+                        dsCtx.fillStyle = '#333'; dsCtx.fillRect(bx,0,4,h/2-34); dsCtx.fillRect(bx,h/2-30,4,60); dsCtx.fillRect(bx,h/2+34,4,h);
+                        dsCtx.fillStyle = '#0ff'; dsCtx.shadowColor='#0ff'; dsCtx.shadowBlur=10;
+                        dsCtx.fillRect(bx-2,h/2-38,4,8); dsCtx.fillRect(bx-2,h/2+30,4,8); dsCtx.shadowBlur=0;
+                        dsCtx.fillStyle='#f60'; dsCtx.beginPath(); dsCtx.arc(30,h/2,10,0,6.28); dsCtx.fill();
+
+                        ds.particles = ds.particles.filter(p => {
+                            p.x += p.vx; p.y += p.vy;
+                            if (Math.abs(p.x-bx)<5 && !p.t) {
+                                if (Math.abs(p.y-h/2+30)<10 || Math.abs(p.y-h/2-30)<10) { p.t=true; p.vy=(Math.random()-0.5)*3; }
+                            }
+                            if (p.x > w-30) { const py=Math.floor((p.y-h/2+200)/4); if(py>=0 && py<ds.pattern.length) ds.pattern[py]++; return false; }
+                            return p.x>0 && p.x<w && p.y>0 && p.y<h;
+                        });
+                        ds.particles.forEach(p => { dsCtx.fillStyle=p.t?'#0ff':'#f60'; dsCtx.beginPath(); dsCtx.arc(p.x,p.y,3,0,6.28); dsCtx.fill(); });
+                        ds.count = ds.particles.length;
+                        if (ds.running && Math.random()<0.15) { ds.particles.push({x:30,y:h/2,vx:4,vy:(Math.random()-0.5),t:false}); }
+                        requestAnimationFrame(drawDS);
+                    }
+                    drawDS();
+
+                    // Entanglement
+                    const enC = document.getElementById('en-canvas');
+                    const enCtx = enC.getContext('2d');
+                    function drawEN() {
+                        const w = enC.width, h = enC.height;
+                        enCtx.fillStyle='#000'; enCtx.fillRect(0,0,w,h);
+                        en.pairs = en.pairs.filter(p => {
+                            p.a.x+=p.a.vx; p.a.y+=p.a.vy; p.b.x+=p.b.vx; p.b.y+=p.b.vy;
+                            if (p.a.x<20||p.a.x>w-20) p.a.vx*=-1; if (p.a.y<20||p.a.y>h-20) p.a.vy*=-1;
+                            if (p.b.x<20||p.b.x>w-20) p.b.vx*=-1; if (p.b.y<20||p.b.y>h-20) p.b.vy*=-1;
+                            return true;
+                        });
+                        en.pairs.forEach(p => {
+                            if (p.entangled && !p.measured) { enCtx.strokeStyle=p.color+'44'; enCtx.setLineDash([5,5]); enCtx.beginPath(); enCtx.moveTo(p.a.x,p.a.y); enCtx.lineTo(p.b.x,p.b.y); enCtx.stroke(); enCtx.setLineDash([]); }
+                            const cA = p.measured ? (p.resultA==='up'?'#0ff':'#f0f') : p.color;
+                            const cB = p.measured ? (p.resultB==='up'?'#0ff':'#f0f') : p.color;
+                            enCtx.fillStyle=cA; enCtx.beginPath(); enCtx.arc(p.a.x,p.a.y,8,0,6.28); enCtx.fill();
+                            enCtx.fillStyle=cB; enCtx.beginPath(); enCtx.arc(p.b.x,p.b.y,8,0,6.28); enCtx.fill();
+                        });
+                        requestAnimationFrame(drawEN);
+                    }
+                    drawEN();
+
+                    // Tunneling
+                    const tuC = document.getElementById('tu-canvas');
+                    const tuCtx = tuC.getContext('2d');
+                    function drawTU() {
+                        const w = tuC.width, h = tuC.height;
+                        tuCtx.fillStyle='#000'; tuCtx.fillRect(0,0,w,h);
+                        const bx = w*0.4;
+                        tuCtx.fillStyle='#333'; tuCtx.fillRect(bx,h/2-40,20,80);
+                        tu.particles = tu.particles.filter(p => {
+                            if (!p.t && !p.p && p.x+5>bx && p.x-5<bx+20 && p.y>h/2-40 && p.y<h/2+40) {
+                                if (Math.random()<0.3) { p.t=true; tu.tunneled++; }
+                                else { p.vx=-3; }
+                            }
+                            if (!p.p && p.x>bx+20) { p.p=true; p.vx=5; }
+                            p.x += p.vx;
+                            return p.x>0 && p.x<w;
+                        });
+                        tu.particles.forEach(p => { tuCtx.fillStyle=p.t?'#f0f':'#0f0'; tuCtx.beginPath(); tuCtx.arc(p.x,p.y,5,0,6.28); tuCtx.fill(); });
+                        requestAnimationFrame(drawTU);
+                    }
+                    drawTU();
+                });
+
+                return { view, tabs, experiments, ds, en, tu, lat, dsClear, enCreatePair, enMeasure, enClear, tuFire, tuClear, latAddNode, latRandom, latClear };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+[workspace]
+members = [
+    "crates/gutoe-core",
+    "crates/gutoe-lattice",
+    "crates/gutoe-physics",
+    "crates/gutoe-viz",
+    "crates/gutoe-analog-gravity",
+    "server",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Wings"]
+license = "MIT"
+
+[workspace.dependencies]
+rust_decimal = "1.37"
+num-complex = "0.4"
+num-bigint = "0.4"
+num-traits = "0.2"
+rand = "0.8"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
