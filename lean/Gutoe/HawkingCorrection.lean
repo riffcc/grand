@@ -148,7 +148,7 @@ theorem correction_negative (c a ω : ℝ) (hc : c > 0) (ha : a > 0)
 -- ── Spectral cutoff ───────────────────────────────────────────────────────────
 
 /-- At k = π/a (Nyquist), group velocity is ZERO: Planck-scale modes don't propagate. — REAL -/
-theorem group_velocity_zero_at_boundary (c a : ℝ) (hc : c > 0) (ha : a > 0) :
+theorem group_velocity_zero_at_boundary (c a : ℝ) (_hc : c > 0) (ha : a > 0) :
     groupVelocity c a (π / a) = 0 := by
   unfold groupVelocity
   have h : π / a * a / 2 = π / 2 := by field_simp

@@ -35,6 +35,7 @@ The 12 states form two hexagonal faces:
 inductive HexState
 | A0 | A60 | A120 | A180 | A240 | A300  -- Positive face
 | B0 | B60 | B120 | B180 | B240 | B300  -- Negative/dual face
+  deriving DecidableEq, Repr
 
 namespace HexState
 
@@ -154,17 +155,19 @@ theorem complement_self_inverse (s : HexState) : complement (complement s) = s :
   cases s <;> rfl
 
 /-- Orthogonal states are 180° apart -/
-theorem orthogonal_is_180 (a b : HexState) (h : orthogonal a b) : distance a b = 3 := h
+theorem orthogonal_is_180 (a b : HexState) (h : orthogonal a b) : distance a b = 3 := by
+  exact of_decide_eq_true h
 
 /-- Adjacent states are 60° apart -/
-theorem adjacent_is_60 (a b : HexState) (h : adjacent a b) : distance a b = 1 := h
+theorem adjacent_is_60 (a b : HexState) (h : adjacent a b) : distance a b = 1 := by
+  exact of_decide_eq_true h
 
 /-- Positive and negative faces are disjoint -/
 theorem pos_neg_disjoint (s : HexState) : s.isPos → s.isNeg = false := by
   cases s <;> decide
 
 /-- All 12 states in an explicit enumeration -/
-def HexState.all : List HexState :=
+def all : List HexState :=
   [A0, A60, A120, A180, A240, A300, B0, B60, B120, B180, B240, B300]
 
 /-- All 12 states accounted for — REAL -/
@@ -211,7 +214,7 @@ beyond purely binary configurations"
 -/
 
 /-- Hexagonal Hadamard - superposition between faces -/
-def hexHadamard (s : HexState) : List (HexState × Float) :=
+noncomputable def hexHadamard (s : HexState) : List (HexState × ℝ) :=
   [(s, 1 / Real.sqrt 2), (s.negate, 1 / Real.sqrt 2)]
 
 /-- Phase rotation -/
@@ -231,20 +234,18 @@ def hexPhase (s : HexState) (θ : Nat) : HexState :=
 /-! ## Complex Representation -/
 
 /-- Degrees to radians -/
-def degToRad (d : ℝ) : ℝ := d * Real.pi / 180
+noncomputable def degToRad (d : ℝ) : ℝ := d * Real.pi / 180
 
 /-- Convert state to complex number on unit circle (e^{iθ} where θ = angle in radians) -/
-def toComplex (s : HexState) : ℂ :=
+noncomputable def toComplex (s : HexState) : ℂ :=
   let θ : ℝ := degToRad (s.angle : ℝ)
   ⟨Real.cos θ, Real.sin θ⟩
 
 /-- All HexState complex representations lie on the unit circle — REAL
-    The original proof was broken (θ was unbound). Correct proof uses sin²+cos²=1. -/
-theorem complex_magnitude_one (s : HexState) : Complex.abs (toComplex s) = 1 := by
-  simp [toComplex, Complex.abs_apply, Complex.normSq_mk]
-  rw [Real.sqrt_eq_one']
-  constructor
-  · positivity
-  · nlinarith [Real.sin_sq_add_cos_sq (degToRad (s.angle : ℝ))]
-
-end Gutoe
+    normSq z = re² + im² = cos²θ + sin²θ = 1 by the Pythagorean identity. -/
+theorem complex_magnitude_one (s : HexState) : Complex.normSq (toComplex s) = 1 := by
+  unfold toComplex degToRad
+  simp only [Complex.normSq_mk]
+  nlinarith [Real.cos_sq_add_sin_sq (↑s.angle * Real.pi / 180),
+             sq_nonneg (Real.cos (↑s.angle * Real.pi / 180)),
+             sq_nonneg (Real.sin (↑s.angle * Real.pi / 180))]

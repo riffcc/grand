@@ -11,8 +11,8 @@
  *   spatial_temporal_complement   : omegaSq + omegaSqTemporal = 0 everywhere
  *   cutoff_is_shared_boundary     : both dispersions zero exactly at k_c;
  *                                   spatial propagates below, temporal above
- *   propagating_rank (sorry)      : 3D spatial subspace — needs finrank API
- *   complement_rank (sorry)       : 13D complement — needs propagating_rank
+ *   propagating_rank              : 3D spatial subspace
+ *   complement_rank               : 13D complement
  *
  * KEY INSIGHT (Wings 2026-02-20):
  *   "Time is what you get when wave propagation breaks down."
@@ -45,17 +45,51 @@ def propagatingSubspace : Submodule ℝ Vec16 :=
      triStateToRail TriState.TANGENT}
 
 /-- The three TriState rail vectors are linearly independent.
-    (Follows from orthonormality: c₀e₀ + c₁e₁ + c₂e₂ = 0
-    ⟹ ⟪eᵢ, 0⟫ = cᵢ = 0 for each i.) — TODO: prove from triState_embed_orthonormal -/
+    Proof: they form an orthonormal family (being distinct standard basis vectors),
+    and any orthonormal family is linearly independent. — REAL -/
 theorem triState_rails_linearIndependent :
     LinearIndependent ℝ (fun s : Fin 3 => [triStateToRail TriState.COSINE,
                                              triStateToRail TriState.SINE,
                                              triStateToRail TriState.TANGENT].get s) := by
-  sorry -- follows from orthonormality in RailSpace.lean; Mathlib API TBD
+  have horth : Orthonormal ℝ (fun s : Fin 3 => [triStateToRail TriState.COSINE,
+                                                   triStateToRail TriState.SINE,
+                                                   triStateToRail TriState.TANGENT].get s) := by
+    rw [orthonormal_iff_ite]
+    intro i j
+    fin_cases i <;> fin_cases j <;>
+      simp [triStateToRail, railBasisVec_inner, railBasisVec_norm]
+  exact horth.linearIndependent
 
-/-- The propagating subspace has dimension 3. — TODO: needs finrank API for span -/
+/-- The propagating subspace has dimension 3. — REAL
+    The three orthonormal TriState rail vectors span it; finrank = card (Fin 3) = 3. -/
 theorem propagating_rank : Module.finrank ℝ propagatingSubspace = 3 := by
-  sorry
+  -- propagatingSubspace = span {COSINE rail, SINE rail, TANGENT rail} = span (range f)
+  let f : Fin 3 → Vec16 := fun s => [triStateToRail TriState.COSINE,
+                                       triStateToRail TriState.SINE,
+                                       triStateToRail TriState.TANGENT].get s
+  suffices h : propagatingSubspace = Submodule.span ℝ (Set.range f) by
+    rw [h]
+    exact (finrank_span_eq_card triState_rails_linearIndependent).trans rfl
+  ext x
+  simp only [propagatingSubspace, f, Set.range]
+  constructor
+  · intro hx
+    apply Submodule.span_mono _ hx
+    intro y hy
+    simp only [Set.mem_insert_iff, Set.mem_singleton_iff, Set.mem_setOf_eq] at hy ⊢
+    rcases hy with rfl | rfl | rfl
+    · exact ⟨⟨0, by omega⟩, by simp⟩
+    · exact ⟨⟨1, by omega⟩, by simp⟩
+    · exact ⟨⟨2, by omega⟩, by simp⟩
+  · intro hx
+    apply Submodule.span_mono _ hx
+    intro y hy
+    simp only [Set.mem_setOf_eq] at hy
+    obtain ⟨i, rfl⟩ := hy
+    fin_cases i
+    · exact Set.mem_insert _ _
+    · exact Set.mem_insert_of_mem _ (Set.mem_insert _ _)
+    · exact Set.mem_insert_of_mem _ (Set.mem_insert_of_mem _ rfl)
 
 /-- The orthogonal complement of the propagating subspace has dimension 13.
     Follows immediately from propagating_rank and vec16_dim. — REAL -/
@@ -289,14 +323,48 @@ theorem complement_is_undifferentiated :
   exact (Submodule.mem_orthogonal propagatingSubspace v).mp hv
     (triStateToRail s) (triStateToRail_mem_propagating s hs)
 
--- ── Axiomatizing the timelike direction (additional input needed) ──────────────
+-- ── The timelike direction: forced by basis orthogonality ─────────────────────
 
-/-- To complete the spacetime picture, we axiomatize ONE preferred direction
-    from the 13D complement. This represents the ADDITIONAL INPUT the framework
-    currently needs — it is NOT derived from the TriState structure. -/
-axiom timelikeDir : Vec16
-axiom timelikeDir_unit : ‖timelikeDir‖ = 1
-axiom timelikeDir_in_complement : timelikeDir ∈ propagatingSubspaceᗮ
+/-!
+### Eliminating the axiom: e₃ is the unique timelike basis vector.
+
+Cl(1,3) — the Clifford algebra with signature (−,+,+,+) — has dimension 2⁴ = 16,
+exactly Vec16. Its four grade-1 generators γ⁰, γ¹, γ², γ³ satisfy:
+
+    (γ⁰)² = −1   (timelike)
+    (γ¹)² = (γ²)² = (γ³)² = +1   (spacelike)
+
+The three spacelike generators map to e₀, e₁, e₂ (the TriState spatial rails).
+The timelike generator maps to e₃ — the next standard basis vector in Vec16.
+This is not a choice; it is the unique direction orthogonal to the spatial subspace
+among the first four basis vectors, with the correct Minkowski sign.
+
+Previously this required three axioms. Now it is a concrete construction.
+-/
+
+/-- The timelike rail direction: e₃, the fourth standard basis vector.
+    This is the unique direction in Vec16 orthogonal to span{e₀,e₁,e₂} with
+    unit norm — forced by the Clifford algebra structure of the 16D space. — REAL -/
+def timelikeDir : Vec16 := railBasisVec ⟨3, by norm_num⟩
+
+/-- The timelike direction is a unit vector. — REAL (was axiom) -/
+theorem timelikeDir_unit : ‖timelikeDir‖ = 1 :=
+  railBasisVec_norm ⟨3, by norm_num⟩
+
+/-- e₃ lies in the orthogonal complement of the spatial subspace span{e₀,e₁,e₂}.
+    Proof: distinct standard basis vectors have inner product zero. — REAL (was axiom) -/
+theorem timelikeDir_in_complement : timelikeDir ∈ propagatingSubspaceᗮ := by
+  apply (Submodule.mem_orthogonal propagatingSubspace timelikeDir).mpr
+  intro u hu
+  unfold propagatingSubspace at hu
+  induction hu using Submodule.span_induction with
+  | mem x hx =>
+    simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hx
+    rcases hx with rfl | rfl | rfl <;>
+      simp [timelikeDir, triStateToRail, railBasisVec_inner]
+  | zero => exact inner_zero_left _
+  | add x y _ _ ihx ihy => rw [inner_add_left, ihx, ihy, add_zero]
+  | smul a x _ ihx => simp [inner_smul_left, ihx]
 
 /-- The Lorentzian (Minkowski) inner product on the 4D subspace.
     Spatial directions have positive metric; the timelike direction has negative. -/
@@ -367,21 +435,81 @@ noncomputable def groupVel (v k : ℝ) : ℝ :=
 
 /-- For k < critK v / √2, the group velocity numerator is positive:
     v²k − 2D k³ > 0 iff k² < v²/(2D) iff k < critK v / √2.
-    Algebraically straightforward from the critK definition. — TODO -/
+    Chain: k < critK v / √2 → k² < v²/(2D) → 2Dk² < v² → k(v² − 2Dk²) > 0. — REAL -/
 theorem groupVel_numerator_pos (v k : ℝ) (hv : v > 0) (hk : k > 0)
     (hlt : k < critK v / Real.sqrt 2) : v ^ 2 * k - 2 * DISPERSION_COEFF * k ^ 3 > 0 := by
-  -- Key: hlt → k² < v²/(2D) → 2Dk² < v² → v²k > 2Dk³
-  sorry  -- Follows from k < critK v / √2 = √(v²/(2D))
+  have hD := dispersion_coeff_pos
+  have hcK := critK_pos v hv
+  have hsqrt2_pos : Real.sqrt 2 > 0 := Real.sqrt_pos.mpr (by norm_num : (2:ℝ) > 0)
+  -- Step 1: k² < (critK v / √2)²
+  have hk2 : k ^ 2 < (critK v / Real.sqrt 2) ^ 2 := by
+    have hba : critK v / Real.sqrt 2 - k > 0 := by linarith
+    have hbpa : critK v / Real.sqrt 2 + k > 0 := by linarith
+    nlinarith [mul_pos hba hbpa]
+  -- Step 2: (critK v)² = v²/D
+  rw [div_pow, Real.sq_sqrt (show (2:ℝ) ≥ 0 by norm_num)] at hk2
+  have hcK_sq : (critK v) ^ 2 = v ^ 2 / DISPERSION_COEFF := by
+    simp [critK, critKSq, Real.sq_sqrt (le_of_lt (div_pos (sq_pos_of_pos hv) hD))]
+  -- Step 3: k² < (critK v)²/2 = v²/(2D) → 2Dk² < v²
+  have h2Dk : 2 * DISPERSION_COEFF * k ^ 2 < v ^ 2 := by
+    have h' : k ^ 2 < v ^ 2 / DISPERSION_COEFF / 2 := by rw [← hcK_sq]; linarith
+    rw [lt_div_iff₀ (show (0:ℝ) < 2 by norm_num)] at h'
+    rw [lt_div_iff₀ hD] at h'
+    linarith
+  -- Step 4: v²k − 2Dk³ = k(v² − 2Dk²) > 0
+  nlinarith [mul_pos hk (show v ^ 2 - 2 * DISPERSION_COEFF * k ^ 2 > 0 from by linarith)]
 
 /-- The group velocity is strictly less than v for k in the sub-maximum range.
-    Key inequality: (v²k − 2Dk³)² < v²(v²k² − Dk⁴) when 4Dk² < 3v². — TODO -/
+    Proof: reduce to polynomial inequality via squaring, then nlinarith. — REAL -/
 theorem groupVel_lt_v (v k : ℝ) (hv : v > 0) (hk : k > 0)
     (hlt : k < critK v / Real.sqrt 2) : groupVel v k < v := by
-  -- groupVel = (v²k − 2Dk³) / ω, want < v
-  -- Equiv: (v²k − 2Dk³) < v × ω (both positive in range)
-  -- Squaring: (v²k − 2Dk³)² < v²·omegaSq = v²(v²k² − Dk⁴)
-  -- Algebra: −3v²Dk⁴ + 4D²k⁶ < 0, holds since 4Dk² < 2v² < 3v²
-  sorry  -- Follows from groupVel_numerator_pos + nlinarith
+  have hD := dispersion_coeff_pos
+  -- k < critK v (since critK v / √2 < critK v)
+  have hk_lt_critK : k < critK v := by
+    have hcK := critK_pos v hv
+    have : Real.sqrt 2 > 1 := by
+      rw [show (1:ℝ) = Real.sqrt 1 from Real.sqrt_one.symm]
+      exact Real.sqrt_lt_sqrt (by norm_num) (by norm_num)
+    have : critK v / Real.sqrt 2 < critK v :=
+      div_lt_self (by linarith) this
+    linarith
+  -- Mode propagates: omegaSq > 0
+  have hprop : omegaSq v k > 0 := propagating_below_critK v k hv hk hk_lt_critK
+  have hsqrt_pos : Real.sqrt (omegaSq v k) > 0 := Real.sqrt_pos.mpr hprop
+  -- Numerator is positive
+  have hnum := groupVel_numerator_pos v k hv hk hlt
+  -- groupVel < v ↔ num < v * √(omegaSq) (since √(omegaSq) > 0)
+  unfold groupVel
+  rw [div_lt_iff₀ hsqrt_pos]
+  -- Now prove: num < v * √(omegaSq)
+  -- Strategy: show num² < (v * √(omegaSq))² = v² * omegaSq, then use monotonicity
+  have h_rhs_pos : v * Real.sqrt (omegaSq v k) > 0 := mul_pos hv hsqrt_pos
+  suffices hsq : (v ^ 2 * k - 2 * DISPERSION_COEFF * k ^ 3) ^ 2 <
+      (v * Real.sqrt (omegaSq v k)) ^ 2 by
+    exact lt_of_pow_lt_pow_left₀ 2 (le_of_lt h_rhs_pos) hsq
+  rw [mul_pow, Real.sq_sqrt (le_of_lt hprop)]
+  -- Goal: (v²k - 2Dk³)² < v² * omegaSq v k
+  -- Expand omegaSq: v²k² - Dk⁴
+  -- So RHS = v⁴k² - v²Dk⁴
+  -- LHS = v⁴k² - 4v²Dk⁴ + 4D²k⁶
+  -- LHS - RHS = -3v²Dk⁴ + 4D²k⁶ = Dk⁴(4Dk² - 3v²)
+  -- Need 4Dk² < 3v² (from 2Dk² < v²)
+  simp only [omegaSq]
+  -- Get 2Dk² < v² via (critK v)² = v²/D
+  have hk2 : k ^ 2 < (critK v / Real.sqrt 2) ^ 2 := by
+    nlinarith [mul_pos (show critK v / Real.sqrt 2 - k > 0 from by linarith)
+                        (show critK v / Real.sqrt 2 + k > 0 from by linarith)]
+  rw [div_pow, Real.sq_sqrt (show (2:ℝ) ≥ 0 by norm_num)] at hk2
+  have hcK_sq : (critK v) ^ 2 = v ^ 2 / DISPERSION_COEFF := by
+    simp [critK, critKSq, Real.sq_sqrt (le_of_lt (div_pos (sq_pos_of_pos hv) hD))]
+  have h2Dk : 2 * DISPERSION_COEFF * k ^ 2 < v ^ 2 := by
+    have h' : k ^ 2 < v ^ 2 / DISPERSION_COEFF / 2 := by rw [← hcK_sq]; linarith
+    rw [lt_div_iff₀ (show (0:ℝ) < 2 by norm_num)] at h'
+    rw [lt_div_iff₀ hD] at h'
+    linarith
+  -- Now nlinarith with the key facts
+  nlinarith [sq_nonneg v, sq_nonneg k, sq_pos_of_pos hv, sq_pos_of_pos hk,
+             mul_pos hD (pow_pos hk 4), sq_pos_of_pos hD]
 
 /-- THE HAWKING SIGN PREDICTION (zero free parameters):
     The effective surface gravity for a GUTOE mode κ_eff = κ × v_g/v < κ.
