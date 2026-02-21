@@ -21,7 +21,7 @@ use num_complex::Complex64;
 
 use crate::config::LatticeConfig;
 use crate::gauge::jacobi_poisson;
-use crate::geometry::{mesh_neighbours, site_coords};
+use crate::geometry::{mesh_neighbours, mesh_neighbours_3d, site_coords};
 
 /// Quantum lepton wave function: complex amplitude at each lattice site.
 /// Σ_i |psi[i]|² = 1 after normalization.
@@ -229,6 +229,98 @@ pub fn quantum_shell_enrichment(
     if rb > 1e-30 { (rs / rb).min(20.0) } else { 20.0 }
 }
 
+// ── 3D Jacobi-Poisson and 3D Schrödinger Hamiltonian ─────────────────────────
+
+/// Jacobi-Poisson using 3D neighbors (6 hex intra + 2 inter-layer).
+/// Solves ∇²_3D φ = −ρ → G(r) ~ 1/(4πr) at large r → 3D Coulomb potential.
+pub fn jacobi_poisson_3d(rho: &[f64], cfg: &LatticeConfig, n_iter: usize) -> Vec<f64> {
+    let n = cfg.n_sites();
+    // Pre-build 3D neighbour cache
+    let nbr_cache: Vec<Vec<usize>> = (0..n)
+        .map(|site| {
+            let (r, c, z) = site_coords(site, cfg);
+            mesh_neighbours_3d(r, c, z, cfg)
+        })
+        .collect();
+
+    let mut phi = vec![0.0f64; n];
+    let mut phi_new = vec![0.0f64; n];
+    for _ in 0..n_iter {
+        for site in 0..n {
+            let nbrs = &nbr_cache[site];
+            let k = nbrs.len() as f64;
+            let sum: f64 = nbrs.iter().map(|&j| phi[j]).sum();
+            phi_new[site] = (sum + k * rho[site]) / k;
+        }
+        std::mem::swap(&mut phi, &mut phi_new);
+    }
+    phi
+}
+
+/// Schrödinger Hamiltonian using the 3D discrete Laplacian.
+/// H = −∇²_3D + α_EM × q × φ_3D
+/// With φ_3D from jacobi_poisson_3d: φ ~ 1/r → 3D Coulomb → Bohr formula.
+pub fn apply_hamiltonian_3d(
+    psi: &LeptonPsi,
+    phi: &[f64],
+    cfg: &LatticeConfig,
+    charge: f64,
+    alpha_em: f64,
+) -> LeptonPsi {
+    let n = psi.len();
+    let mut h_psi = vec![Complex64::new(0.0, 0.0); n];
+    for site in 0..n {
+        let (r, c, z) = site_coords(site, cfg);
+        let nbrs = mesh_neighbours_3d(r, c, z, cfg);
+        let k = nbrs.len() as f64;
+        let nbr_sum: Complex64 = nbrs.iter().map(|&j| psi[j]).sum();
+        let kinetic = psi[site] - nbr_sum / k;
+        let potential = psi[site] * Complex64::new(alpha_em * charge * phi[site], 0.0);
+        h_psi[site] = kinetic + potential;
+    }
+    h_psi
+}
+
+/// Imaginary time step with the 3D Hamiltonian.
+pub fn imaginary_time_step_3d(
+    psi: &mut LeptonPsi,
+    phi: &[f64],
+    cfg: &LatticeConfig,
+    charge: f64,
+    alpha_em: f64,
+    dtau: f64,
+) {
+    let h_psi = apply_hamiltonian_3d(psi, phi, cfg, charge, alpha_em);
+    for (i, h_i) in h_psi.iter().enumerate() {
+        psi[i] -= *h_i * dtau;
+    }
+    normalise(psi);
+}
+
+/// Expected energy with the 3D Hamiltonian.
+pub fn expected_energy_3d(
+    psi: &LeptonPsi,
+    phi: &[f64],
+    cfg: &LatticeConfig,
+    charge: f64,
+    alpha_em: f64,
+) -> (f64, f64, f64) {
+    let n = psi.len();
+    let mut kinetic = 0.0;
+    let mut potential = 0.0;
+    for site in 0..n {
+        let (r, c, z) = site_coords(site, cfg);
+        let nbrs = mesh_neighbours_3d(r, c, z, cfg);
+        let k = nbrs.len() as f64;
+        let nbr_sum: Complex64 = nbrs.iter().map(|&j| psi[j]).sum();
+        let kin_term = psi[site] - nbr_sum / k;
+        let pot_term = (alpha_em * charge * phi[site]) * psi[site];
+        kinetic   += (psi[site].conj() * kin_term).re;
+        potential += (psi[site].conj() * pot_term).re;
+    }
+    (kinetic + potential, kinetic, potential)
+}
+
 // ── Bohr formula test on the hex lattice ──────────────────────────────────────
 
 /// Cartesian coordinates for a hex site (odd rows shifted left by 0.5).
@@ -306,6 +398,64 @@ pub fn bohr_test(alpha: f64, l: usize, n_jacobi: usize, n_iter: usize, dtau: f64
     }
 
     let (e_total, e_kin, e_pot) = expected_energy(&psi, &phi, &cfg, charge, alpha);
+    let bohr_3d = -alpha * alpha / 2.0;
+    let ratio = if bohr_3d.abs() > 1e-30 { e_total / bohr_3d } else { f64::NAN };
+
+    BohrResult { alpha, l, e_total, e_kin, e_pot, bohr_3d, ratio }
+}
+
+/// Hydrogen atom on the L×L×N_layers hex lattice using 3D Coulomb.
+///
+/// Same as bohr_test but uses 3D Poisson (mesh_neighbours_3d) and 3D Schrödinger.
+/// The 3D Coulomb potential V ~ 1/r should give E₀ ∝ α² (Bohr formula).
+pub fn bohr_test_3d(
+    alpha: f64,
+    l: usize,
+    n_layers: usize,
+    n_jacobi: usize,
+    n_iter: usize,
+    dtau: f64,
+) -> BohrResult {
+    let cfg = LatticeConfig {
+        hex_rows: l,
+        hex_cols: l,
+        layers: n_layers,
+        ..Default::default()
+    };
+    let n = cfg.n_sites();
+    let layer_sz = l * l;
+    let cr = l / 2;
+    let cc = l / 2;
+    let center_layer = n_layers / 2;
+    let center = center_layer * layer_sz + cr * l + cc;
+
+    // 3D Coulomb field
+    let mut rho = vec![-1.0 / n as f64; n];
+    rho[center] += 1.0;
+    let phi = jacobi_poisson_3d(&rho, &cfg, n_jacobi);
+
+    let (cx, cy) = hex_cartesian(cr, cc);
+    let cz = center_layer as f64; // layer index as z-coordinate
+
+    // 3D Gaussian: σ = 1/α in all three dimensions
+    let bohr_r = (1.0 / alpha).max(1.0);
+    let mut psi: LeptonPsi = (0..n)
+        .map(|i| {
+            let (r, c, z) = site_coords(i, &cfg);
+            let (x, y) = hex_cartesian(r, c);
+            let dz = z as f64 - cz;
+            let dist_sq = (x - cx).powi(2) + (y - cy).powi(2) + dz * dz;
+            Complex64::new((-dist_sq / (2.0 * bohr_r * bohr_r)).exp(), 0.0)
+        })
+        .collect();
+    normalise(&mut psi);
+
+    let charge = -1.0_f64;
+    for _ in 0..n_iter {
+        imaginary_time_step_3d(&mut psi, &phi, &cfg, charge, alpha, dtau);
+    }
+
+    let (e_total, e_kin, e_pot) = expected_energy_3d(&psi, &phi, &cfg, charge, alpha);
     let bohr_3d = -alpha * alpha / 2.0;
     let ratio = if bohr_3d.abs() > 1e-30 { e_total / bohr_3d } else { f64::NAN };
 
