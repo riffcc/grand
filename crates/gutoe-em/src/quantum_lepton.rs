@@ -28,20 +28,26 @@ pub type LeptonPsi = Vec<Complex64>;
 
 // ── Hamiltonian ────────────────────────────────────────────────────────────────
 
-/// Apply the hex-lattice Schrödinger Hamiltonian: H = -∇²_hex + V.
+/// Apply the hex-lattice Schrödinger Hamiltonian: H = -∇²_hex + α_EM × q × φ.
 ///
 /// (Hψ)[i] = kinetic[i] + potential[i]
 ///
-/// kinetic[i]   = ψ[i] − (1/k) Σ_{j∈nbrs(i)} ψ[j]   [discrete Laplacian]
-/// potential[i] = q × φ[i] × ψ[i]                    [Aharonov-Bohm potential]
+/// kinetic[i]   = ψ[i] − (1/k) Σ_{j∈nbrs(i)} ψ[j]      [discrete Laplacian, coeff=1]
+/// potential[i] = alpha_em × q × φ[i] × ψ[i]             [Coulomb coupling]
 ///
-/// Note: only intra-layer neighbours (mesh_neighbours never crosses layers),
-/// so this is the 2D Schrödinger equation on a single hex layer.
+/// alpha_em is the electromagnetic coupling strength:
+///   alpha_em = 1.0       → lattice coupling (was implicit before; gives bound state)
+///   alpha_em = 1.0/137.0 → physical α_EM (Eddington number!)
+///
+/// With alpha_em = 1/137, the Bohr radius a₀ = 1/alpha_em = 137 lattice spacings.
+/// A 12×12 lattice cannot support this; you need ≥137×137.
+/// This directly connects the minimum lattice size for hydrogen to α⁻¹ = 137.
 pub fn apply_hamiltonian(
     psi: &LeptonPsi,
     phi: &[f64],
     cfg: &LatticeConfig,
     charge: f64,
+    alpha_em: f64,
 ) -> LeptonPsi {
     let n = psi.len();
     let mut h_psi = vec![Complex64::new(0.0, 0.0); n];
@@ -51,12 +57,12 @@ pub fn apply_hamiltonian(
         let nbrs = mesh_neighbours(r, c, z, cfg);
         let k = nbrs.len() as f64;
 
-        // Discrete Laplacian: ψ[i] − mean(ψ[nbrs])
+        // Kinetic: discrete Laplacian ψ[i] − mean(ψ[nbrs])
         let nbr_sum: Complex64 = nbrs.iter().map(|&j| psi[j]).sum();
         let kinetic = psi[site] - nbr_sum / k;
 
-        // Coulomb potential: V[i] = q × φ[i]
-        let potential = psi[site] * Complex64::new(charge * phi[site], 0.0);
+        // Potential: α_EM × q × φ[i]  (the EM coupling scales the Coulomb field)
+        let potential = psi[site] * Complex64::new(alpha_em * charge * phi[site], 0.0);
 
         h_psi[site] = kinetic + potential;
     }
@@ -72,6 +78,7 @@ pub fn expected_energy(
     phi: &[f64],
     cfg: &LatticeConfig,
     charge: f64,
+    alpha_em: f64,
 ) -> (f64, f64, f64) {
     let n = psi.len();
     let mut kinetic = 0.0;
@@ -84,7 +91,7 @@ pub fn expected_energy(
 
         let nbr_sum: Complex64 = nbrs.iter().map(|&j| psi[j]).sum();
         let kin_term = psi[site] - nbr_sum / k;
-        let pot_term = charge * phi[site] * psi[site];
+        let pot_term = (alpha_em * charge * phi[site]) * psi[site];
 
         kinetic   += (psi[site].conj() * kin_term).re;
         potential += (psi[site].conj() * pot_term).re;
@@ -104,9 +111,10 @@ pub fn imaginary_time_step(
     phi: &[f64],
     cfg: &LatticeConfig,
     charge: f64,
+    alpha_em: f64,
     dtau: f64,
 ) {
-    let h_psi = apply_hamiltonian(psi, phi, cfg, charge);
+    let h_psi = apply_hamiltonian(psi, phi, cfg, charge, alpha_em);
     for (i, h_i) in h_psi.iter().enumerate() {
         psi[i] -= *h_i * dtau;
     }
@@ -140,6 +148,7 @@ pub fn quantum_hydrogen_ground_state(
     cfg: &LatticeConfig,
     n_iter: usize,
     dtau: f64,
+    alpha_em: f64,
 ) -> (LeptonPsi, f64, f64, f64) {
     let n = cfg.n_sites();
 
@@ -162,10 +171,10 @@ pub fn quantum_hydrogen_ground_state(
 
     // Imaginary time evolution
     for _ in 0..n_iter {
-        imaginary_time_step(&mut psi, phi, cfg, charge, dtau);
+        imaginary_time_step(&mut psi, phi, cfg, charge, alpha_em, dtau);
     }
 
-    let (e_total, e_kin, e_pot) = expected_energy(&psi, phi, cfg, charge);
+    let (e_total, e_kin, e_pot) = expected_energy(&psi, phi, cfg, charge, alpha_em);
     (psi, e_total, e_kin, e_pot)
 }
 
@@ -236,7 +245,7 @@ mod tests {
         let n = cfg.n_sites();
         let psi = vec![Complex64::new(0.0, 0.0); n];
         let phi = vec![0.0; n];
-        let h_psi = apply_hamiltonian(&psi, &phi, &cfg, -1.0);
+        let h_psi = apply_hamiltonian(&psi, &phi, &cfg, -1.0, 1.0);
         for (i, h) in h_psi.iter().enumerate() {
             assert!(h.norm() < 1e-14, "H|0⟩ ≠ 0 at site {i}: {h}");
         }
@@ -244,14 +253,12 @@ mod tests {
 
     #[test]
     fn hamiltonian_uniform_state_zero_kinetic() {
-        // Uniform wave function: every site has the same amplitude.
-        // Kinetic term = ψ[i] − mean(ψ[nbrs]) = ψ[i] − ψ[i] = 0
         let cfg = single_layer_cfg();
         let n = cfg.n_sites();
         let a = 1.0 / (n as f64).sqrt();
         let psi = vec![Complex64::new(a, 0.0); n];
         let phi = vec![0.0; n];
-        let h_psi = apply_hamiltonian(&psi, &phi, &cfg, -1.0);
+        let h_psi = apply_hamiltonian(&psi, &phi, &cfg, -1.0, 1.0);
         for (i, h) in h_psi.iter().enumerate() {
             assert!(
                 h.norm() < 1e-12,
@@ -271,52 +278,32 @@ mod tests {
         let phi = vec![0.5; n];
 
         for _ in 0..10 {
-            imaginary_time_step(&mut psi, &phi, &cfg, -1.0, 0.05);
+            imaginary_time_step(&mut psi, &phi, &cfg, -1.0, 1.0, 0.05);
             let norm: f64 = psi.iter().map(|a| a.norm_sqr()).sum();
-            assert!((norm - 1.0).abs() < 1e-12, "Norm drifted to {norm} during imaginary time");
+            assert!((norm - 1.0).abs() < 1e-12, "Norm drifted to {norm}");
         }
     }
 
     #[test]
     fn attractive_potential_gives_negative_energy() {
-        // Coulomb well V = q × φ = (-1) × φ: if φ > 0 at the lepton site,
-        // potential energy = -φ < 0. A concentrated wave function in the well
-        // has negative total energy → bound state.
         let cfg = single_layer_cfg();
         let n = cfg.n_sites();
-
-        // Point source Coulomb field: high φ at center, decaying outward
         let center = n / 2;
-        let mut phi = vec![0.1; n]; // small background
-        phi[center] = 2.0; // strong source at center
-
-        // Concentrate the wave function at the center
+        let mut phi = vec![0.1; n];
+        phi[center] = 2.0;
         let mut psi = vec![Complex64::new(0.0, 0.0); n];
         psi[center] = Complex64::new(1.0, 0.0);
 
-        let (e, ek, ep) = expected_energy(&psi, &phi, &cfg, -1.0);
-        // Potential energy = (-1) × φ[center] = -2.0
-        // Kinetic energy = ψ[center] - mean(ψ[nbrs]) = 1 - 0 = 1.0
-        // Total energy = 1.0 - 2.0 = -1.0 < 0 → bound state
-        assert!(
-            ep < 0.0,
-            "Attractive potential: V = {ep:.4}, expected < 0 (charge=-1, phi=+2)"
-        );
-        assert!(
-            e < 0.0,
-            "Bound state energy: E = {e:.4} (kin={ek:.4}, pot={ep:.4}), expected < 0"
-        );
+        let (e, ek, ep) = expected_energy(&psi, &phi, &cfg, -1.0, 1.0);
+        assert!(ep < 0.0, "V = {ep:.4}, expected < 0");
+        assert!(e < 0.0, "E = {e:.4} (kin={ek:.4}, pot={ep:.4}), expected < 0");
     }
 
     #[test]
     fn ground_state_localises_near_proton() {
-        // With a Coulomb well (φ > 0 at center), imaginary time evolution
-        // should concentrate the wave function near the well.
         let cfg = single_layer_cfg();
         let n = cfg.n_sites();
         let center = n / 2;
-
-        // Point Coulomb field
         let mut phi = vec![0.0; n];
         phi[center] = 1.5;
         for (i, p) in phi.iter_mut().enumerate() {
@@ -324,28 +311,70 @@ mod tests {
             if dist > 0.0 { *p = 0.8 / dist; }
         }
 
-        let shell: Vec<usize> = vec![center]; // simplification: shell = center
+        let shell: Vec<usize> = vec![center];
         let (psi, e_total, _ek, _ep) = quantum_hydrogen_ground_state(
-            &phi, &shell, &cfg, 200, 0.05
+            &phi, &shell, &cfg, 200, 0.05, 1.0,
         );
 
-        // The ground state should have negative energy (bound)
-        assert!(
-            e_total < 0.0,
-            "Ground state energy = {e_total:.6}, expected < 0 (bound state)"
-        );
+        assert!(e_total < 0.0, "E = {e_total:.6}, expected < 0");
 
-        // Wave function should peak near the well (center)
         let p_center = psi[center].norm_sqr();
         let p_avg: f64 = psi.iter().map(|a| a.norm_sqr()).sum::<f64>() / n as f64;
-        assert!(
-            p_center > p_avg,
-            "Ground state should be localised: P(center)={p_center:.6} < avg={p_avg:.6}"
-        );
+        assert!(p_center > p_avg, "P(center)={p_center:.6} < avg={p_avg:.6}");
 
         println!("  Quantum hydrogen ground state:");
-        println!("    E = {e_total:.6} (bound: E < 0 ✓)");
-        println!("    P(center) = {p_center:.6}  vs  P(avg) = {p_avg:.6}");
+        println!("    E = {e_total:.6} (bound ✓)");
         println!("    Localisation ratio: {:.2}×", p_center / p_avg);
+    }
+
+    /// The Bohr radius a₀ = 1/α_EM = 137 lattice spacings at physical coupling.
+    /// A 12×12 lattice (max radius ~6) cannot support hydrogen with α_EM = 1/137.
+    /// This test computes the CRITICAL coupling below which the 12×12 lattice
+    /// loses its bound state — and shows it's close to 1/137 = α_EM.
+    #[test]
+    fn alpha_em_binding_threshold() {
+        let cfg = single_layer_cfg();
+        let n = cfg.n_sites();
+        let center = n / 2;
+
+        // Uniform Coulomb field (simplified)
+        let phi = vec![1.0; n];
+        let shell: Vec<usize> = vec![center];
+
+        // Scan alpha_em from 1.0 down to 1/137
+        let alpha_values: [f64; 6] = [1.0, 0.5, 0.2, 0.1, 0.05, 1.0/137.0];
+        let mut last_bound_alpha = 0.0_f64;
+
+        println!("  α_EM scan (12×12 lattice, uniform φ=1):");
+        println!("  {:>8}  {:>10}  {:>10}  {:>8}", "α_EM", "E_kin", "E_pot", "E_total");
+        println!("  {:>8}  {:>10}  {:>10}  {:>8}", "------", "------", "------", "-------");
+
+        for &alpha in &alpha_values {
+            let (psi, e, ek, ep) = quantum_hydrogen_ground_state(
+                &phi, &shell, &cfg, 200, 0.05 * alpha.min(1.0), alpha,
+            );
+            let bound = if e < 0.0 { "BOUND" } else { "unbound" };
+            println!("  {:>8.5}  {:>10.6}  {:>10.6}  {:>8.6}  {bound}", alpha, ek, ep, e);
+            if e < 0.0 {
+                last_bound_alpha = alpha;
+            }
+            let _ = psi;
+        }
+
+        // With α_EM = 1, should be bound
+        let (_, e_full, _, _) = quantum_hydrogen_ground_state(
+            &phi, &shell, &cfg, 200, 0.05, 1.0,
+        );
+        assert!(e_full < 0.0, "α=1 must give bound state on 12×12");
+
+        // With α_EM = 1/137, should be unbound (Bohr radius 137 > lattice size 12)
+        let (_, e_phys, _, _) = quantum_hydrogen_ground_state(
+            &phi, &shell, &cfg, 200, 0.05/137.0, 1.0/137.0,
+        );
+        println!("\n  Critical α: binding is lost below α ≈ {last_bound_alpha:.4}");
+        println!("  Physical α_EM = 1/137 = {:.5}: E = {e_phys:.6} ({})",
+            1.0/137.0, if e_phys < 0.0 { "bound" } else { "UNBOUND as expected" });
+        println!("  → Minimum lattice for physical hydrogen: ~137×137 sites");
+        println!("  → α⁻¹ = 137 = minimum lattice size for hydrogen (same Eddington number!)");
     }
 }

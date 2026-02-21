@@ -272,12 +272,17 @@ mod hydrogen_formation_test {
             shell_sites.sort_unstable();
             shell_sites.dedup();
 
+            // Use lattice coupling (α=1) for the bound state demonstration.
+            // Physical α_EM = 1/137 requires a 137×137 lattice (Bohr radius = 1/α).
+            // See alpha_em_binding_threshold test for the coupling scan.
+            let alpha_em = 1.0_f64;
             let (psi, e_total, e_kin, e_pot) = quantum_hydrogen_ground_state(
                 &phi,
                 &shell_sites,
                 &cfg,
-                300,   // imaginary time iterations
-                0.05,  // step size δτ
+                300,    // imaginary time iterations
+                0.05,   // step size δτ
+                alpha_em,
             );
 
             let enrich = quantum_shell_enrichment(&psi, &proton_sites, &cfg);
