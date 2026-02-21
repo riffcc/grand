@@ -71,6 +71,66 @@ pub fn grade_of(s: u8) -> i32 {
 /// Z₃ quark orbits in Cl(1,3) — three-element groups under Z₃ rotation.
 pub const Z3_ORBITS: [[u8; 3]; 4] = [[3, 5, 9], [4, 6, 10], [7, 11, 13], [8, 12, 14]];
 
+// ── One-loop running coupling ─────────────────────────────────────────────────
+
+/// Running Z₃ color coupling via the one-loop beta function.
+///
+/// α_s(t) = α_UV / (1 − (b₀/2π) × α_UV × ln(t+1))
+///
+/// Physics:
+/// - UV (t=0): α_s = α_UV (quarks nearly free, cycle easily)
+/// - IR (t → t_*): α_s → ∞ (Landau pole = confinement transition)
+/// - t_* = exp(2π / (b₀ × α_UV)) − 1  (with default params: t_* ≈ 149)
+///
+/// b₀ comes from the Clifford grade structure:
+///   b₀ = (11/3) × N_grade2 − (2/3) × N_grade1 = 58/3 ≈ 19.33
+pub fn running_alpha_s(t: usize, cfg: &LatticeConfig) -> f64 {
+    let a = cfg.coupling_uv;
+    let b0_2pi = cfg.beta_coeff / (2.0 * std::f64::consts::PI);
+    let denom = 1.0 - b0_2pi * a * ((t + 1) as f64).ln();
+    if denom <= 0.0 {
+        f64::INFINITY
+    } else {
+        a / denom
+    }
+}
+
+/// Effective Z₃ cycle probability at timestep t.
+///
+/// As α_s grows (IR), the cycle rate DECREASES: quarks freeze into
+/// color-singlet configurations (confinement). cycle_prob → 0 at the
+/// Landau pole.
+pub fn cycle_prob_rg(t: usize, cfg: &LatticeConfig) -> f64 {
+    let alpha_s = running_alpha_s(t, cfg);
+    if alpha_s.is_infinite() {
+        0.0 // Fully confined: quarks cannot change color
+    } else {
+        // cycle_prob scales INVERSELY with α_s: more coupling = less cycling
+        (cfg.cycle_prob * cfg.coupling_uv / alpha_s).min(1.0)
+    }
+}
+
+/// Effective confinement energy scale (alignment strength) at timestep t.
+///
+/// The color binding energy INCREASES with α_s: stronger coupling →
+/// tighter confinement → higher mass. This is the mechanism for the
+/// proton-to-lepton mass ratio growing toward 1836.
+pub fn alignment_rg(t: usize, cfg: &LatticeConfig) -> f64 {
+    let alpha_s = running_alpha_s(t, cfg);
+    if alpha_s.is_infinite() {
+        cfg.alignment_strength * 1e4 // Past Landau pole: maximum confinement
+    } else {
+        cfg.alignment_strength * alpha_s / cfg.coupling_uv
+    }
+}
+
+/// The Landau pole timestep: confinement transition.
+/// t_* = exp(2π / (beta_coeff × coupling_uv)) − 1
+pub fn landau_pole(cfg: &LatticeConfig) -> f64 {
+    let b0_2pi = cfg.beta_coeff / (2.0 * std::f64::consts::PI);
+    (1.0 / (b0_2pi * cfg.coupling_uv)).exp() - 1.0
+}
+
 // ── Lattice initialisation ────────────────────────────────────────────────────
 
 pub fn init_lattice(cfg: &LatticeConfig) -> Vec<u8> {
@@ -91,19 +151,31 @@ pub fn sample_without_replacement<R: Rng>(rng: &mut R, pool: &[usize], n: usize)
 
 // ── Single simulation step ────────────────────────────────────────────────────
 
-/// One simulation step with two-pass design.
+/// One simulation step with two-pass design and RG-running Z₃ coupling.
 ///
+/// `t` — current timestep, used to compute the running color coupling.
 /// `gauge = None` → Phase 1 (quarks only).
 /// `proton_sites` → set of proton quark sites excluded from lepton hop candidates.
+///
+/// RG dynamics:
+///   cycle_prob_rg(t) → 0 as t → t_*   (quarks freeze: confinement)
+///   alignment_rg(t)  → ∞ as t → t_*   (binding energy grows: mass)
+///   t_* = exp(2π / (b₀ × α_UV)) ≈ 149 (end of Phase 1)
 pub fn step<R: Rng>(
     lattice: &[u8],
     rng: &mut R,
     cfg: &LatticeConfig,
     gauge: Option<&GaugeFields>,
     proton_sites: &HashSet<usize>,
+    t: usize,
 ) -> Vec<u8> {
     let n = cfg.n_sites();
     let mut new = lattice.to_vec();
+
+    // Running coupling: cycle_prob decreases, alignment increases toward t_*
+    let cp = cycle_prob_rg(t, cfg);
+    let al = alignment_rg(t, cfg).min(1.0 - cp - cfg.clifford_prob);
+    // al is capped so probabilities stay valid: cp + clifford + al ≤ 1
 
     // ── Pass 1: VOID differentiation + quark dynamics ─────────────────────────
     for site in 0..n {
@@ -131,10 +203,11 @@ pub fn step<R: Rng>(
             // Quarks and all other non-void, non-lepton states
             let r_val: f64 = rng.gen();
 
-            if r_val < cfg.cycle_prob {
+            if r_val < cp {
                 // Z₃ cycle: bit rotation in Cl(1,3)
+                // Rate DECREASES with time: quarks freeze at confinement
                 new[site] = Z3_TABLE[state as usize];
-            } else if r_val < cfg.cycle_prob + cfg.clifford_prob {
+            } else if r_val < cp + cfg.clifford_prob {
                 // Clifford XOR with a random active (non-lepton) neighbour
                 let nbrs = mesh_neighbours(r, c, z, cfg);
                 let partners: Vec<u8> = nbrs
@@ -152,8 +225,9 @@ pub fn step<R: Rng>(
                     let partner = partners[rng.gen_range(0..partners.len())];
                     new[site] = ((state - 1) ^ (partner - 1)) + 1;
                 }
-            } else if r_val < cfg.cycle_prob + cfg.clifford_prob + cfg.alignment_strength {
+            } else if r_val < cp + cfg.clifford_prob + al {
                 // Alignment: majority vote among non-void, non-lepton neighbours
+                // Rate INCREASES with time: stronger confinement → more alignment
                 let nbrs = mesh_neighbours(r, c, z, cfg);
                 let nbr_states: Vec<u8> = nbrs
                     .iter()
@@ -278,7 +352,7 @@ mod tests {
         let cfg = small_cfg();
         let lattice = init_lattice(&cfg);
         let mut rng = StdRng::seed_from_u64(42);
-        let next = step(&lattice, &mut rng, &cfg, None, &HashSet::new());
+        let next = step(&lattice, &mut rng, &cfg, None, &HashSet::new(), 0);
         let active = next.iter().filter(|&&s| s != VOID).count();
         // With differentiation_prob=0.02 and N=64, expect some active sites
         assert!(active > 0, "Lattice should grow from VOID after one step");

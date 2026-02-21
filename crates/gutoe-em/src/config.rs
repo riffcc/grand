@@ -36,6 +36,19 @@ pub struct LatticeConfig {
     pub photon_c: f64,
     pub photon_coupling: f64,
     pub poisson_iters: usize,
+
+    /// UV value of the Z₃ color coupling α_s at t=0.
+    /// Chosen so the Landau pole (confinement) coincides with Phase 1 end:
+    ///   t_* = exp(2π / (beta_coeff × coupling_uv)) ≈ 150
+    ///   → coupling_uv = 2π / (beta_coeff × ln(150)) ≈ 0.0649
+    pub coupling_uv: f64,
+
+    /// One-loop beta function coefficient for Z₃ color coupling.
+    /// Derived from Clifford grade structure:
+    ///   b₀ = (11/3) × N_grade2 − (2/3) × N_grade1
+    ///      = (11/3) × 6 − (2/3) × 4 = 22 − 8/3 = 58/3 ≈ 19.33
+    /// This is the GUTOE analog of the QCD b₀ coefficient.
+    pub beta_coeff: f64,
 }
 
 impl Default for LatticeConfig {
@@ -54,6 +67,10 @@ impl Default for LatticeConfig {
             photon_c: 0.4,
             photon_coupling: 0.05,
             poisson_iters: 80,
+            // Running coupling: Landau pole at t_* ≈ 150
+            // 2π / (58/3 × ln(150)) = 6.283 / (19.333 × 5.011) = 0.0649
+            coupling_uv: 0.0649,
+            beta_coeff: 58.0 / 3.0,
         }
     }
 }

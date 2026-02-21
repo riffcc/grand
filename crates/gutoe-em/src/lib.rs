@@ -21,7 +21,10 @@ pub use gauge::{
     GaugeFields,
 };
 pub use geometry::{mesh_neighbours, site_coords};
-pub use sim::{init_lattice, sample_without_replacement, step, veracity};
+pub use sim::{
+    alignment_rg, cycle_prob_rg, init_lattice, landau_pole, running_alpha_s,
+    sample_without_replacement, step, veracity,
+};
 
 // ── Hydrogen Formation Integration Test ──────────────────────────────────────
 //
@@ -59,8 +62,8 @@ mod hydrogen_formation_test {
         for seed_idx in 0..5usize {
             let mut rng = StdRng::seed_from_u64((seed_idx as u64) * 137 + 7);
             let mut lat = init_lattice(&cfg);
-            for _ in 0..ph1 {
-                lat = step(&lat, &mut rng, &cfg, None, &Default::default());
+            for t in 0..ph1 {
+                lat = step(&lat, &mut rng, &cfg, None, &Default::default(), t);
             }
             let quarks = detect_quarks(&lat, &cfg);
             let trips = find_proton_triplets(&quarks, &cfg);
@@ -93,9 +96,9 @@ mod hydrogen_formation_test {
             let mut rng = StdRng::seed_from_u64(seed);
             let mut lat = init_lattice(&cfg);
 
-            // ── Phase 1: quarks only ──────────────────────────────────────────
-            for _ in 0..ph1 {
-                lat = step(&lat, &mut rng, &cfg, None, &HashSet::new());
+            // ── Phase 1: quarks only (RG running active) ─────────────────────
+            for t in 0..ph1 {
+                lat = step(&lat, &mut rng, &cfg, None, &HashSet::new(), t);
             }
 
             // ── Inject γ⁰ into proton-containing layers ──────────────────────
@@ -166,7 +169,7 @@ mod hydrogen_formation_test {
                     gauge.phi = jacobi_poisson(&rho_phi, &cfg, cfg.poisson_iters);
                 }
 
-                lat = step(&lat, &mut rng, &cfg, Some(&gauge), &proton_sites);
+                lat = step(&lat, &mut rng, &cfg, Some(&gauge), &proton_sites, ph1 + t);
 
                 if (t + 1) % report == 0 {
                     let ri = (t + 1) / report - 1;
