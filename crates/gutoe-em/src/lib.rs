@@ -5,6 +5,7 @@
 // All 13 Python unit tests live in the respective modules.
 // The hydrogen formation integration test is here.
 
+pub mod alpha;
 pub mod analysis;
 pub mod config;
 pub mod gauge;
