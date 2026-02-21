@@ -8,6 +8,10 @@
 pub mod alpha;
 pub mod analysis;
 pub mod quantum_lepton;
+pub use quantum_lepton::{
+    quantum_hydrogen_ground_state, quantum_shell_enrichment, expected_energy,
+    apply_hamiltonian, LeptonPsi,
+};
 pub mod config;
 pub mod gauge;
 pub mod geometry;
@@ -52,6 +56,7 @@ mod hydrogen_formation_test {
     use crate::analysis::{analyze, detect_quarks, find_proton_triplets};
     use crate::config::{LatticeConfig, QuarkType, LEPTON_SEED};
     use crate::gauge::{compute_charge_density, jacobi_poisson, update_gauge, GaugeFields};
+    use crate::quantum_lepton::{quantum_hydrogen_ground_state, quantum_shell_enrichment};
     use crate::sim::{init_lattice, sample_without_replacement, step};
 
     /// Phase 1 baseline: Rust sim forms protons (sanity check before Phase 2 test).
@@ -200,5 +205,121 @@ mod hydrogen_formation_test {
         );
 
         println!("HYDROGEN: YES — peak avg {peak_e:.2}×  any-seed peak {any_seed_peak:.2}×");
+    }
+
+    /// Quantum hydrogen: Schrödinger equation on hex lattice after Phase 1.
+    ///
+    /// Protocol:
+    ///   Phase 1: classical quark dynamics → stable proton triplets
+    ///   Phase 2 (quantum): imaginary time evolution of γ⁰ wave function
+    ///             in proton Coulomb field → ground state energy and enrichment
+    ///
+    /// This replaces the classical stochastic lepton hop with unitary dynamics.
+    /// The lepton is no longer a u8 at one site — it's a SpatialPsi spread
+    /// over the lattice. Binding energy comes from ⟨ψ|H|ψ⟩ < 0.
+    #[test]
+    fn quantum_hydrogen_bound_state() {
+        let cfg = LatticeConfig::default();
+        let ph1 = 150usize;
+        let n = cfg.n_sites();
+        let n_seeds = 5usize;
+
+        // Quantum metrics collected across seeds
+        let mut energies: Vec<f64> = Vec::new();
+        let mut enrichments: Vec<f64> = Vec::new();
+
+        for seed_idx in 0..n_seeds {
+            let mut rng = StdRng::seed_from_u64((seed_idx as u64) * 137 + 7);
+            let mut lat = init_lattice(&cfg);
+
+            // ── Phase 1: classical quark dynamics ─────────────────────────────
+            for t in 0..ph1 {
+                lat = step(&lat, &mut rng, &cfg, None, &HashSet::new(), t);
+            }
+
+            // ── Detect protons and build Coulomb field ────────────────────────
+            let quarks = detect_quarks(&lat, &cfg);
+            let trips  = find_proton_triplets(&quarks, &cfg);
+            if trips.is_empty() {
+                println!("  seed {seed_idx}: no protons — skip");
+                continue;
+            }
+
+            let proton_sites: HashSet<usize> =
+                trips.iter().flat_map(|&[d, u1, u2]| [d, u1, u2]).collect();
+
+            // Proton-only Coulomb field (same as classical Phase 2)
+            let q_map: HashMap<usize, QuarkType> =
+                quarks.iter().map(|q| (q.site, q.quark_type)).collect();
+            let q_prot: HashMap<usize, QuarkType> = proton_sites
+                .iter()
+                .filter_map(|&s| q_map.get(&s).map(|&qt| (s, qt)))
+                .collect();
+            let rho_phi = compute_charge_density(&lat, &q_prot, &cfg);
+            let phi = jacobi_poisson(&rho_phi, &cfg, cfg.poisson_iters);
+
+            // ── Phase 2 (quantum): Schrödinger ground state ───────────────────
+            // Proton shell sites = non-proton sites adjacent to any proton quark
+            let mut shell_sites: Vec<usize> = Vec::new();
+            for &ps in &proton_sites {
+                let (r, c, z) = crate::geometry::site_coords(ps, &cfg);
+                for nb in crate::geometry::mesh_neighbours(r, c, z, &cfg) {
+                    if !proton_sites.contains(&nb) {
+                        shell_sites.push(nb);
+                    }
+                }
+            }
+            shell_sites.sort_unstable();
+            shell_sites.dedup();
+
+            let (psi, e_total, e_kin, e_pot) = quantum_hydrogen_ground_state(
+                &phi,
+                &shell_sites,
+                &cfg,
+                300,   // imaginary time iterations
+                0.05,  // step size δτ
+            );
+
+            let enrich = quantum_shell_enrichment(&psi, &proton_sites, &cfg);
+
+            println!(
+                "  seed {seed_idx}: {} protons  E={:+.4} (kin={:+.4} pot={:+.4})  enrichment={:.2}×",
+                trips.len(), e_total, e_kin, e_pot, enrich
+            );
+
+            energies.push(e_total);
+            enrichments.push(enrich);
+        }
+
+        // ── Assertions ────────────────────────────────────────────────────────
+        assert!(!energies.is_empty(), "No protons formed in any seed");
+
+        let mean_e = energies.iter().sum::<f64>() / energies.len() as f64;
+        let mean_enrich = enrichments.iter().sum::<f64>() / enrichments.len() as f64;
+
+        println!("\n  Mean binding energy: {mean_e:+.6}");
+        println!("  Mean Born enrichment: {mean_enrich:.2}×");
+
+        assert!(
+            mean_e < 0.0,
+            "QUANTUM HYDROGEN: NO — mean ground state energy {mean_e:+.4} ≥ 0. \
+             Lepton is unbound. Coulomb well too shallow for this lattice."
+        );
+        assert!(
+            mean_enrich > 1.0,
+            "QUANTUM HYDROGEN: Wave function not concentrated near proton: \
+             enrichment = {mean_enrich:.2}× (expected > 1×)"
+        );
+
+        println!(
+            "\nQUANTUM HYDROGEN: YES — E_ground = {mean_e:+.4} < 0 (bound)  \
+             Born enrichment = {mean_enrich:.2}× > 1 (localised)"
+        );
+        println!(
+            "  Classical lepton hop → quantum Schrodinger equation on hex lattice."
+        );
+        println!(
+            "  Same Cl(1,3) algebra. Same Poisson solver. Unitary dynamics."
+        );
     }
 }
