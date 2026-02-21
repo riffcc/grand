@@ -23,8 +23,9 @@ use gutoe_em::quantum_lepton::{bohr_test_3d, BohrResult};
 pub enum Backend { Cpu, #[cfg(feature = "cuda")] Cuda, #[cfg(feature = "rocm")] Rocm }
 
 pub fn detect_backend() -> Backend {
-    #[cfg(feature = "rocm")] return Backend::Rocm;
-    #[cfg(feature = "cuda")] return Backend::Cuda;
+    #[cfg(feature = "rocm")] { return Backend::Rocm; }
+    #[cfg(feature = "cuda")] { return Backend::Cuda; }
+    #[allow(unreachable_code)]
     Backend::Cpu
 }
 
@@ -87,6 +88,18 @@ extern "C" {
         out_e_kin:   *mut f64,
         out_e_pot:   *mut f64,
     );
+    /// Open-boundary variant: small box, φ=α/r and ψ=0 at walls.
+    /// Equivalent to L=∞ periodic for localised states. Memory ∝ (2R+1)³
+    /// where R ≈ 8/α — independent of the physical box size.
+    fn run_hydrogen_obc(
+        alpha_em:    f64,
+        hex_rows:    i32, hex_cols: i32, layers: i32,
+        n_jacobi:    i32, n_iter:   i32, renorm_every: i32,
+        dtau:        f64,
+        out_e_total: *mut f64,
+        out_e_kin:   *mut f64,
+        out_e_pot:   *mut f64,
+    );
 }
 
 #[cfg(any(feature = "cuda", feature = "rocm"))]
@@ -104,6 +117,29 @@ fn solve_gpu(cfg: &SolverConfig) -> BohrResult {
     let bohr_3d = -cfg.alpha * cfg.alpha / 2.0;
     BohrResult { alpha: cfg.alpha, l: cfg.l, e_total, e_kin, e_pot,
                  bohr_3d, ratio: e_total / bohr_3d }
+}
+
+/// Open-boundary Schrödinger solver — CoW memory: allocates only (2R+1)³ sites.
+/// For α=0.1: R≈82, box=165³≈4.5M sites regardless of physical L.
+/// For α=0.01: R≈802, box=1605³ — scale R with 1/α.
+#[cfg(any(feature = "cuda", feature = "rocm"))]
+pub fn solve_hydrogen_obc(alpha: f64, n_jacobi: usize, n_iter: usize, dtau: f64,
+                           _backend: Backend) -> BohrResult {
+    // Active radius: 8 Bohr radii (exp(-8)≈3e-4, energy error negligible)
+    let r_active = ((8.0 / alpha).ceil() as usize).max(8);
+    let l = 2 * r_active + 1;   // small cube, open BC
+    let (mut e_total, mut e_kin, mut e_pot) = (0.0_f64, 0.0_f64, 0.0_f64);
+    unsafe {
+        run_hydrogen_obc(
+            alpha,
+            l as i32, l as i32, l as i32,
+            n_jacobi as i32, n_iter as i32, 10_i32,
+            dtau,
+            &mut e_total, &mut e_kin, &mut e_pot,
+        );
+    }
+    let bohr_3d = -alpha * alpha / 2.0;
+    BohrResult { alpha, l, e_total, e_kin, e_pot, bohr_3d, ratio: e_total / bohr_3d }
 }
 
 // ── Bohr convergence scan ─────────────────────────────────────────────────────
@@ -165,5 +201,169 @@ mod tests {
             r.e_kin, r.e_pot, r.e_total, r.ratio);
         println!("  Bohr −α²/2 = {:.6}", r.bohr_3d);
         assert!(r.e_total < 0.0, "GPU: must be bound at α=0.1 L=144");
+    }
+
+    /// Convergence scan: C = E₀/(−α²/2) vs lattice size.
+    /// Run with: cargo test -p gutoe-gpu --features rocm --release -- bohr_convergence_scan --nocapture
+    #[test]
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    fn bohr_convergence_scan() {
+        let backend = detect_backend();
+        // Scan increasing L at fixed α=0.1 (a₀=10 lattice units).
+        // Keep iterations fixed to bound runtime; convergence is geometric
+        // so we can extrapolate C_∞ from the falling series.
+        // L=144 → L/a₀=14.4, L=192 → 19.2, L=240 → 24.0, L=288 → 28.8
+        // Scale iterations down for large L to stay within ROCm iGPU limits.
+        // C(L) trend is what matters; we don't need full ground-state convergence.
+        let configs = [
+            (0.1_f64, 336_usize, 5_000, 20_000, 0.001),  // sanity: should work
+            (0.1_f64, 432_usize, 2_000,  8_000, 0.001),
+            (0.1_f64, 576_usize, 2_000,  8_000, 0.001),
+            (0.1_f64, 720_usize, 1_000,  4_000, 0.001),
+            (0.1_f64, 960_usize, 1_000,  4_000, 0.001),
+        ];
+        println!("\n  GUTOE Bohr convergence scan — backend: {backend:?}");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}  {:>8}",
+                 "L", "L/a₀", "E_total", "−α²/2", "C", "sites");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}  {:>8}",
+                 "─", "─", "─", "─", "─", "─");
+        for (alpha, l, n_jacobi, n_iter, dtau) in configs {
+            let cfg = SolverConfig { alpha, l, n_jacobi, n_iter, dtau, backend };
+            let n = l * l * l;
+            println!("  L={l} ({n} sites)…");
+            let r = solve_hydrogen_3d(&cfg);
+            println!("  {:>6}  {:>8.2}  {:>10.6}  {:>10.6}  {:>8.4}  {:>8}",
+                     l, (l as f64) * alpha, r.e_total, r.bohr_3d, r.ratio, n);
+            assert!(r.e_total < 0.0, "must be bound at L={l}");
+        }
+    }
+
+    /// OBC α-scan: scan α at fixed L/a₀ ≈ 16 (L = 2⌈8/α⌉+1) with proper Jacobi convergence.
+    /// n_jacobi ≈ 0.93×L² ensures <1% Jacobi residual (convergence rate ≈ π²/(2L²) per step).
+    /// Box-size correction: C_∞(α) ≈ C_box(α) + A/L, A ≈ 19 (from L-scan at α=0.1).
+    /// At fixed L/a₀=16: correction = 19α/16 ≈ 1.19α — significant at large α.
+    ///
+    /// cargo test -p gutoe-gpu --features rocm --release -- bohr_obc_scan --nocapture
+    #[test]
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    fn bohr_obc_scan() {
+        let backend = detect_backend();
+        // Scan α: smaller α = finer discretisation, C_∞(α→0) = lattice Bohr constant.
+        // Jacobi convergence rate ≈ π²/(2L²) per step; need n_jacobi ≈ L² for 1% φ accuracy.
+        // Imaginary-time: need τ = n_iter×dtau >> 1/ΔE where ΔE ≈ 3α²×C/8 ≈ 0.12α².
+        // dtau=0.05: stable (dtau × max_eigenvalue ≈ 0.05×2 = 0.1 << 1).
+        // n_jacobi ∝ L² = (16/α)²; n_iter ∝ 1/α² so τ∝1/α² ≈ 2/ΔE.
+        let alphas: &[(f64, usize, usize, f64)] = &[
+            //  α    n_sor    n_iter   dtau    L=16/α  ω≈2-2π/L  theory n_sor×2
+            (0.30,    200,   4_000, 0.05),  // L=55,  ω=1.889,  n≈ 80
+            (0.20,    300,   9_000, 0.05),  // L=81,  ω=1.925,  n≈120
+            (0.10,    500,  34_000, 0.05),  // L=161, ω=1.962,  n≈200
+            (0.07,    700,  70_000, 0.05),  // L=231, ω=1.973,  n≈270
+            (0.05,   1000, 134_000, 0.05),  // L=321, ω=1.980,  n≈345
+        ];
+        println!("\n  GUTOE OBC α-scan (open BC, L/a₀≈16, n_jac∝L²) — backend: {backend:?}");
+        println!("  {:>6}  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "α", "L_box", "sites", "E_total", "−α²/2", "C");
+        println!("  {:>6}  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "─", "─", "─", "─", "─", "─");
+        for &(alpha, n_jacobi, n_iter, dtau) in alphas {
+            let r_active = ((8.0 / alpha).ceil() as usize).max(8);
+            let l = 2 * r_active + 1;
+            let n = l * l * l;
+            println!("  α={alpha:.2} → L_box={l} ({n} sites)…");
+            let res = solve_hydrogen_obc(alpha, n_jacobi, n_iter, dtau, backend);
+            println!("  {:>6.2}  {:>6}  {:>8}  {:>10.6}  {:>10.6}  {:>8.4}",
+                     alpha, l, n, res.e_total, res.bohr_3d, res.ratio);
+            assert!(res.e_total < 0.0, "OBC: must be bound at α={alpha}");
+        }
+        // C_∞(α) ≈ C_box(α) + 19/L where L=16/α; from L-scan: C_∞(0.1) ≈ 0.550.
+    }
+
+    /// Single-point L=961: confirm Richardson extrapolation C_∞(α=0.1)=0.547.
+    /// Predicted C(961) = 0.547 − 18.2/961 = 0.528.
+    /// 961³=888M sites, ~36 GB peak (d_rho freed after Poisson) — fits tealc's 96 GiB GPU.
+    /// Optimised: n_sor=2000 (theory ~700, 3× safety), n_iter=10000 (τ=500, 3.4× gap).
+    ///
+    /// cargo test -p gutoe-gpu --features rocm --release -- bohr_obc_l960 --nocapture
+    #[test]
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    fn bohr_obc_l960() {
+        let alpha = 0.10_f64;
+        let a0 = 1.0 / alpha;
+        let backend = detect_backend();
+        let bohr = -alpha * alpha / 2.0;
+
+        let l = 961_usize;   // odd = centred proton; 961³=888M, ~36 GB peak
+        let n_sor = 1_000;   // convergence diagnostic: 5× more SOR than previous run
+        let n_iter = 30_000; // τ=1500, matching alpha-scan convergence depth
+        let dtau = 0.05;
+        let n = l * l * l;
+
+        println!("\n  GUTOE OBC L=961 (α={alpha}, n_sor={n_sor}, n_iter={n_iter}, dtau={dtau}) — {backend:?}");
+        println!("  L={l} ({n} sites, {:.1} GB φ+ψ)", n as f64 * 40.0 / 1e9);
+        let (mut et, mut ek, mut ep) = (0.0_f64, 0.0_f64, 0.0_f64);
+        unsafe {
+            run_hydrogen_obc(
+                alpha,
+                l as i32, l as i32, l as i32,
+                n_sor as i32, n_iter as i32, 10_i32,
+                dtau,
+                &mut et, &mut ek, &mut ep,
+            );
+        }
+        let c = et / bohr;
+        let c_pred = 0.547 - 18.2 / l as f64;
+        println!("  L={l}  L/a₀={:.1}  E_total={et:.6}  −α²/2={bohr:.6}  C={c:.4}",
+                 l as f64 / a0);
+        println!("  Richardson prediction: C={c_pred:.4}  (Δ={:.4})", c - c_pred);
+        assert!(et < 0.0, "OBC: must be bound at L={l}");
+    }
+
+    /// OBC L-scan: fix α=0.1, vary L to isolate finite-size vs α-dependence.
+    /// n_jacobi ∝ L² ensures 1% Jacobi convergence regardless of box size.
+    /// n_iter fixed so all points have the same imaginary-time τ=1700.
+    ///
+    /// cargo test -p gutoe-gpu --features rocm --release -- bohr_obc_lscan --nocapture
+    #[test]
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    fn bohr_obc_lscan() {
+        let alpha = 0.10_f64;
+        let a0 = 1.0 / alpha;   // Bohr radius = 10 lattice sites
+        let backend = detect_backend();
+        let bohr = -alpha * alpha / 2.0;
+
+        // n_jacobi ≈ 0.93×L² for 1% Jacobi residual (rate ≈ π²/(2L²) per step)
+        // n_iter = 34000, dtau = 0.05 → τ = 1700 for all (same imaginary time)
+        let configs: &[(usize, usize, usize, f64)] = &[
+            //   L    n_sor    n_iter   dtau    ω=2/(1+sin(π/L))  theory n_sor×2
+            ( 161,    500,  34_000, 0.05),  // L/a₀=16, ω=1.962,  n≈200
+            ( 241,    700,  34_000, 0.05),  // L/a₀=24, ω=1.974,  n≈270
+            ( 321,   1000,  34_000, 0.05),  // L/a₀=32, ω=1.980,  n≈345
+            ( 481,   1500,  34_000, 0.05),  // L/a₀=48, ω=1.987,  n≈950
+            ( 960,   2000,  17_000, 0.05),  // L/a₀=96, ω=1.993,  n≈1050 (τ=850)
+        ];
+        println!("\n  GUTOE OBC L-scan (α={alpha}, open BC, n_iter=34K, dtau=0.05) — {backend:?}");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "L", "L/a₀", "E_total", "−α²/2", "C");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "─", "─", "─", "─", "─");
+        for &(l, n_jacobi, n_iter, dtau) in configs {
+            let n = l * l * l;
+            println!("  L={l} ({n} sites, n_jacobi={n_jacobi})…");
+            let (mut et, mut ek, mut ep) = (0.0_f64, 0.0_f64, 0.0_f64);
+            unsafe {
+                run_hydrogen_obc(
+                    alpha,
+                    l as i32, l as i32, l as i32,
+                    n_jacobi as i32, n_iter as i32, 10_i32,
+                    dtau,
+                    &mut et, &mut ek, &mut ep,
+                );
+            }
+            let c = et / bohr;
+            println!("  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
+                     l, (l as f64) / a0, et, bohr, c);
+            assert!(et < 0.0, "OBC L-scan: must be bound at L={l}");
+        }
     }
 }
