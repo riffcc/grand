@@ -4,18 +4,17 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "wgpu-powered GUTOE quantum experiment visualizer"
+description = "Live GUTOE Cl(1,3) lattice visualizer — wgpu hex grid"
 
 [[bin]]
 name = "gutoe-viz"
 path = "src/main.rs"
 
 [dependencies]
-wgpu = "22"
-winit = "0.30"
-bytemuck = { version = "1", features = ["derive"] }
-pollster = "0.3"
+wgpu       = "22"
+winit      = "0.30"
+bytemuck   = { version = "1", features = ["derive"] }
+rand       = { workspace = true }
+log        = "0.4"
 env_logger = "0.11"
-log = "0.4"
-image = { version = "0.25", default-features = false, features = ["png"] }
-gutoe-physics = { path = "../gutoe-physics" }
+pollster   = "0.3"
