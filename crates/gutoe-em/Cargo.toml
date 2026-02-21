@@ -1,0 +1,10 @@
+[package]
+name = "gutoe-em"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "GUTOE U(1) Gauge Field + Hydrogen Formation Simulation"
+
+[dependencies]
+rand.workspace = true

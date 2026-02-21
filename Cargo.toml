@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/gutoe-core",
+    "crates/gutoe-em",
     "crates/gutoe-lattice",
     "crates/gutoe-physics",
     "crates/gutoe-viz",
