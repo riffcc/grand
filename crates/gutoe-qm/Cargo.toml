@@ -1,0 +1,9 @@
+[package]
+name = "gutoe-qm"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+num-complex.workspace = true
+rand.workspace = true
+gutoe-em = { path = "../gutoe-em" }

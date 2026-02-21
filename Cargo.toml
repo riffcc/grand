@@ -2,6 +2,7 @@
 members = [
     "crates/gutoe-core",
     "crates/gutoe-em",
+    "crates/gutoe-qm",
     "crates/gutoe-lattice",
     "crates/gutoe-physics",
     "crates/gutoe-viz",
