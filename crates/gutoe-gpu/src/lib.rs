@@ -1,197 +1,137 @@
 // GUTOE GPU — Accelerated 3D Schrödinger solver
 // Copyright (C) 2026 Riff Labs, AGPL-3.0-or-later
 //
-// Architecture:
-//   - CPU fallback: always available, calls gutoe-em directly
-//   - CUDA backend: --features cuda  (NVIDIA)
-//   - ROCm backend: --features rocm  (AMD via HIP — same kernel source)
+// Backends:
+//   CPU:  always available, wraps gutoe-em::quantum_lepton
+//   CUDA: --features cuda  (NVIDIA sm_86 = RTX 3070 Ti default)
+//   ROCm: --features rocm  (AMD via HIP — same kernel source)
 //
-// The kernel source lives in kernels/schrodinger.cu.
-// Compile with:
-//   NVIDIA: nvcc -O3 -arch=sm_80 kernels/schrodinger.cu -o schrodinger.o
-//   AMD:    hipcc -O3 kernels/schrodinger.cu -o schrodinger.o
+// To compile:
+//   NVIDIA: CUDA_ARCH=sm_86 cargo build -p gutoe-gpu --features cuda
+//   AMD:    cargo build -p gutoe-gpu --features rocm
 //
-// HIP compatibility means the SAME .cu source compiles for both.
-// No code duplication. No architecture lock-in.
-//
-// The GPU-accelerated run that converges the Bohr formula:
-//   144×144×144 lattice, α=0.1, L=1440 > 10/α=100 → exp_3d → 2.0
-//   ~3M sites × 10,000 iters × 8 flops = ~240 GFLOPs
-//   AMD Ryzen AI Max 395+ (unified 80GB): ~2 seconds
+// The 3070 Ti benchmark at α=0.1, L=144:
+//   2.985M sites × 5000 Jacobi + 20000 imaginary-time steps
+//   Memory: ~200 MB (fits in 12 GB)
+//   Expected runtime: ~15s (FP64 memory-bandwidth limited)
 
-use num_complex::Complex64;
-use gutoe_em::{
-    quantum_lepton::{
-        LeptonPsi, jacobi_poisson_3d, apply_hamiltonian_3d, imaginary_time_step_3d,
-        expected_energy_3d, bohr_test_3d, BohrResult,
-    },
-    config::LatticeConfig,
-};
+use gutoe_em::quantum_lepton::{bohr_test_3d, BohrResult};
 
-// ── Backend selection ──────────────────────────────────────────────────────────
+// ── Backend enum ──────────────────────────────────────────────────────────────
 
-/// Which computation backend is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Backend {
-    /// Pure Rust on CPU. Always available.
-    Cpu,
-    /// NVIDIA CUDA. Requires --features cuda and nvcc at compile time.
-    #[cfg(feature = "cuda")]
-    Cuda,
-    /// AMD ROCm/HIP. Requires --features rocm and hipcc at compile time.
-    #[cfg(feature = "rocm")]
-    Rocm,
-}
+pub enum Backend { Cpu, #[cfg(feature = "cuda")] Cuda, #[cfg(feature = "rocm")] Rocm }
 
-/// Detect the best available backend.
 pub fn detect_backend() -> Backend {
-    #[cfg(feature = "rocm")]
-    return Backend::Rocm;
-    #[cfg(feature = "cuda")]
-    return Backend::Cuda;
+    #[cfg(feature = "rocm")] return Backend::Rocm;
+    #[cfg(feature = "cuda")] return Backend::Cuda;
     Backend::Cpu
 }
 
-// ── Solver ────────────────────────────────────────────────────────────────────
+// ── Solver config ─────────────────────────────────────────────────────────────
 
-/// Configuration for the GPU-accelerated 3D hydrogen solver.
 #[derive(Debug, Clone)]
 pub struct SolverConfig {
-    /// Coupling constant α_EM (1/137 for physical hydrogen)
-    pub alpha: f64,
-    /// Lattice size in each dimension (L×L×L cube)
-    pub l: usize,
-    /// Number of Jacobi-Poisson iterations for the Coulomb field
-    pub n_jacobi: usize,
-    /// Number of imaginary-time evolution steps
-    pub n_iter: usize,
-    /// Imaginary time step δτ (stability: δτ < 1/||H||)
-    pub dtau: f64,
-    /// Computation backend
-    pub backend: Backend,
+    pub alpha:     f64,
+    pub l:         usize,   // L×L×L cube
+    pub n_jacobi:  usize,
+    pub n_iter:    usize,
+    pub dtau:      f64,
+    pub backend:   Backend,
 }
 
 impl SolverConfig {
-    /// Default config for physical α = 1/137 on a lattice big enough to fit.
-    /// Minimum L for Bohr convergence: L > 10/α = 1370 → use 1440 (clean tiling).
-    /// Use --features rocm for GPU acceleration on AMD hardware.
-    pub fn physical_hydrogen(backend: Backend) -> Self {
-        let alpha = 1.0 / 137.0;
-        Self {
-            alpha,
-            l: 144, // Start smaller; scale up to 1440 with GPU
-            n_jacobi: 2000,
-            n_iter: 20_000,
-            dtau: 0.001,
-            backend,
-        }
+    /// RTX 3070 Ti: α=0.1, L=144 — Bohr radius (10) fits, ~200 MB VRAM
+    pub fn bohr_3070ti() -> Self {
+        Self { alpha: 0.1, l: 144, n_jacobi: 5000, n_iter: 20_000, dtau: 0.001,
+               backend: detect_backend() }
     }
-
-    /// Fast test config (α=0.5, fits on 12×12×12, CPU feasible)
+    /// Fast CPU test: α=0.5, L=12
     pub fn fast_test(backend: Backend) -> Self {
-        Self {
-            alpha: 0.5,
-            l: 12,
-            n_jacobi: 200,
-            n_iter: 5_000,
-            dtau: 0.01,
-            backend,
-        }
+        Self { alpha: 0.5, l: 12, n_jacobi: 200, n_iter: 5_000, dtau: 0.01, backend }
+    }
+    /// Multi-point scan for Bohr convergence
+    pub fn scan_point(alpha: f64, backend: Backend) -> Self {
+        let l = ((6.0 / alpha) as usize).max(12).min(300);
+        let n_iter = ((3.0 / (alpha * alpha)) as usize).min(50_000).max(2_000);
+        let dtau = 0.003 * alpha.min(1.0);
+        let n_jacobi = 1000;
+        Self { alpha, l, n_jacobi, n_iter, dtau, backend }
     }
 }
 
-/// Run the 3D hydrogen ground state solver on the specified backend.
-///
-/// Returns (E_total, E_kin, E_pot) in lattice units.
-/// E_total < 0 → bound state (hydrogen).
-/// Bohr formula: E_total → −α²/2 as lattice grows large enough.
+// ── Main solver ───────────────────────────────────────────────────────────────
+
 pub fn solve_hydrogen_3d(cfg: &SolverConfig) -> BohrResult {
     match cfg.backend {
-        Backend::Cpu => solve_cpu(cfg),
-        #[cfg(feature = "cuda")]
-        Backend::Cuda => solve_gpu_cuda(cfg),
-        #[cfg(feature = "rocm")]
-        Backend::Rocm => solve_gpu_rocm(cfg),
+        Backend::Cpu                     => solve_cpu(cfg),
+        #[cfg(feature = "cuda")] Backend::Cuda => solve_gpu(cfg),
+        #[cfg(feature = "rocm")] Backend::Rocm => solve_gpu(cfg),
     }
 }
-
-// ── CPU backend ────────────────────────────────────────────────────────────────
 
 fn solve_cpu(cfg: &SolverConfig) -> BohrResult {
     bohr_test_3d(cfg.alpha, cfg.l, cfg.l, cfg.n_jacobi, cfg.n_iter, cfg.dtau)
 }
 
-// ── CUDA backend (stub — implement when nvcc available) ────────────────────────
+// ── GPU FFI (shared between CUDA and ROCm — same symbol, same ABI) ───────────
 
-#[cfg(feature = "cuda")]
-fn solve_gpu_cuda(cfg: &SolverConfig) -> BohrResult {
-    // TODO: call into the compiled CUDA kernels via FFI.
-    // The kernel source is in kernels/schrodinger.cu.
-    // Build: nvcc -O3 -arch=sm_80 kernels/schrodinger.cu -o schrodinger.o
-    //
-    // Steps:
-    // 1. cudaMalloc for rho, phi, psi, h_psi (n × f64 or n × Complex)
-    // 2. Copy rho to device
-    // 3. Loop n_jacobi: jacobi_step_3d<<<grid, 256>>>(...) → phi
-    // 4. Init psi as 3D Gaussian on device
-    // 5. Loop n_iter: apply_hamiltonian_3d + imaginary_time_step + normalise
-    // 6. Compute <H> = dot(psi*, h_psi) on device
-    // 7. Copy result back
-    //
-    // Falls back to CPU until implemented:
-    eprintln!("CUDA backend not yet implemented; falling back to CPU");
-    solve_cpu(cfg)
+#[cfg(any(feature = "cuda", feature = "rocm"))]
+extern "C" {
+    fn run_hydrogen_cuda(
+        alpha_em:    f64,
+        hex_rows:    i32, hex_cols: i32, layers: i32,
+        n_jacobi:    i32, n_iter:   i32, renorm_every: i32,
+        dtau:        f64,
+        out_e_total: *mut f64,
+        out_e_kin:   *mut f64,
+        out_e_pot:   *mut f64,
+    );
 }
 
-// ── ROCm/HIP backend (same kernels, different runtime) ─────────────────────────
-
-#[cfg(feature = "rocm")]
-fn solve_gpu_rocm(cfg: &SolverConfig) -> BohrResult {
-    // Same as CUDA but using HIP runtime (hipMalloc, hipMemcpy, etc.)
-    // Compile kernels with: hipcc -O3 kernels/schrodinger.cu -o schrodinger.o
-    //
-    // HIP is binary-compatible with CUDA on AMD hardware — same kernel source,
-    // same calling convention, different runtime library.
-    //
-    // For the AMD Ryzen AI Max 395+ (integrated GPU, shared 80GB memory):
-    //   - hipMalloc allocates from unified memory pool
-    //   - No explicit data transfer needed (CPU and GPU share the same DRAM)
-    //   - Peak: ~10 TFLOPS FP64 (conservative)
-    //   - 144^3 = 2.985M sites × 20000 iters × 8 flops = ~480 GFLOPs → ~0.05s
-    //
-    // Falls back to CPU until ROCm is linked:
-    eprintln!("ROCm backend not yet implemented; falling back to CPU");
-    solve_cpu(cfg)
+#[cfg(any(feature = "cuda", feature = "rocm"))]
+fn solve_gpu(cfg: &SolverConfig) -> BohrResult {
+    let (mut e_total, mut e_kin, mut e_pot) = (0.0_f64, 0.0_f64, 0.0_f64);
+    unsafe {
+        run_hydrogen_cuda(
+            cfg.alpha,
+            cfg.l as i32, cfg.l as i32, cfg.l as i32,
+            cfg.n_jacobi as i32, cfg.n_iter as i32, 10_i32,
+            cfg.dtau,
+            &mut e_total, &mut e_kin, &mut e_pot,
+        );
+    }
+    let bohr_3d = -cfg.alpha * cfg.alpha / 2.0;
+    BohrResult { alpha: cfg.alpha, l: cfg.l, e_total, e_kin, e_pot,
+                 bohr_3d, ratio: e_total / bohr_3d }
 }
 
-// ── Utility: progressive run showing convergence ───────────────────────────────
+// ── Bohr convergence scan ─────────────────────────────────────────────────────
 
-/// Run with increasing lattice sizes and show how exp_3d converges to 2.0.
-/// This is the definitive test: does the Bohr formula emerge from the Clifford lattice?
-pub fn bohr_convergence_scan(alphas: &[f64], l_values: &[usize], backend: Backend) {
-    println!("GUTOE Bohr convergence scan: exp_3d should → 2.0 as L → ∞");
-    println!("{:>8}  {:>6}  {:>6}  {:>10}  {:>10}  {:>8}  {:>8}",
-        "α", "L", "N", "E_total", "−α²/2", "ratio", "backend");
-    println!("{:>8}  {:>6}  {:>6}  {:>10}  {:>10}  {:>8}  {:>8}",
-        "─", "─", "─", "─", "─", "─", "─");
+/// Scan α values to show exp_3d converging to 2.0 (Bohr formula).
+/// On GPU: each point takes ~15s (3070 Ti) or ~0.05s (395+), so a
+/// 10-point scan is feasible as a single benchmark run.
+pub fn bohr_convergence_scan(alphas: &[f64], backend: Backend) {
+    println!("GUTOE Bohr convergence: E₀ ∝ α^n, n → 2.0 as L → ∞");
+    println!("{:>8}  {:>6}  {:>10}  {:>10}  {:>8}", "α", "L", "E_total", "−α²/2", "ratio");
+    println!("{:>8}  {:>6}  {:>10}  {:>10}  {:>8}", "─", "─", "─", "─", "─");
 
-    for (&alpha, &l) in alphas.iter().zip(l_values.iter()) {
-        let solver_cfg = SolverConfig {
-            alpha,
-            l,
-            n_jacobi: 500,
-            n_iter: ((5.0 / (alpha * alpha)) as usize).min(50_000),
-            dtau: 0.005 * alpha.min(1.0),
-            backend,
-        };
-        let r = solve_hydrogen_3d(&solver_cfg);
-        let be_label = format!("{:?}", backend);
-        println!("{:>8.4}  {:>6}  {:>6}  {:>10.6}  {:>10.6}  {:>8.3}  {:>8}",
-            alpha, l, l * l * l, r.e_total, r.bohr_3d, r.ratio, be_label);
+    let mut prev_e: Option<(f64, f64)> = None;
+    for &alpha in alphas {
+        let cfg = SolverConfig::scan_point(alpha, backend);
+        let r = solve_hydrogen_3d(&cfg);
+        println!("{:>8.4}  {:>6}  {:>10.6}  {:>10.6}  {:>8.3}",
+            alpha, cfg.l, r.e_total, r.bohr_3d, r.ratio);
+
+        if let Some((a0, e0)) = prev_e {
+            let exp = (e0.abs() / r.e_total.abs()).ln() / (a0 / alpha).ln();
+            println!("         exp[{a0:.3}→{alpha:.3}] = {exp:.3}  (Bohr target: 2.0)");
+        }
+        prev_e = Some((alpha, r.e_total));
     }
 }
 
-// ── Tests ──────────────────────────────────────────────────────────────────────
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -201,20 +141,29 @@ mod tests {
     fn cpu_backend_gives_bound_state() {
         let cfg = SolverConfig::fast_test(Backend::Cpu);
         let r = solve_hydrogen_3d(&cfg);
-        assert!(
-            r.e_total < 0.0,
-            "CPU 3D hydrogen: E = {:.6}, expected < 0 (bound state)",
-            r.e_total
-        );
-        println!("  CPU backend: α={:.2} L={} E={:.6} C={:.3}",
-            cfg.alpha, cfg.l, r.e_total, r.ratio);
+        assert!(r.e_total < 0.0,
+            "CPU: α={:.2} L={} E={:.6} must be bound", cfg.alpha, cfg.l, r.e_total);
+        println!("  CPU: α={:.2} L={} E={:.6} C={:.3}", cfg.alpha, cfg.l, r.e_total, r.ratio);
     }
 
     #[test]
-    fn backend_detection_works() {
+    fn backend_detection() {
         let b = detect_backend();
-        println!("  Active backend: {:?}", b);
-        // At minimum, CPU is always available
-        assert!(matches!(b, Backend::Cpu) || true);
+        println!("  Active backend: {b:?}");
+        let _ = b;
+    }
+
+    /// Run the GPU Bohr test if CUDA/ROCm feature is enabled.
+    /// cargo test -p gutoe-gpu --features cuda -- --nocapture
+    #[test]
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    fn gpu_bohr_test() {
+        let cfg = SolverConfig::bohr_3070ti();
+        println!("  Running on {:?}: α={} L={}³ N={}", cfg.backend, cfg.alpha, cfg.l, cfg.l.pow(3));
+        let r = solve_hydrogen_3d(&cfg);
+        println!("  E_kin={:.6} E_pot={:.6} E_total={:.6} C={:.3}",
+            r.e_kin, r.e_pot, r.e_total, r.ratio);
+        println!("  Bohr −α²/2 = {:.6}", r.bohr_3d);
+        assert!(r.e_total < 0.0, "GPU: must be bound at α=0.1 L=144");
     }
 }
