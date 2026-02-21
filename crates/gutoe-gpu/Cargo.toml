@@ -1,0 +1,19 @@
+[package]
+name = "gutoe-gpu"
+version.workspace = true
+edition.workspace = true
+description = "GPU-accelerated Schrodinger solver for GUTOE (CUDA + ROCm via HIP)"
+
+[dependencies]
+gutoe-em = { path = "../gutoe-em" }
+num-complex.workspace = true
+
+# No GPU crate dependencies here — the kernels are compiled separately
+# and linked via build.rs. This keeps the CPU fallback always available.
+
+[features]
+default = []
+cuda  = []   # NVIDIA CUDA: compile kernels with nvcc
+rocm  = []   # AMD ROCm: compile kernels with hipcc (same kernel source)
+# To enable: cargo build --features cuda
+#            cargo build --features rocm
