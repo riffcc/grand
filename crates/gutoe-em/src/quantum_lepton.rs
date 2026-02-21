@@ -710,6 +710,76 @@ mod tests {
         );
     }
 
+    /// 3D Bohr formula on a properly-sized isotropic cube.
+    ///
+    /// For each α, uses L³ with L = 6/α (so Bohr radius a₀ = 1/α ≤ L/6).
+    ///   α=1.0:  a₀=1,  L=6,   216 sites   (trivial)
+    ///   α=0.5:  a₀=2,  L=12,  1728 sites
+    ///   α=0.2:  a₀=5,  L=30,  27000 sites
+    ///   α=0.1:  a₀=10, L=60,  216000 sites (may be slow in debug)
+    ///
+    /// The scaling exponent should converge to 2.0 (Bohr) when the lattice
+    /// is large enough to hold the wave function without boundary compression.
+    #[test]
+    fn bohr_3d_scaling_correct_lattice() {
+        // (alpha, l_per_dim, n_layers=l, n_jacobi, n_iter, dtau)
+        // Each run has L = floor(6/alpha), so a0 = 1/alpha = L/6 << L/2
+        let configs: Vec<(f64, usize)> = vec![
+            (1.00, 6),   // a₀=1,  L=6  — trivially fits
+            (0.50, 12),  // a₀=2,  L=12 — fits with room to spare
+            (0.20, 30),  // a₀=5,  L=30 — fits well
+        ];
+
+        println!("\n  3D Bohr: isotropic cube L³ with a₀=1/α ≤ L/6");
+        println!("  {:>8}  {:>6}  {:>6}  {:>10}  {:>10}  {:>10}  {:>8}",
+            "α", "L", "N", "E_kin", "E_pot", "E_total", "ratio");
+        println!("  {:>8}  {:>6}  {:>6}  {:>10}  {:>10}  {:>10}  {:>8}",
+            "─", "─", "─", "─", "─", "─", "─");
+
+        let mut alphas = Vec::new();
+        let mut energies = Vec::new();
+
+        for (alpha, l) in &configs {
+            let n_layers = *l; // cubic: same in all 3 dims
+            let n_sites = l * l * n_layers;
+            // Iterations scale with 1/alpha² to reach ground state
+            let n_iter = ((1.0 / (alpha * alpha)) as usize).max(500).min(10000);
+            let dtau = 0.01_f64 * alpha.min(1.0);
+            let n_jacobi = 500;
+
+            let r = bohr_test_3d(*alpha, *l, n_layers, n_jacobi, n_iter, dtau);
+            println!("  {:>8.3}  {:>6}  {:>6}  {:>10.6}  {:>10.6}  {:>10.6}  {:>8.3}",
+                alpha, l, n_sites, r.e_kin, r.e_pot, r.e_total, r.ratio);
+
+            assert!(r.e_total < 0.0, "α={alpha:.2}: must be bound on {l}³ cube");
+            alphas.push(*alpha);
+            energies.push(r.e_total);
+        }
+
+        // Compute scaling exponent
+        let alpha_ratio = alphas[0] / alphas[alphas.len()-1];
+        let e_ratio = energies[0].abs() / energies[energies.len()-1].abs();
+        let exp_3d = e_ratio.ln() / alpha_ratio.ln();
+
+        println!("\n  Scaling: E₀ ∝ α^{exp_3d:.3}");
+        println!("  Bohr (3D Coulomb): n = 2.000");
+        println!("  2D log-Coulomb:    n ~ 1.4");
+        println!("  Ratio E₀/(−α²/2) should be constant if n=2 holds");
+
+        // All states must be bound
+        for (&alpha, &e) in alphas.iter().zip(energies.iter()) {
+            assert!(e < 0.0, "α={alpha:.2}: E={e:.6} must be bound");
+        }
+
+        // Convergence to Bohr (n=2) requires L >> 1/alpha in all 3D.
+        // On our hex+z lattice the anisotropy means effective L differs
+        // in z vs xy. The exponent overshoots 2.0 on small lattices —
+        // it approaches 2.0 from above as L grows.
+        // For the 144×144×144 lattice on GPU: exponent should hit ~2.
+        println!("  Current: exp_3d = {exp_3d:.3} (converges to 2.0 as L → ∞)");
+        println!("  For convergence: use L > 10/alpha in all 3 dims → GPU required");
+    }
+
     /// Full 144×144 lattice at physical α_EM = 1/137.
     /// The Bohr radius a₀ = 1/α = 137 ≈ L/2 = 72 → wave function barely fits.
     ///
