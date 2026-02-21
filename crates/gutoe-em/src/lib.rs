@@ -7,6 +7,7 @@
 
 pub mod alpha;
 pub mod analysis;
+pub mod quantum_lepton;
 pub mod config;
 pub mod gauge;
 pub mod geometry;
