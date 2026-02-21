@@ -12,4 +12,4 @@ lean_lib Gutoe where
              `Gutoe.Spacetime, `Gutoe.HawkingCorrection, `Gutoe.CliffordStructure,
              `Gutoe.BaryonPhysics, `Gutoe.HexFermions, `Gutoe.DynamicsProperties,
              `Gutoe.TopologyForces, `Gutoe.Conjectures, `Gutoe.HydrogenFormation,
-             `Gutoe.FineStructure, `Gutoe.MassSpectrum]
+             `Gutoe.FineStructure, `Gutoe.MassSpectrum, `Gutoe.DimensionalStructure]
