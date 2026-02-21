@@ -15,6 +15,24 @@ fn flat_idx(r: usize, c: usize, z: usize, cfg: &LatticeConfig) -> usize {
     (z * cfg.hex_rows + r) * cfg.hex_cols + c
 }
 
+/// Eight neighbours: 6 intra-layer (hex) + 2 inter-layer (z±1, same r,c).
+///
+/// Turns the 12-layer hex toroid into a proper 3D lattice.
+/// The 3D discrete Laplacian has Green's function G(r) ~ 1/(4πr) at large r,
+/// giving the 3D Coulomb potential needed for the Bohr formula.
+///
+/// Compare mesh_neighbours (intra-layer only): gives G(r) ~ -ln(r)/(2π) → 2D log.
+/// With inter-layer links: gives G(r) ~ 1/r → 3D Coulomb → Bohr formula.
+pub fn mesh_neighbours_3d(r: usize, c: usize, z: usize, cfg: &LatticeConfig) -> Vec<usize> {
+    let mut nbrs = mesh_neighbours(r, c, z, cfg);
+    // Add z−1 and z+1 (periodic in the layer direction)
+    let z_prev = (z + cfg.layers - 1) % cfg.layers;
+    let z_next = (z + 1) % cfg.layers;
+    nbrs.push(flat_idx(r, c, z_prev, cfg));
+    nbrs.push(flat_idx(r, c, z_next, cfg));
+    nbrs
+}
+
 /// Six neighbours in the hex grid, wrapping on rows and cols.
 /// Identical to Python `hex_neighbours` + `mesh_neighbours` — intra-layer only.
 pub fn mesh_neighbours(r: usize, c: usize, z: usize, cfg: &LatticeConfig) -> Vec<usize> {

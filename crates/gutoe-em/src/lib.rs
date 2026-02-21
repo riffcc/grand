@@ -25,7 +25,7 @@ pub use gauge::{
     compute_charge_density, em_force_on_lepton, jacobi_poisson, maxwell_wave_step, update_gauge,
     GaugeFields,
 };
-pub use geometry::{mesh_neighbours, site_coords};
+pub use geometry::{mesh_neighbours, mesh_neighbours_3d, site_coords};
 pub use sim::{
     alignment_rg, cycle_prob_rg, init_lattice, landau_pole, running_alpha_s,
     sample_without_replacement, step, veracity,
