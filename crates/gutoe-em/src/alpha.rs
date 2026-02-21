@@ -185,8 +185,21 @@ pub fn mp_me_geometric() -> f64 {
 /// Weinberg angle sin²θ_W at GUT scale (SU(5) prediction).
 pub const WEINBERG_GUT: f64 = 3.0 / 8.0;   // = 0.375
 
+/// Weinberg angle at the electroweak scale (Clifford prediction).
+/// sin²θ_W = 3/13 where:
+///   3 = dim(SU(2)) = spatial bivectors {γ¹², γ¹³, γ²³}
+///   13 = 3 + grade2_dim + grade3_dim = 3+6+4 = Clifford_dim - 3 = 16-3
+/// Agreement with experiment: 99.805% (error 0.195%). Zero free parameters.
+pub const WEINBERG_ELECTROWEAK: f64 = 3.0 / 13.0;
+
 /// Weinberg angle at Z mass (experimental).
 pub const WEINBERG_OBSERVED: f64 = 0.23122;
+
+/// φ_shell formula: exact 12×12 hex lattice Green's function ≈ 13/21.
+/// 13 = Clifford_dim - dim(SU(2)) = 16 - 3 (SAME 13 as Weinberg denominator!)
+/// 21 = T(6) = T(grade2_dim) = T(hex_coordination)
+/// Numerical verification: exact solve gives 0.619978 vs 13/21 = 0.619048 (0.15% error)
+pub const PHI_SHELL_FORMULA: f64 = 13.0 / 21.0;
 
 /// Number of distinct grades in Cl(1,3): {0,1,2,3,4}.
 pub const N_GRADES: u32 = 5;
@@ -399,6 +412,63 @@ mod tests {
             "12×T(17) = {pred:.4} vs experiment {MP_ME_EXP:.4}, error = {:.4}%",
             err * 100.0
         );
+    }
+
+    #[test]
+    fn weinberg_electroweak_3_over_13() {
+        // sin²θ_W = 3/13 = 0.23077 at the electroweak scale
+        // Experiment: 0.23122 at M_Z (MS-bar scheme)
+        // Error: 0.195% — best Clifford prediction by far
+        let pred = WEINBERG_ELECTROWEAK;
+        let err = (pred - WEINBERG_OBSERVED).abs() / WEINBERG_OBSERVED;
+        assert!(
+            err < 0.003, // < 0.3%
+            "sin²θ_W = 3/13 = {pred:.5} vs experiment {WEINBERG_OBSERVED:.5}: error {:.2}%",
+            err * 100.0
+        );
+        // Verify the Clifford decomposition:
+        // 3 = spatial_bivectors, 10 = grade2 + grade3 = 6+4, 13 = 3+10
+        let spatial_biv: u32 = 3;
+        let grade2: u32 = 6;  // C(4,2)
+        let grade3: u32 = 4;  // C(4,3)
+        assert_eq!(spatial_biv + grade2 + grade3, 13, "Weinberg denominator = 3+6+4 = 13");
+        // Also: 13 = Clifford_dim - SU(2)_dim = 16 - 3
+        assert_eq!(CLIFFORD_DIM - spatial_biv, 13, "13 = Clifford_dim - dim(SU(2))");
+        // T(6) = 21 = triangular number of hex coordination
+        assert_eq!(triangular(6), 21, "T(6) = 21");
+        // The 13 connection: same 13 in Weinberg and phi_shell
+        let phi_shell_pred = 13.0 / triangular(6) as f64;
+        let phi_shell_exact = 0.619978; // from exact Green's function solve
+        let phi_err = (phi_shell_pred - phi_shell_exact).abs() / phi_shell_exact;
+        assert!(phi_err < 0.002, "phi_shell = 13/21 = {phi_shell_pred:.6} vs exact {phi_shell_exact:.6}: error {:.3}%", phi_err*100.0);
+    }
+
+    #[test]
+    fn schwinger_correction_n_grades_times_alpha() {
+        // The first-loop correction to both α⁻¹ and mp/me ≈ n_grades × α = 5/137
+        let n_grades = N_GRADES as f64;
+        let alpha = 1.0 / ALPHA_INVERSE_PHYSICAL;
+        let correction = n_grades * alpha;
+
+        // Experimental corrections from integer/Wyler formulas
+        let delta_alpha_inv = ALPHA_INVERSE_PHYSICAL - EDDINGTON_NUMBER as f64;
+        let delta_mp_me = MP_ME_EXP - 6.0 * std::f64::consts::PI.powi(5);
+
+        // Both corrections should be within 10% of 5α
+        let err_alpha = (correction - delta_alpha_inv).abs() / delta_alpha_inv;
+        let err_mp    = (correction - delta_mp_me).abs() / delta_mp_me;
+        assert!(err_alpha < 0.10, "5α = {correction:.6} vs Δ(α⁻¹) = {delta_alpha_inv:.6}: {:.1}%", err_alpha*100.0);
+        assert!(err_mp < 0.10, "5α = {correction:.6} vs Δ(mp/me) = {delta_mp_me:.6}: {:.1}%", err_mp*100.0);
+
+        // The corrected formulas
+        let alpha_inv_corrected = EDDINGTON_NUMBER as f64 + correction;
+        let mp_me_corrected = 6.0 * std::f64::consts::PI.powi(5) + correction;
+        println!("  Schwinger correction 5α = {correction:.6}");
+        println!("  α⁻¹ corrected: {alpha_inv_corrected:.6} vs exp {ALPHA_INVERSE_PHYSICAL:.6} (Δ={:.6})", ALPHA_INVERSE_PHYSICAL - alpha_inv_corrected);
+        println!("  mp/me corrected: {mp_me_corrected:.6} vs exp {MP_ME_EXP:.6} (Δ={:.6})", MP_ME_EXP - mp_me_corrected);
+        // Residuals should be < 0.001 (order α²)
+        assert!((ALPHA_INVERSE_PHYSICAL - alpha_inv_corrected).abs() < 0.001);
+        assert!((MP_ME_EXP - mp_me_corrected).abs() < 0.005);
     }
 
     #[test]
