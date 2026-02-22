@@ -15,6 +15,9 @@
 //   Memory: ~200 MB (fits in 12 GB)
 //   Expected runtime: ~15s (FP64 memory-bandwidth limited)
 
+pub mod watson;
+pub mod speculative;
+
 use gutoe_em::quantum_lepton::{bohr_test_3d, BohrResult};
 
 // ── Backend enum ──────────────────────────────────────────────────────────────
@@ -92,6 +95,17 @@ extern "C" {
     /// Equivalent to L=∞ periodic for localised states. Memory ∝ (2R+1)³
     /// where R ≈ 8/α — independent of the physical box size.
     fn run_hydrogen_obc(
+        alpha_em:    f64,
+        hex_rows:    i32, hex_cols: i32, layers: i32,
+        n_jacobi:    i32, n_iter:   i32, renorm_every: i32,
+        dtau:        f64,
+        out_e_total: *mut f64,
+        out_e_kin:   *mut f64,
+        out_e_pot:   *mut f64,
+    );
+    /// Periodic-boundary variant: SOR Poisson with PBC (cold start),
+    /// periodic Hamiltonian. Includes Madelung-like image corrections.
+    fn run_hydrogen_pbc(
         alpha_em:    f64,
         hex_rows:    i32, hex_cols: i32, layers: i32,
         n_jacobi:    i32, n_iter:   i32, renorm_every: i32,
@@ -365,5 +379,325 @@ mod tests {
                      l, (l as f64) / a0, et, bohr, c);
             assert!(et < 0.0, "OBC L-scan: must be bound at L={l}");
         }
+    }
+
+    /// OBC L-scan at α=0.2: extract C_∞(0.2) via Richardson extrapolation.
+    /// a₀=5 sites, everything converges fast: τ∝1/α²=25, need ~2000 steps.
+    /// If C_∞(0.2) ≈ 0.547 → universal lattice constant (same as α=0.1).
+    /// If C_∞(0.2) ≠ 0.547 → α-dependent, not universal.
+    ///
+    /// cargo test -p gutoe-gpu --features cuda --release -- bohr_obc_lscan_a02 --nocapture
+    #[test]
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    fn bohr_obc_lscan_a02() {
+        let alpha = 0.20_f64;
+        let a0 = 1.0 / alpha;   // Bohr radius = 5 lattice sites
+        let backend = detect_backend();
+        let bohr = -alpha * alpha / 2.0;
+
+        // τ = n_iter × dtau.  ΔE ≈ 3α²C/8 ≈ 0.008.  Need τ >> 1/ΔE = 125.
+        // τ = 500 gives e^{-ΔEτ} = e^{-4} ≈ 2% excited-state contamination.
+        let configs: &[(usize, usize, usize, f64)] = &[
+            //   L    n_sor    n_iter   dtau
+            (  81,    200,  10_000, 0.05),  // L/a₀=16.2
+            ( 121,    300,  10_000, 0.05),  // L/a₀=24.2
+            ( 161,    400,  10_000, 0.05),  // L/a₀=32.2
+            ( 241,    600,  10_000, 0.05),  // L/a₀=48.2
+        ];
+        println!("\n  GUTOE OBC L-scan α=0.2 (a₀=5) — {backend:?}");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "L", "L/a₀", "E_total", "−α²/2", "C");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "─", "─", "─", "─", "─");
+        let mut results: Vec<(usize, f64)> = Vec::new();
+        for &(l, n_sor, n_iter, dtau) in configs {
+            let n = l * l * l;
+            println!("  L={l} ({n} sites, n_sor={n_sor})…");
+            let (mut et, mut ek, mut ep) = (0.0_f64, 0.0_f64, 0.0_f64);
+            unsafe {
+                run_hydrogen_obc(
+                    alpha,
+                    l as i32, l as i32, l as i32,
+                    n_sor as i32, n_iter as i32, 10_i32,
+                    dtau,
+                    &mut et, &mut ek, &mut ep,
+                );
+            }
+            let c = et / bohr;
+            println!("  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
+                     l, (l as f64) / a0, et, bohr, c);
+            assert!(et < 0.0, "OBC L-scan α=0.2: must be bound at L={l}");
+            results.push((l, c));
+        }
+        // Richardson extrapolation: C(L) = C_∞ - B/L
+        // From last two points: B = (C2-C1)/( 1/L1 - 1/L2 ), C_∞ = C2 + B/L2
+        println!("\n  Richardson pair fits:");
+        for i in 1..results.len() {
+            let (l1, c1) = results[i-1];
+            let (l2, c2) = results[i];
+            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let c_inf = c2 + b / l2 as f64;
+            println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
+        }
+    }
+
+    /// OBC L-scan at α=0.07: a₀=14.3 sites. Finer discretization probe.
+    ///
+    /// cargo test -p gutoe-gpu --features rocm --release -- bohr_obc_lscan_a007 --nocapture
+    #[test]
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    fn bohr_obc_lscan_a007() {
+        let alpha = 0.07_f64;
+        let a0 = 1.0 / alpha;
+        let backend = detect_backend();
+        let bohr = -alpha * alpha / 2.0;
+
+        // ΔE ≈ 3α²C/8 ≈ 0.001.  τ=500 → e^{-0.5} ≈ 60% — need more τ.
+        // τ=2500 → e^{-2.5} ≈ 8%.  τ=5000 → e^{-5} ≈ 0.7%.
+        let configs: &[(usize, usize, usize, f64)] = &[
+            //   L    n_sor    n_iter   dtau
+            ( 231,    600,  70_000, 0.05),  // L/a₀=16.2, τ=3500
+            ( 341,    900,  70_000, 0.05),  // L/a₀=23.9
+            ( 461,   1200,  70_000, 0.05),  // L/a₀=32.3
+        ];
+        println!("\n  GUTOE OBC L-scan α=0.07 (a₀=14.3) — {backend:?}");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "L", "L/a₀", "E_total", "−α²/2", "C");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "─", "─", "─", "─", "─");
+        let mut results: Vec<(usize, f64)> = Vec::new();
+        for &(l, n_sor, n_iter, dtau) in configs {
+            let n = l * l * l;
+            println!("  L={l} ({n} sites, n_sor={n_sor})…");
+            let (mut et, mut ek, mut ep) = (0.0_f64, 0.0_f64, 0.0_f64);
+            unsafe {
+                run_hydrogen_obc(
+                    alpha,
+                    l as i32, l as i32, l as i32,
+                    n_sor as i32, n_iter as i32, 10_i32,
+                    dtau,
+                    &mut et, &mut ek, &mut ep,
+                );
+            }
+            let c = et / bohr;
+            println!("  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
+                     l, (l as f64) / a0, et, bohr, c);
+            assert!(et < 0.0, "OBC L-scan α=0.07: must be bound at L={l}");
+            results.push((l, c));
+        }
+        println!("\n  Richardson pair fits:");
+        for i in 1..results.len() {
+            let (l1, c1) = results[i-1];
+            let (l2, c2) = results[i];
+            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let c_inf = c2 + b / l2 as f64;
+            println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
+        }
+    }
+
+    /// OBC L-scan at α=0.05: a₀=20 sites. Finest discretization we can do fast.
+    ///
+    /// cargo test -p gutoe-gpu --features rocm --release -- bohr_obc_lscan_a005 --nocapture
+    #[test]
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    fn bohr_obc_lscan_a005() {
+        let alpha = 0.05_f64;
+        let a0 = 1.0 / alpha;
+        let backend = detect_backend();
+        let bohr = -alpha * alpha / 2.0;
+
+        // ΔE ≈ 3α²C/8 ≈ 0.0005.  Need τ >> 2000.
+        // τ=6700 → e^{-3.35} ≈ 3.5%.
+        let configs: &[(usize, usize, usize, f64)] = &[
+            //   L    n_sor     n_iter   dtau
+            ( 321,   1000,  134_000, 0.05),  // L/a₀=16.1, τ=6700
+            ( 481,   1500,  134_000, 0.05),  // L/a₀=24.1
+            ( 641,   2000,  134_000, 0.05),  // L/a₀=32.1
+        ];
+        println!("\n  GUTOE OBC L-scan α=0.05 (a₀=20) — {backend:?}");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "L", "L/a₀", "E_total", "−α²/2", "C");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "─", "─", "─", "─", "─");
+        let mut results: Vec<(usize, f64)> = Vec::new();
+        for &(l, n_sor, n_iter, dtau) in configs {
+            let n = l * l * l;
+            println!("  L={l} ({n} sites, n_sor={n_sor})…");
+            let (mut et, mut ek, mut ep) = (0.0_f64, 0.0_f64, 0.0_f64);
+            unsafe {
+                run_hydrogen_obc(
+                    alpha,
+                    l as i32, l as i32, l as i32,
+                    n_sor as i32, n_iter as i32, 10_i32,
+                    dtau,
+                    &mut et, &mut ek, &mut ep,
+                );
+            }
+            let c = et / bohr;
+            println!("  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
+                     l, (l as f64) / a0, et, bohr, c);
+            assert!(et < 0.0, "OBC L-scan α=0.05: must be bound at L={l}");
+            results.push((l, c));
+        }
+        println!("\n  Richardson pair fits:");
+        for i in 1..results.len() {
+            let (l1, c1) = results[i-1];
+            let (l2, c2) = results[i];
+            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let c_inf = c2 + b / l2 as f64;
+            println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
+        }
+    }
+
+    /// OBC L-scan at α=0.3: fastest scan, a₀=3.3 sites.
+    /// Third independent C_∞ measurement.
+    ///
+    /// cargo test -p gutoe-gpu --features cuda --release -- bohr_obc_lscan_a03 --nocapture
+    #[test]
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    fn bohr_obc_lscan_a03() {
+        let alpha = 0.30_f64;
+        let a0 = 1.0 / alpha;
+        let backend = detect_backend();
+        let bohr = -alpha * alpha / 2.0;
+
+        // ΔE ≈ 3α²C/8 ≈ 0.018.  τ=500 → e^{-9} ≈ 0.01%.  Very converged.
+        let configs: &[(usize, usize, usize, f64)] = &[
+            //   L    n_sor    n_iter   dtau
+            (  55,    150,  10_000, 0.05),  // L/a₀=16.5
+            (  81,    200,  10_000, 0.05),  // L/a₀=24.3
+            ( 121,    300,  10_000, 0.05),  // L/a₀=36.3
+            ( 161,    400,  10_000, 0.05),  // L/a₀=48.3
+        ];
+        println!("\n  GUTOE OBC L-scan α=0.3 (a₀=3.3) — {backend:?}");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "L", "L/a₀", "E_total", "−α²/2", "C");
+        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+                 "─", "─", "─", "─", "─");
+        let mut results: Vec<(usize, f64)> = Vec::new();
+        for &(l, n_sor, n_iter, dtau) in configs {
+            let n = l * l * l;
+            println!("  L={l} ({n} sites, n_sor={n_sor})…");
+            let (mut et, mut ek, mut ep) = (0.0_f64, 0.0_f64, 0.0_f64);
+            unsafe {
+                run_hydrogen_obc(
+                    alpha,
+                    l as i32, l as i32, l as i32,
+                    n_sor as i32, n_iter as i32, 10_i32,
+                    dtau,
+                    &mut et, &mut ek, &mut ep,
+                );
+            }
+            let c = et / bohr;
+            println!("  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
+                     l, (l as f64) / a0, et, bohr, c);
+            assert!(et < 0.0, "OBC L-scan α=0.3: must be bound at L={l}");
+            results.push((l, c));
+        }
+        println!("\n  Richardson pair fits:");
+        for i in 1..results.len() {
+            let (l1, c1) = results[i-1];
+            let (l2, c2) = results[i];
+            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let c_inf = c2 + b / l2 as f64;
+            println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
+        }
+    }
+
+    /// Boundary diagnostic: OBC vs PBC vs analytical correction at α=0.1.
+    ///
+    /// Tests all three hypotheses in one run:
+    /// 1. Boundary |ψ|² — is the wavefunction hitting the walls?
+    /// 2. PBC comparison — does removing grounded walls change C?
+    /// 3. Analytical correction C + 2/(αL) — does image-charge formula work?
+    ///
+    /// cargo test -p gutoe-gpu --features cuda --release -- bohr_boundary_diagnostics --nocapture
+    #[test]
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    fn bohr_boundary_diagnostics() {
+        let alpha = 0.10_f64;
+        let a0 = 1.0 / alpha;
+        let backend = detect_backend();
+        let bohr = -alpha * alpha / 2.0;
+
+        let configs: &[(usize, usize, usize, f64)] = &[
+            //   L    n_sor    n_iter   dtau
+            ( 161,    500,  34_000, 0.05),
+            ( 241,    700,  34_000, 0.05),
+            ( 321,   1000,  34_000, 0.05),
+        ];
+
+        println!("\n  ═══ GUTOE Boundary Diagnostics α={alpha} (a₀={a0}) — {backend:?} ═══");
+
+        // ── Part 1: OBC with boundary |ψ|² ──
+        println!("\n  ── OBC (grounded walls: ψ=0, φ=α/r) ──");
+        println!("  {:>6}  {:>8}  {:>8}  {:>12}  {:>8}",
+                 "L", "C_raw", "C_corr", "bnd_|ψ|²", "2/(αL)");
+        let mut obc_results: Vec<(usize, f64)> = Vec::new();
+        for &(l, n_sor, n_iter, dtau) in configs {
+            let (mut et, mut ek, mut ep) = (0.0_f64, 0.0_f64, 0.0_f64);
+            println!("  L={l} ({} sites, n_sor={n_sor})…", (l as u64).pow(3));
+            unsafe {
+                run_hydrogen_obc(
+                    alpha,
+                    l as i32, l as i32, l as i32,
+                    n_sor as i32, n_iter as i32, 10_i32,
+                    dtau,
+                    &mut et, &mut ek, &mut ep,
+                );
+            }
+            let c_raw = et / bohr;
+            let correction = 2.0 / (alpha * l as f64);
+            let c_corr = c_raw + correction;
+            // boundary |ψ|² is printed by C code; we just print the rest
+            println!("  {:>6}  {:>8.4}  {:>8.4}  {:>12}  {:>8.4}",
+                     l, c_raw, c_corr, "(see above)", correction);
+            obc_results.push((l, c_raw));
+        }
+        println!("\n  OBC Richardson pair fits:");
+        for i in 1..obc_results.len() {
+            let (l1, c1) = obc_results[i-1];
+            let (l2, c2) = obc_results[i];
+            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let c_inf = c2 + b / l2 as f64;
+            println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
+        }
+
+        // ── Part 2: PBC (periodic boundaries, no walls) ──
+        println!("\n  ── PBC (periodic: no walls, Madelung images) ──");
+        println!("  {:>6}  {:>8}", "L", "C_pbc");
+        let mut pbc_results: Vec<(usize, f64)> = Vec::new();
+        for &(l, n_sor, n_iter, dtau) in configs {
+            let (mut et, mut ek, mut ep) = (0.0_f64, 0.0_f64, 0.0_f64);
+            // PBC needs more SOR sweeps (cold start, no Coulomb warm-start)
+            let n_sor_pbc = n_sor * 3;
+            println!("  L={l} ({} sites, n_sor={n_sor_pbc})…", (l as u64).pow(3));
+            unsafe {
+                run_hydrogen_pbc(
+                    alpha,
+                    l as i32, l as i32, l as i32,
+                    n_sor_pbc as i32, n_iter as i32, 10_i32,
+                    dtau,
+                    &mut et, &mut ek, &mut ep,
+                );
+            }
+            let c_pbc = et / bohr;
+            println!("  {:>6}  {:>8.4}", l, c_pbc);
+            pbc_results.push((l, c_pbc));
+        }
+        println!("\n  PBC Richardson pair fits:");
+        for i in 1..pbc_results.len() {
+            let (l1, c1) = pbc_results[i-1];
+            let (l2, c2) = pbc_results[i];
+            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let c_inf = c2 + b / l2 as f64;
+            println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
+        }
+
+        // ── Part 3: Summary ──
+        println!("\n  ═══ SUMMARY ═══");
+        println!("  If OBC boundary |ψ|² is ~0: wavefunction doesn't reach walls, B is NOT image-charge.");
+        println!("  If PBC C_∞ ≈ OBC C_∞: the 1/L correction is NOT from grounded-wall images.");
+        println!("  If C_corr is constant across L: B = 2/(αL) is the exact correction.\n");
     }
 }
