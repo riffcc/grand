@@ -12,4 +12,11 @@ lean_lib Gutoe where
              `Gutoe.Spacetime, `Gutoe.HawkingCorrection, `Gutoe.CliffordStructure,
              `Gutoe.BaryonPhysics, `Gutoe.HexFermions, `Gutoe.DynamicsProperties,
              `Gutoe.TopologyForces, `Gutoe.Conjectures, `Gutoe.HydrogenFormation,
-             `Gutoe.FineStructure, `Gutoe.MassSpectrum, `Gutoe.DimensionalStructure]
+             `Gutoe.FineStructure, `Gutoe.MassSpectrum, `Gutoe.DimensionalStructure,
+             `Gutoe.Z3Uniqueness, `Gutoe.BellInequality, `Gutoe.ThreeGenerations,
+             `Gutoe.KoideMasses, `Gutoe.LeptonMass, `Gutoe.PerturbativeSymmetry,
+             `Gutoe.SignatureUniqueness, `Gutoe.LatticeGeometry, `Gutoe.InstantonMass,
+             `Gutoe.Z3ForcedStructure,
+             `Gutoe.GaugeGroupSU2, `Gutoe.GaugeGroupSU3, `Gutoe.GaugeGroupSM,
+             `Gutoe.GaugeConstants, `Gutoe.Chirality, `Gutoe.ContinuumLimit,
+             `Gutoe.LorentzInvariance, `Gutoe.GrandMasterTheorem]
