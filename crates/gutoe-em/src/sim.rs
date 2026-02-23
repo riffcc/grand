@@ -131,6 +131,32 @@ pub fn landau_pole(cfg: &LatticeConfig) -> f64 {
     (1.0 / (b0_2pi * cfg.coupling_uv)).exp() - 1.0
 }
 
+/// Z₃ instanton action S_inst(t) = −ln(cycle_prob_rg(t)).
+///
+/// This is the action per instanton event — one Z₃ color rotation (quark
+/// recoloring = vacuum sector change). Increases monotonically from ~ln(20)
+/// at t=0 to ∞ at the Landau pole.
+///
+/// Physical interpretation: cycle_prob_rg(t) = fugacity of Z₃ gauge tunneling.
+/// The lepton mass freezes in at the moment this fugacity falls below m_e/m_p,
+/// i.e., when S_inst first crosses ln(m_p/m_e) ≈ 7.515.
+pub fn z3_instanton_action(t: usize, cfg: &LatticeConfig) -> f64 {
+    let cp = cycle_prob_rg(t, cfg);
+    if cp <= 0.0 { f64::INFINITY } else { -cp.ln() }
+}
+
+/// First t where S_inst(t) ≥ s_target. Returns None if never reached within
+/// 10_000 steps. Used to locate the mass ratio threshold: t* where
+/// S_inst = ln(m_p/m_e) ≈ 7.515.
+pub fn instanton_threshold(s_target: f64, cfg: &LatticeConfig) -> Option<usize> {
+    for t in 0..10_000 {
+        if z3_instanton_action(t, cfg) >= s_target {
+            return Some(t);
+        }
+    }
+    None
+}
+
 // ── Lattice initialisation ────────────────────────────────────────────────────
 
 pub fn init_lattice(cfg: &LatticeConfig) -> Vec<u8> {
@@ -161,16 +187,20 @@ pub fn sample_without_replacement<R: Rng>(rng: &mut R, pool: &[usize], n: usize)
 ///   cycle_prob_rg(t) → 0 as t → t_*   (quarks freeze: confinement)
 ///   alignment_rg(t)  → ∞ as t → t_*   (binding energy grows: mass)
 ///   t_* = exp(2π / (b₀ × α_UV)) ≈ 149 (end of Phase 1)
-pub fn step<R: Rng>(
+/// Like `step`, but also returns the number of Z₃ cycle events that fired.
+/// Each cycle event is one Z₃ instanton: a quark undergoes a color rotation.
+/// The empirical rate per quark per step ≈ `cycle_prob_rg(t)` = exp(−S_inst(t)).
+pub fn step_counted<R: Rng>(
     lattice: &[u8],
     rng: &mut R,
     cfg: &LatticeConfig,
     gauge: Option<&GaugeFields>,
     proton_sites: &HashSet<usize>,
     t: usize,
-) -> Vec<u8> {
+) -> (Vec<u8>, usize) {
     let n = cfg.n_sites();
     let mut new = lattice.to_vec();
+    let mut z3_cycles: usize = 0;
 
     // Running coupling: cycle_prob decreases, alignment increases toward t_*
     let cp = cycle_prob_rg(t, cfg);
@@ -207,6 +237,7 @@ pub fn step<R: Rng>(
                 // Z₃ cycle: bit rotation in Cl(1,3)
                 // Rate DECREASES with time: quarks freeze at confinement
                 new[site] = Z3_TABLE[state as usize];
+                z3_cycles += 1;
             } else if r_val < cp + cfg.clifford_prob {
                 // Clifford XOR with a random active (non-lepton) neighbour
                 let nbrs = mesh_neighbours(r, c, z, cfg);
@@ -292,7 +323,20 @@ pub fn step<R: Rng>(
         }
     }
 
-    new
+    (new, z3_cycles)
+}
+
+/// One simulation step. Returns the updated lattice.
+/// Use `step_counted` if you also need the Z₃ cycle event count.
+pub fn step<R: Rng>(
+    lattice: &[u8],
+    rng: &mut R,
+    cfg: &LatticeConfig,
+    gauge: Option<&GaugeFields>,
+    proton_sites: &HashSet<usize>,
+    t: usize,
+) -> Vec<u8> {
+    step_counted(lattice, rng, cfg, gauge, proton_sites, t).0
 }
 
 #[cfg(test)]

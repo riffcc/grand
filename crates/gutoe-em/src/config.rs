@@ -58,7 +58,10 @@ impl Default for LatticeConfig {
             hex_cols: 12,
             layers: 12,
             differentiation_prob: 0.02,
-            cycle_prob: 0.05,
+            // cp = exp(-|magneticTriplet|) = exp(-3) ≈ 0.04979:
+            //   one unit of Z₃ instanton action per quark-colour corner.
+            //   At t=0: S_inst(0) = −ln(cp) = 3 = |{γ¹², γ¹³, γ²³}| (Lean: z3_instanton_initial_action)
+            cycle_prob: (-3.0_f64).exp(),
             clifford_prob: 0.03,
             alignment_strength: 0.15,
             quark_threshold: 0.6,

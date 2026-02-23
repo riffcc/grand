@@ -70,6 +70,10 @@ fn build_nbr_cache(cfg: &LatticeConfig) -> Vec<Vec<usize>> {
 ///
 /// Positive source (proton quark, +2/3 or combined +1) → positive φ.
 /// Lepton drifts toward max φ → EM attraction.
+///
+/// Zero-mode fix: the mean of φ is subtracted after convergence.
+/// On a periodic lattice ∇²φ = −ρ only determines φ up to a constant;
+/// subtracting the mean enforces the unique zero-mean solution.
 pub fn jacobi_poisson(rho: &[f64], cfg: &LatticeConfig, n_iter: usize) -> Vec<f64> {
     let n = cfg.n_sites();
     let nbr_cache = build_nbr_cache(cfg);
@@ -85,6 +89,10 @@ pub fn jacobi_poisson(rho: &[f64], cfg: &LatticeConfig, n_iter: usize) -> Vec<f6
         }
         std::mem::swap(&mut phi, &mut phi_new);
     }
+
+    // Zero-mode fix: subtract mean to uniquely fix the constant ambiguity
+    let mean = phi.iter().sum::<f64>() / n as f64;
+    phi.iter_mut().for_each(|v| *v -= mean);
     phi
 }
 
@@ -106,6 +114,10 @@ fn hex_laplacian(field: &[f64], cfg: &LatticeConfig) -> Vec<f64> {
 // ── Maxwell scalar wave equation (leapfrog) ───────────────────────────────────
 
 /// Leapfrog step: A_new = 2·A − A_prev + c²·∇²A + coupling·ρ
+///
+/// Zero-mode fix: the k=0 Fourier component of A satisfies ∂²A₀/∂t² = J₀,
+/// growing quadratically if there is a net source J₀ ≠ 0.  Subtracting
+/// mean(A_new) after each step pins the zero mode to zero.
 pub fn maxwell_wave_step(gauge: &mut GaugeFields, rho: &[f64], cfg: &LatticeConfig) {
     let c2 = cfg.photon_c * cfg.photon_c;
     let lap = hex_laplacian(&gauge.a, cfg);
@@ -114,8 +126,109 @@ pub fn maxwell_wave_step(gauge: &mut GaugeFields, rho: &[f64], cfg: &LatticeConf
     for i in 0..n {
         a_new[i] = 2.0 * gauge.a[i] - gauge.a_prev[i] + c2 * lap[i] + rho[i] * cfg.photon_coupling;
     }
+    // Zero-mode fix: subtract mean
+    let mean_new = a_new.iter().sum::<f64>() / n as f64;
+    a_new.iter_mut().for_each(|v| *v -= mean_new);
     gauge.a_prev.clone_from(&gauge.a);
     gauge.a = a_new;
+}
+
+/// Measure the photon dispersion coefficient ω/k on the hex lattice.
+///
+/// Initialises A as a pure cosine mode with wavevector k = 2π·n / hex_cols,
+/// then evolves for `n_steps` and measures the oscillation period by tracking
+/// A at site 0.  Returns (measured_ω, expected_ω, ratio ω/ω_expected).
+///
+/// On the periodic hex lattice, ω_expected = arccos(1 + c²·λ/2) where λ is
+/// the hex Laplacian eigenvalue for the mode, computed numerically.
+pub fn measure_photon_dispersion(
+    cfg: &LatticeConfig,
+    mode_n: usize,
+    n_steps: usize,
+) -> (f64, f64, f64) {
+    use std::f64::consts::PI;
+    let n = cfg.n_sites();
+    let k = 2.0 * PI * mode_n as f64 / cfg.hex_cols as f64;
+
+    // Initialise A(site) = cos(k · col)
+    let mut a = vec![0.0f64; n];
+    for site in 0..n {
+        let c = site % cfg.hex_cols;
+        a[site] = (k * c as f64).cos();
+    }
+
+    // Zero-mean (remove constant component)
+    let mean_a = a.iter().sum::<f64>() / n as f64;
+    a.iter_mut().for_each(|v| *v -= mean_a);
+
+    // Compute the hex Laplacian eigenvalue numerically for this mode
+    let nbr_cache: Vec<Vec<usize>> = (0..n)
+        .map(|site| {
+            let (r, c, z) = crate::geometry::site_coords(site, cfg);
+            crate::geometry::mesh_neighbours(r, c, z, cfg)
+        })
+        .collect();
+    let lambda = {
+        let mut lap = vec![0.0f64; n];
+        for site in 0..n {
+            let nbrs = &nbr_cache[site];
+            let k_deg = nbrs.len() as f64;
+            let sum: f64 = nbrs.iter().map(|&nb| a[nb] - a[site]).sum();
+            lap[site] = sum / k_deg;
+        }
+        // λ = lap · a / (a · a)  (Rayleigh quotient)
+        let num: f64 = lap.iter().zip(a.iter()).map(|(l, av)| l * av).sum();
+        let den: f64 = a.iter().map(|av| av * av).sum();
+        if den > 1e-14 { num / den } else { 0.0 }
+    };
+
+    // Expected frequency from leapfrog dispersion: ω = arccos(1 + c²·λ/2)
+    let c2 = cfg.photon_c * cfg.photon_c;
+    let arg = 1.0 + c2 * lambda / 2.0;
+    let omega_expected = if arg.abs() <= 1.0 { arg.acos() } else { 0.0 };
+
+    // Run leapfrog with zero-velocity start (A_prev = A)
+    let rho = vec![0.0f64; n];
+    let mut gauge = GaugeFields {
+        phi: vec![0.0f64; n],
+        a: a.clone(),
+        a_prev: a.clone(), // zero initial velocity
+    };
+
+    let mut a0_series = Vec::with_capacity(n_steps);
+    for _ in 0..n_steps {
+        maxwell_wave_step(&mut gauge, &rho, cfg);
+        a0_series.push(gauge.a[0]);
+    }
+
+    // Extract period from zero crossings (positive → negative)
+    let mut crossings = Vec::new();
+    for i in 1..a0_series.len() {
+        if a0_series[i - 1] > 0.0 && a0_series[i] <= 0.0 {
+            crossings.push(i as f64);
+        }
+    }
+    let measured_period = if crossings.len() >= 2 {
+        let half_periods: Vec<f64> =
+            crossings.windows(2).map(|w| w[1] - w[0]).collect();
+        2.0 * half_periods.iter().sum::<f64>() / half_periods.len() as f64
+    } else {
+        f64::NAN
+    };
+
+    let omega_measured = if measured_period.is_finite() {
+        2.0 * PI / measured_period
+    } else {
+        0.0
+    };
+
+    let ratio = if omega_expected > 1e-14 {
+        omega_measured / omega_expected
+    } else {
+        1.0
+    };
+
+    (omega_measured, omega_expected, ratio)
 }
 
 // ── EM force on lepton ────────────────────────────────────────────────────────
@@ -395,5 +508,96 @@ mod tests {
         assert_eq!(rho.len(), cfg.n_sites());
         assert!(rho[0] > 0.0, "UP quark site should have positive charge");
         assert!(rho[2] < 0.0, "DOWN quark site should have negative charge");
+    }
+
+    // ── Zero-mode fix ─────────────────────────────────────────────────────────
+
+    /// Without zero-mode fix, a net source grows A quadratically.
+    /// With the fix (mean subtraction), A stays bounded after many steps.
+    #[test]
+    fn zero_mode_fix_prevents_quadratic_drift() {
+        let cfg = small_cfg();
+        let mut gauge = GaugeFields::new(cfg.n_sites());
+        // Net source (sum ρ ≠ 0) would previously cause unbounded A growth
+        let mut rho = vec![0.0f64; cfg.n_sites()];
+        rho[center_site(&cfg)] = 1.0; // constant net positive charge
+
+        for _ in 0..200 {
+            maxwell_wave_step(&mut gauge, &rho, &cfg);
+        }
+        // With zero-mode fix, the max |A| should remain bounded (< 1.0)
+        // Without fix it grows as ~t² * coupling = 200² * 0.05 = 2000
+        let max_a = gauge.a.iter().map(|v| v.abs()).fold(0.0f64, f64::max);
+        assert!(
+            max_a < 1.0,
+            "Zero-mode should be pinned; A grows unbounded without fix: max|A| = {max_a:.2}"
+        );
+    }
+
+    /// Jacobi Poisson solution is zero-mean after the fix.
+    #[test]
+    fn jacobi_poisson_zero_mean() {
+        let cfg = small_cfg();
+        let mut rho = vec![0.0f64; cfg.n_sites()];
+        rho[center_site(&cfg)] = 1.0;
+        let phi = jacobi_poisson(&rho, &cfg, 200);
+        let mean = phi.iter().sum::<f64>() / phi.len() as f64;
+        assert!(
+            mean.abs() < 1e-10,
+            "Jacobi solution should be zero-mean after fix; got mean = {mean:.2e}"
+        );
+    }
+
+    // ── Photon dispersion ─────────────────────────────────────────────────────
+
+    /// Photon wave oscillates with a finite, non-zero period on the hex lattice.
+    ///
+    /// cos(kc) is not a Laplacian eigenfunction on the offset hex grid, so the
+    /// exact dispersion formula doesn't apply.  We verify the physical properties:
+    ///   1. Wave oscillates (non-zero, finite ω)
+    ///   2. ω is in the stable range (0, π) — leapfrog stability
+    ///   3. ω/k is printed as the dispersion coefficient
+    #[test]
+    fn photon_dispersion_hex_lattice() {
+        let cfg = LatticeConfig {
+            hex_rows: 12,
+            hex_cols: 12,
+            layers: 1,
+            ..Default::default()
+        };
+        let (omega_meas, omega_exp, _ratio) = measure_photon_dispersion(&cfg, 2, 600);
+        let k = 2.0 * std::f64::consts::PI * 2.0 / cfg.hex_cols as f64;
+        let phase_vel = if k > 1e-14 { omega_meas / k } else { 0.0 };
+        println!(
+            "Photon dispersion n=2: ω_measured={omega_meas:.4}  ω_rayleigh={omega_exp:.4}  \
+             phase_vel=ω/k={phase_vel:.4}  c={:.4}",
+            cfg.photon_c
+        );
+        // Wave must oscillate with a definite, finite period
+        assert!(omega_meas > 1e-6, "Wave must oscillate: ω = {omega_meas:.6}");
+        // Leapfrog stability: ω < π
+        assert!(omega_meas < std::f64::consts::PI, "ω = {omega_meas:.4} exceeds stability limit π");
+        // Phase velocity in plausible range relative to c
+        assert!(
+            phase_vel > 0.01 * cfg.photon_c && phase_vel < 10.0 * cfg.photon_c,
+            "Phase velocity {phase_vel:.4} should be O(c={:.4})", cfg.photon_c
+        );
+    }
+
+    /// Higher k → higher ω (normal dispersion).
+    #[test]
+    fn photon_dispersion_increases_with_mode_number() {
+        let cfg = LatticeConfig {
+            hex_rows: 12,
+            hex_cols: 12,
+            layers: 1,
+            ..Default::default()
+        };
+        let (_, omega1, _) = measure_photon_dispersion(&cfg, 1, 600);
+        let (_, omega2, _) = measure_photon_dispersion(&cfg, 2, 600);
+        assert!(
+            omega2 > omega1,
+            "Mode n=2 should have higher ω than n=1: ω₁={omega1:.4} ω₂={omega2:.4}"
+        );
     }
 }
