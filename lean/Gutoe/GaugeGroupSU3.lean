@@ -51,6 +51,15 @@ theorem quarkOrbit_z3_invariant : quarkOrbit.image z3_4d = quarkOrbit := by deci
 theorem quarkOrbit_z3_transitive : ∀ s ∈ quarkOrbit, ∃ k : Fin 3, z3_4d^[k.val] 3 = s := by
   decide
 
+/-- GRAND-67 (minimax-safe):
+    The quark orbit is equivalent to `Fin 3`, i.e. it is a genuine 3-state
+    color representation carrier. -/
+theorem quarkOrbit_equiv_fin3 : Nonempty ({s // s ∈ quarkOrbit} ≃ Fin 3) := by
+  classical
+  have hcard : Fintype.card {s // s ∈ quarkOrbit} = 3 := by
+    simpa [Fintype.card_subtype_iff, quarkOrbit_card]
+  exact ⟨Fintype.equivFinOfCardEq hcard⟩
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Part 2: su(3) dimension — n²−1 formula
 -- ══════════════════════════════════════════════════════════════════════════════

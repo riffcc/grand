@@ -57,6 +57,44 @@ theorem quarks_not_z3_fixed :
     ∀ s ∈ quarkOrbit, z3_4d s ≠ s := by decide
 
 -- ══════════════════════════════════════════════════════════════════════════════
+-- Part 1b: Z₃ singlet-sector split (minimax-safe finite structure)
+-- ══════════════════════════════════════════════════════════════════════════════
+
+/-- The Z₃-fixed singlet sector splits into two disjoint pairs:
+    low-grade pair `{1,2}` and high-grade pair `{15,16}`. -/
+theorem z3_singlet_sector_split :
+    z3_singlets = ({1, 2} : Finset ℕ) ∪ ({15, 16} : Finset ℕ) ∧
+    ({1, 2} : Finset ℕ) ∩ ({15, 16} : Finset ℕ) = ∅ := by
+  constructor <;> decide
+
+/-- The low-grade singlet pair has cardinality two and is contained in `z3_singlets`.
+    This is the finite weak-doublet candidate sector. -/
+theorem weak_doublet_candidate_pair :
+    ({1, 2} : Finset ℕ) ⊆ z3_singlets ∧ ({1, 2} : Finset ℕ).card = 2 := by
+  constructor <;> decide
+
+/-- The high-grade singlet pair has cardinality two and is contained in `z3_singlets`.
+    This isolates the complementary singlet sector (right-handed-style pair). -/
+theorem right_handed_singlet_pair :
+    ({15, 16} : Finset ℕ) ⊆ z3_singlets ∧ ({15, 16} : Finset ℕ).card = 2 := by
+  constructor <;> decide
+
+/-- The full Z₃ singlet sector has exactly four states. -/
+theorem z3_singlet_sector_card :
+    z3_singlets.card = 4 := by
+  decide
+
+/-- GRAND-68 (minimax-safe):
+    Weak-doublet candidate from the Z₃-singlet sector:
+    `{1,2}` is a 2-state pair, with exactly one grade-1 state (the lepton γ⁰). -/
+theorem lepton_doublet_from_z3_singlets :
+    ({1, 2} : Finset ℕ).card = 2 ∧
+    ({1, 2} : Finset ℕ) ⊆ z3_singlets ∧
+    ({1, 2} : Finset ℕ).filter (fun s => s ∈ grade1_4d) = ({2} : Finset ℕ) := by
+  refine ⟨by decide, by decide, ?_⟩
+  decide
+
+-- ══════════════════════════════════════════════════════════════════════════════
 -- Part 2: Grade-2 decomposition — SU(2) generators + EM bivectors
 -- ══════════════════════════════════════════════════════════════════════════════
 
@@ -72,6 +110,43 @@ theorem su2_sector_z3_invariant :
 /-- The EM triplet (temporal bivectors) is also Z₃-invariant. -/
 theorem em_sector_z3_invariant :
     emTriplet.image z3_4d = emTriplet := by decide
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Part 2b: Particle IDs / quantum table / spin-1 grade-2 sector
+-- ══════════════════════════════════════════════════════════════════════════════
+
+/-- GRAND-113 (minimax-safe):
+    Particle identification from grade excitations:
+    grade-1 states split into lepton + quark orbit,
+    and grade-2 states split into EM + magnetic triplets. -/
+theorem particle_identification_from_grade_excitations :
+    grade1_4d = leptonState ∪ quarkOrbit ∧
+    grade2_4d = emTriplet ∪ magneticTriplet := by
+  constructor
+  · exact (grade1_lepton_quark_partition).1.symm
+  · exact (grade2_su2_em_partition).1.symm
+
+/-- GRAND-114 (minimax-safe):
+    Finite quantum-number table from Clifford sectors:
+    1 lepton singlet, 3 quark states, 3 EM bivectors, 3 magnetic bivectors,
+    and 4 total Z₃ singlets. -/
+theorem quantum_number_table_from_clifford_grades :
+    leptonState.card = 1 ∧
+    quarkOrbit.card = 3 ∧
+    emTriplet.card = 3 ∧
+    magneticTriplet.card = 3 ∧
+    z3_singlets.card = 4 := by
+  refine ⟨by decide, by decide, by decide, by decide, z3_singlet_sector_card⟩
+
+/-- GRAND-57 (minimax-safe):
+    Grade-2 (bivector) gauge-boson sector has six states and splits as 3+3
+    (temporal EM triplet + spatial magnetic triplet), i.e. the spin-1 carrier sector. -/
+theorem gauge_boson_spin1_grade2_sector :
+    grade2_4d.card = 6 ∧
+    emTriplet.card = 3 ∧
+    magneticTriplet.card = 3 ∧
+    emTriplet ∩ magneticTriplet = ∅ := by
+  refine ⟨by decide, by decide, by decide, (grade2_su2_em_partition).2⟩
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Part 3: Generator counting — 1 + 3 + 8 = 12

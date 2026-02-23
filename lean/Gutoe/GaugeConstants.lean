@@ -91,8 +91,28 @@ Given sin²θ_W = 3/13:
 /-- cos²θ_W = 10/13 from sin²θ_W = 3/13. -/
 theorem cos_sq_theta_w : 1 - (3/13 : ℚ) = 10/13 := by norm_num
 
-/-- m_Z/m_W = √(13/10) from cos²θ_W = 10/13. -/
-theorem mZ_over_mW_sq : (1 : ℚ)^2 / (10/13) = 13/10 := by norm_num
+/-- cos²θ_W = 10/13 from the shared Z₃-orbit Weinberg theorem. -/
+theorem cos_sq_theta_w_from_z3 :
+    1 - (magneticTriplet.card : ℚ) / (2^4 - magneticTriplet.card : ℚ) = 10 / 13 := by
+  rw [weinberg_from_z3_orbits]
+  norm_num
+
+/-- Squared W/Z inverse ratio from Z₃-orbit Weinberg angle:
+    (m_Z / m_W)² = 1 / cos²θ_W = 13/10. -/
+theorem mZ_over_mW_sq_from_z3 :
+    (1 : ℚ) / (1 - (magneticTriplet.card : ℚ) / (2^4 - magneticTriplet.card : ℚ)) = 13 / 10 := by
+  rw [cos_sq_theta_w_from_z3]
+  norm_num
+
+/-- Positive-root mass ratio statement in ℝ:
+    m_Z / m_W = √(13/10). -/
+theorem mZ_over_mW_from_z3 :
+    Real.sqrt (((1 : ℚ) / (1 - (magneticTriplet.card : ℚ) / (2^4 - magneticTriplet.card : ℚ)) : ℚ) : ℝ) =
+    Real.sqrt ((13 / 10 : ℚ) : ℝ) := by
+  have hq :
+      (1 : ℚ) / (1 - (magneticTriplet.card : ℚ) / (2^4 - magneticTriplet.card : ℚ)) = 13 / 10 :=
+    mZ_over_mW_sq_from_z3
+  exact congrArg Real.sqrt (by exact_mod_cast hq)
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Wilson loop area law → confinement (logical chain)
@@ -145,6 +165,40 @@ def confinement_from_wilson_loop
     Confined :=
   ⟨σ, hσ, area_law⟩
 
+/-- GRAND-145 (minimax-safe):
+    If rectangular Wilson loops obey area law, extracting
+    `-log W / r` along loops of area `r^2` yields a linear potential `σ r`.
+    This is the algebraic confinement signature. -/
+theorem confinement_slope_from_area_law
+    (σ : ℝ)
+    (W : ℝ → ℝ)
+    (h_area : ∀ r : ℝ, 0 < r → W (r ^ 2) = Real.exp (-(σ * r ^ 2))) :
+    ∀ r : ℝ, 0 < r → (-Real.log (W (r ^ 2))) / r = σ * r := by
+  intro r hr
+  rw [h_area r hr]
+  calc
+    (-Real.log (Real.exp (-(σ * r ^ 2)))) / r
+        = (- (-(σ * r ^ 2))) / r := by rw [Real.log_exp]
+    _ = (σ * r ^ 2) / r := by ring
+    _ = σ * r := by
+      field_simp [hr.ne']
+      ring
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Fermi constant identity
+-- ══════════════════════════════════════════════════════════════════════════════
+
+/-- GRAND-140 (minimax-safe):
+    Pure algebraic substitution from `m_W = g f₀ / 2` into
+    `G_F = g² / (8 m_W²)` gives `G_F = 1 / (2 f₀²)`. -/
+theorem fermi_constant_from_mw_relation
+    (g f0 : ℝ)
+    (hg : g ≠ 0)
+    (hf0 : f0 ≠ 0) :
+    g ^ 2 / (8 * (g * f0 / 2) ^ 2) = 1 / (2 * f0 ^ 2) := by
+  field_simp [hg, hf0]
+  ring
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Charge sum = 0 per generation (baby anomaly)
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -159,6 +213,17 @@ Each generation has total hypercharge sum = 0.
     Quarks: 3 colors × (2/3 + (-1/3)) = 1
     Leptons: (-1) + 0 = -1
     Total: 1 + (-1) = 0 -/
-theorem charge_sum_per_generation : 3 * ((2/3 : ℚ) - (1/3 : ℚ)) - 1 = 0 := by norm_num
+theorem charge_sum_per_generation :
+    (3 : ℚ) * ((2 / 3 : ℚ) - (1 / 3 : ℚ)) + (-1 : ℚ) + (0 : ℚ) = 0 := by
+  norm_num
+
+/-- GRAND-121 (minimax-safe):
+    Same cancellation, now tied to the shared Z₃ color multiplicity term
+    `magneticTriplet.card = 3` from Cl(1,3) orbit structure. -/
+theorem anomaly_cancellation_from_clifford :
+    (magneticTriplet.card : ℚ) * ((2 / 3 : ℚ) - (1 / 3 : ℚ)) + (-1 : ℚ) + (0 : ℚ) = 0 := by
+  have hcolor : magneticTriplet.card = 3 := by decide
+  rw [hcolor]
+  norm_num
 
 end Gutoe.GaugeConstants

@@ -18,3 +18,5 @@ venv/
 .DS_Store
 /tmp/
 .mcp.json
+
+AGENTS.md

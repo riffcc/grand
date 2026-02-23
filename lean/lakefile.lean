@@ -20,4 +20,6 @@ lean_lib Gutoe where
              `Gutoe.GaugeGroupSU2, `Gutoe.GaugeGroupSU3, `Gutoe.GaugeGroupSM,
              `Gutoe.GaugeConstants, `Gutoe.Chirality, `Gutoe.ContinuumLimit,
              `Gutoe.LorentzInvariance, `Gutoe.GrandMasterTheorem,
-             `Gutoe.GravityMetric]
+             `Gutoe.GravityMetric,
+             `Gutoe.KerrGeometry,
+             `Gutoe.LambdaQG]

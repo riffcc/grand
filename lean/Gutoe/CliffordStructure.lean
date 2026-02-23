@@ -136,6 +136,13 @@ theorem cl13_grade_dimensions :
 theorem grade_sum_eq_16 :
     (∑ k ∈ Finset.range 5, Nat.choose 4 k) = 16 := by native_decide
 
+/-- GRAND-112 (minimax-safe):
+    The rail state space is exactly `Vec16` because its dimension equals
+    the Cl(1,3) grade-sum dimension. -/
+theorem state_space_vec16_from_cl13 :
+    Module.finrank ℝ Vec16 = (∑ k ∈ Finset.range 5, Nat.choose 4 k) := by
+  rw [vec16_dim, grade_sum_eq_16]
+
 -- ── Connecting Cl(1,3) generators to Vec16 rail directions ──────────────────
 
 open Gutoe.Spacetime in
