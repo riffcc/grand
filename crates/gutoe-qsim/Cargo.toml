@@ -1,0 +1,11 @@
+[package]
+name = "gutoe-qsim"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+gutoe-em = { path = "../gutoe-em" }
+blake3 = "1"
+rand.workspace = true

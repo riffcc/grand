@@ -20,7 +20,14 @@ fn main() {
 
         println!("cargo:warning=Compiling CUDA kernels for {arch}...");
 
-        let status = Command::new("nvcc")
+        // Find nvcc: honour NVCC env, then /usr/local/cuda/bin, then PATH
+        let nvcc = env::var("NVCC").unwrap_or_else(|_| {
+            let default = "/usr/local/cuda/bin/nvcc";
+            if std::path::Path::new(default).exists() { default.to_string() }
+            else { "nvcc".to_string() }
+        });
+
+        let status = Command::new(&nvcc)
             .args(&[
                 "-O3",
                 &format!("-arch={arch}"),

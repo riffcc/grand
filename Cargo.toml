@@ -7,6 +7,7 @@ members = [
     "crates/gutoe-lattice",
     "crates/gutoe-physics",
     "crates/gutoe-viz",
+    "crates/gutoe-qsim",
     "crates/gutoe-analog-gravity",
     "server",
 ]

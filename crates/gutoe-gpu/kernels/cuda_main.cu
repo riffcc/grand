@@ -273,6 +273,34 @@ void scale_kernel(C64* psi, double scale, int n)
     if (i < n) psi[i] = cmulr(psi[i], scale);
 }
 
+/* ── Boundary norm: sum |ψ|² for sites touching any wall ─────────────────── */
+__global__
+void boundary_norm_kernel(const C64* psi, double* partial,
+                           int n, int hex_rows, int hex_cols, int layers)
+{
+    extern __shared__ double sm[];
+    int tid = threadIdx.x;
+    int i   = blockIdx.x*blockDim.x + tid;
+
+    double val = 0.0;
+    if (i < n) {
+        int lsz = hex_rows * hex_cols;
+        int z   = i / lsz, rem = i % lsz;
+        int r   = rem / hex_cols, c = rem % hex_cols;
+        if (r == 0 || r == hex_rows-1 ||
+            c == 0 || c == hex_cols-1 ||
+            z == 0 || z == layers-1)
+            val = cnorm2(psi[i]);
+    }
+    sm[tid] = val;
+    __syncthreads();
+    for (int s = blockDim.x/2; s > 0; s >>= 1) {
+        if (tid < s) sm[tid] += sm[tid+s];
+        __syncthreads();
+    }
+    if (tid == 0) partial[blockIdx.x] = sm[0];
+}
+
 /* ── Open-boundary-condition (OBC) helpers ───────────────────────────────────
  *
  * For each of the 8 neighbours of site (z,r,c) we return the flat index if
@@ -652,6 +680,13 @@ void run_hydrogen_obc(
     CUDA_CHECK(cudaDeviceSynchronize());
     printf("  Phase 3 done.\n"); fflush(stdout);
 
+    /* Boundary |ψ|² diagnostic */
+    boundary_norm_kernel<<<n_blk,BLOCK,BLOCK*sizeof(double)>>>(
+        d_psi, d_pe, n, hex_rows, hex_cols, layers);
+    CUDA_CHECK(cudaMemcpy(h_partial, d_pe, n_blk*sizeof(double), cudaMemcpyDeviceToHost));
+    { double bnd=0.0; for(int i=0;i<n_blk;i++) bnd+=h_partial[i];
+      printf("  Boundary |ψ|² = %.6e\n", bnd); fflush(stdout); }
+
     /* Phase 4: energy */
     energy_obc_kernel<<<n_blk,BLOCK,3*BLOCK*sizeof(double)>>>(
         d_psi, d_phi, alpha_em, -1.0,
@@ -669,6 +704,173 @@ void run_hydrogen_obc(
     *out_e_total=et; *out_e_kin=ek; *out_e_pot=ep;
 
     /* d_rho already freed after Poisson */
+    cudaFree(d_phi);
+    cudaFree(d_psi); cudaFree(d_psi2);
+    cudaFree(d_pe); cudaFree(d_pk); cudaFree(d_pp);
+    free(h_partial);
+}
+
+/* ── PBC SOR kernel — periodic neighbours, no wall boundary ──────────────── */
+__global__
+void sor_pbc_compact_kernel(double* phi, const double* rho,
+                             int phase, double omega,
+                             int hex_rows, int hex_cols, int layers,
+                             int n_color, int cols_per_row)
+{
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid >= n_color) return;
+
+    int z_par = phase / 3;
+    int hc    = phase % 3;
+
+    int sites_per_layer = hex_rows * cols_per_row;
+    int half_z = tid / sites_per_layer;
+    int rem    = tid % sites_per_layer;
+    int r      = rem / cols_per_row;
+    int ci     = rem % cols_per_row;
+
+    int z = half_z * 2 + z_par;
+    if (z >= layers || r >= hex_rows) return;
+    int first_c = ((hc - (r & 1)) % 3 + 3) % 3;
+    int c = first_c + ci * 3;
+    if (c >= hex_cols) return;
+
+    int i = (z * hex_rows + r) * hex_cols + c;
+    int nbrs[8];
+    hex_nbrs_3d(i, hex_rows, hex_cols, layers, nbrs);
+
+    double s = 0.0;
+    for (int j = 0; j < 8; j++) s += phi[nbrs[j]];
+    double phi_gs = (s + 8.0 * rho[i]) / 8.0;
+    phi[i] = (1.0 - omega) * phi[i] + omega * phi_gs;
+}
+
+/* ── PBC host driver ─────────────────────────────────────────────────────────
+ *
+ * Periodic boundary conditions for both ψ and φ.
+ * φ solved by SOR with cold start (no Coulomb warm-start — PBC potential
+ * includes all periodic images, not just 1/r).
+ * ψ uses periodic Hamiltonian (ham_and_step_kernel with hex_nbrs_3d).
+ */
+extern "C"
+void run_hydrogen_pbc(
+    double alpha_em,
+    int hex_rows, int hex_cols, int layers,
+    int n_jacobi, int n_iter, int renorm_every,
+    double dtau,
+    double* out_e_total, double* out_e_kin, double* out_e_pot)
+{
+    int n     = hex_rows * hex_cols * layers;
+    int n_blk = (n + BLOCK - 1) / BLOCK;
+    int lsz   = hex_rows * hex_cols;
+    int center= (layers/2)*lsz + (hex_rows/2)*hex_cols + (hex_cols/2);
+
+    double cx, cy, cz;
+    { int r=hex_rows/2, c=hex_cols/2;
+      hex_cart(r, c, &cx, &cy); cz=(double)(layers/2); }
+
+    setbuf(stdout, NULL);
+
+    double *d_rho, *d_phi, *d_pe, *d_pk, *d_pp;
+    C64    *d_psi, *d_psi2;
+    CUDA_CHECK(cudaMalloc(&d_rho,  (size_t)n * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_phi,  (size_t)n * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_psi,  (size_t)n * sizeof(C64)));
+    CUDA_CHECK(cudaMalloc(&d_psi2, (size_t)n * sizeof(C64)));
+    CUDA_CHECK(cudaMalloc(&d_pe,   n_blk * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_pk,   n_blk * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_pp,   n_blk * sizeof(double)));
+    double* h_partial = (double*)malloc(n_blk * sizeof(double));
+
+    /* Phase 1: PBC SOR Poisson — cold start */
+    CUDA_CHECK(cudaMemset(d_phi, 0, (size_t)n * sizeof(double)));
+    init_rho_kernel<<<n_blk,BLOCK>>>(d_rho, n, center);
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    double omega = 2.0 / (1.0 + sin(M_PI / (double)hex_rows));
+    int cols_per_row = (hex_cols + 2) / 3;
+    int half_layers  = (layers + 1) / 2;
+    int n_color      = half_layers * hex_rows * cols_per_row;
+    int n_color_blk  = (n_color + BLOCK - 1) / BLOCK;
+    printf("  Phase 1: PBC SOR (%d sweeps, ω=%.4f)...\n", n_jacobi, omega);
+    fflush(stdout);
+    for (int iter = 0; iter < n_jacobi; iter++) {
+        for (int phase = 0; phase < 6; phase++) {
+            sor_pbc_compact_kernel<<<n_color_blk,BLOCK>>>(
+                d_phi, d_rho, phase, omega,
+                hex_rows, hex_cols, layers,
+                n_color, cols_per_row);
+        }
+        if ((iter+1) % 100 == 0 || iter == 0) {
+            CUDA_CHECK(cudaDeviceSynchronize());
+            printf("    SOR sweep %d/%d\n", iter+1, n_jacobi); fflush(stdout);
+        }
+    }
+    CUDA_CHECK(cudaDeviceSynchronize());
+    printf("  Phase 1 done.\n"); fflush(stdout);
+
+    /* Diagnostic: check phi after SOR */
+    {
+        double phi_center = 0.0;
+        CUDA_CHECK(cudaMemcpy(&phi_center, &d_phi[center], sizeof(double), cudaMemcpyDeviceToHost));
+        /* Also check a few samples for NaN/Inf */
+        double phi_corner = 0.0;
+        CUDA_CHECK(cudaMemcpy(&phi_corner, &d_phi[0], sizeof(double), cudaMemcpyDeviceToHost));
+        printf("  PBC φ diagnostic: φ[center]=%.6f, φ[corner]=%.6f\n", phi_center, phi_corner);
+        fflush(stdout);
+    }
+
+    cudaFree(d_rho); d_rho = NULL;
+
+    /* Phase 2: Gaussian init */
+    double sigma = 1.0/alpha_em; if (sigma < 1.0) sigma = 1.0;
+    init_gaussian_kernel<<<n_blk,BLOCK>>>(d_psi, n, hex_rows, hex_cols, layers,
+                                           cx, cy, cz, sigma);
+    CUDA_CHECK(cudaDeviceSynchronize());
+    norm_sq_kernel<<<n_blk,BLOCK,BLOCK*sizeof(double)>>>(d_psi, d_pe, n);
+    CUDA_CHECK(cudaMemcpy(h_partial, d_pe, n_blk*sizeof(double), cudaMemcpyDeviceToHost));
+    { double s=0.0; for(int i=0;i<n_blk;i++) s+=h_partial[i];
+      printf("  PBC ψ norm²=%.6f, scale=%.6e\n", s, 1.0/sqrt(s)); fflush(stdout);
+      scale_kernel<<<n_blk,BLOCK>>>(d_psi, 1.0/sqrt(s), n); }
+    CUDA_CHECK(cudaDeviceSynchronize());
+    printf("  Phase 2 done.\n"); fflush(stdout);
+
+    /* Phase 3: PBC imaginary time (uses periodic Hamiltonian) */
+    printf("  Phase 3: PBC imaginary time (%d steps, dtau=%.3f, τ=%.1f)...\n",
+           n_iter, dtau, n_iter*dtau); fflush(stdout);
+    for (int iter = 0; iter < n_iter; iter++) {
+        ham_and_step_kernel<<<n_blk,BLOCK>>>(d_psi, d_psi2, d_phi,
+            alpha_em, -1.0, dtau, n, hex_rows, hex_cols, layers);
+        C64* tmp = d_psi; d_psi = d_psi2; d_psi2 = tmp;
+        if ((iter+1) % renorm_every == 0) {
+            norm_sq_kernel<<<n_blk,BLOCK,BLOCK*sizeof(double)>>>(d_psi, d_pe, n);
+            CUDA_CHECK(cudaMemcpy(h_partial, d_pe, n_blk*sizeof(double), cudaMemcpyDeviceToHost));
+            double s=0.0; for(int i=0;i<n_blk;i++) s+=h_partial[i];
+            scale_kernel<<<n_blk,BLOCK>>>(d_psi, 1.0/sqrt(s), n);
+            if ((iter+1) % 1000 == 0) {
+                printf("    Step %d/%d\n", iter+1, n_iter); fflush(stdout);
+            }
+        }
+    }
+    CUDA_CHECK(cudaDeviceSynchronize());
+    printf("  Phase 3 done.\n"); fflush(stdout);
+
+    /* Phase 4: PBC energy (periodic kernel) */
+    energy_kernel<<<n_blk,BLOCK,3*BLOCK*sizeof(double)>>>(
+        d_psi, d_phi, alpha_em, -1.0,
+        d_pe, d_pk, d_pp, n, hex_rows, hex_cols, layers);
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    double et=0,ek=0,ep=0;
+    CUDA_CHECK(cudaMemcpy(h_partial,d_pe,n_blk*sizeof(double),cudaMemcpyDeviceToHost));
+    for(int i=0;i<n_blk;i++) et+=h_partial[i];
+    CUDA_CHECK(cudaMemcpy(h_partial,d_pk,n_blk*sizeof(double),cudaMemcpyDeviceToHost));
+    for(int i=0;i<n_blk;i++) ek+=h_partial[i];
+    CUDA_CHECK(cudaMemcpy(h_partial,d_pp,n_blk*sizeof(double),cudaMemcpyDeviceToHost));
+    for(int i=0;i<n_blk;i++) ep+=h_partial[i];
+
+    *out_e_total=et; *out_e_kin=ek; *out_e_pot=ep;
+
     cudaFree(d_phi);
     cudaFree(d_psi); cudaFree(d_psi2);
     cudaFree(d_pe); cudaFree(d_pk); cudaFree(d_pp);
