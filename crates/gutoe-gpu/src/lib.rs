@@ -18,6 +18,7 @@
 pub mod watson;
 pub mod speculative;
 pub mod metric;
+pub mod tracer;
 
 use gutoe_em::quantum_lepton::{bohr_test_3d, BohrResult};
 

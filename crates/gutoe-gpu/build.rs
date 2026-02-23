@@ -1,11 +1,15 @@
 // GUTOE GPU build script — compile CUDA/HIP kernels if the feature is enabled
 // Copyright (C) 2026 Riff Labs, AGPL-3.0-or-later
 
+#[cfg(any(feature = "cuda", feature = "rocm"))]
 use std::env;
+#[cfg(any(feature = "cuda", feature = "rocm"))]
 use std::path::PathBuf;
+#[cfg(any(feature = "cuda", feature = "rocm"))]
 use std::process::Command;
 
 fn main() {
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     // ── CUDA (NVIDIA) ──────────────────────────────────────────────────────
