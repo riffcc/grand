@@ -7,6 +7,7 @@ description = "GPU-accelerated Schrodinger solver for GUTOE (CUDA + ROCm via HIP
 [dependencies]
 gutoe-em = { path = "../gutoe-em" }
 num-complex.workspace = true
+rayon = "1"
 
 # Interactive black hole viewer (bh_viewer binary)
 wgpu       = "22"
@@ -26,6 +27,10 @@ path = "src/bin/bh_viewer.rs"
 [[bin]]
 name = "bh_render"
 path = "src/bin/bh_render.rs"
+
+[[bin]]
+name = "bh_kerr_report"
+path = "src/bin/bh_kerr_report.rs"
 
 [features]
 default = []
