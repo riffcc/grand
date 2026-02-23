@@ -19,4 +19,5 @@ lean_lib Gutoe where
              `Gutoe.Z3ForcedStructure,
              `Gutoe.GaugeGroupSU2, `Gutoe.GaugeGroupSU3, `Gutoe.GaugeGroupSM,
              `Gutoe.GaugeConstants, `Gutoe.Chirality, `Gutoe.ContinuumLimit,
-             `Gutoe.LorentzInvariance, `Gutoe.GrandMasterTheorem]
+             `Gutoe.LorentzInvariance, `Gutoe.GrandMasterTheorem,
+             `Gutoe.GravityMetric]
