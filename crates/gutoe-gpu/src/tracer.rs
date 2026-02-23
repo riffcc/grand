@@ -278,6 +278,185 @@ pub fn trace_photon(
     }
 }
 
+// ── Interior-camera trace ─────────────────────────────────────────────────────
+
+/// Trace a null geodesic fired **outward** from a camera inside the event horizon.
+///
+/// # Physics
+///
+/// From inside the horizon (r_cam < r_horizon), the potential V(r_cam) < 0, so
+/// `orbit_vr_sq(r_cam, b, …) > 0` for every finite b.  Every photon can start moving
+/// outward (p_start > 0).
+///
+/// - `b < b_crit`:  photon clears the photon-sphere barrier → escapes to infinity
+///                  (sees the outside universe, accretion disk, star field)
+/// - `b > b_crit`:  photon reaches a turning point before the photon sphere,
+///                  reverses, falls back → returns `Captured` (GUTOE core)
+///
+/// # Arguments
+/// - `r_cam`: coordinate radius of the camera (must satisfy r_cam < metric.r_horizon())
+pub fn trace_photon_interior(
+    metric: &GutoeMetric,
+    disk_inner_re: f64,
+    disk_outer_re: f64,
+    r_cam: f64,
+    bx: f64,
+    by: f64,
+    max_phi: f64,
+    dphi: f64,
+) -> TraceResult {
+    let r_s = metric.r_s;
+    let r_c = metric.r_core();
+    let b   = (bx * bx + by * by).sqrt();
+
+    // Pure-radial photon: always escapes
+    if b < 1e-12 {
+        return TraceResult::Escaped { phi_total: max_phi };
+    }
+
+    // Inside the horizon V < 0 → orbit_vr_sq > 0 always
+    let vr0_sq  = orbit_vr_sq(r_cam, b, r_s, r_c).max(0.0);
+    let p_start = vr0_sq.sqrt();   // outward (positive)
+
+    // Camera areal radius: capture returned photons once back below this level
+    let re_cam  = (r_cam * r_cam + r_c * r_c).sqrt();
+    let re_cap  = re_cam * 1.05;
+
+    // Escape once past the outer disk / strong-gravity region
+    let r_escape = (3.0 * b)
+        .max(disk_outer_re * 1.5)
+        .max(20.0 * r_s);
+
+    let sin_i        = by / b;
+    let is_equatorial = sin_i.abs() < 1e-6;
+
+    let mut r   = r_cam;
+    let mut p   = p_start;
+    let mut phi = 0.0_f64;
+    let mut n_cross = 0_u32;
+    let mut turned  = false;
+
+    let max_steps = (max_phi / dphi).ceil() as usize + 1;
+
+    for _step in 0..max_steps {
+        let (r_new, p_rk4) = rk4_step(r, p, b, r_s, r_c, dphi);
+
+        let vr2_new = orbit_vr_sq(r_new, b, r_s, r_c).max(0.0);
+        let p_new   = if p_rk4 >= 0.0 { vr2_new.sqrt() } else { -vr2_new.sqrt() };
+        let phi_new = phi + dphi;
+        let re_new  = (r_new * r_new + r_c * r_c).sqrt();
+
+        // Turning point: radial motion reversed from outward to inward
+        if !turned && p > 0.0 && p_new <= 0.0 {
+            turned = true;
+        }
+
+        // After turning: capture once back below the camera's areal radius
+        if turned && re_new < re_cap {
+            return TraceResult::Captured;
+        }
+
+        // Escape: risen past strong-gravity region
+        if !turned && r_new >= r_escape {
+            return TraceResult::Escaped { phi_total: phi_new };
+        }
+
+        // Disk hit detection (same φ = nπ crossing logic as exterior trace)
+        if is_equatorial {
+            let re_cur = (r * r + r_c * r_c).sqrt();
+            if !turned && re_cur >= disk_inner_re && re_cur <= disk_outer_re && p > 0.0 {
+                return TraceResult::DiskHit { r_eff: re_cur, phi_orb: phi, n_cross: 1 };
+            }
+        } else {
+            let target = (n_cross as f64 + 1.0) * PI;
+            if phi < target && phi_new >= target {
+                let t       = (target - phi) / dphi;
+                let r_cross = r + t * (r_new - r);
+                let re_cross = (r_cross * r_cross + r_c * r_c).sqrt();
+                n_cross += 1;
+                if re_cross >= disk_inner_re && re_cross <= disk_outer_re {
+                    return TraceResult::DiskHit {
+                        r_eff: re_cross,
+                        phi_orb: target,
+                        n_cross,
+                    };
+                }
+            }
+        }
+
+        r   = r_new;
+        p   = p_new;
+        phi = phi_new;
+    }
+
+    // Timed out
+    if r >= r_escape * 0.5 && !turned {
+        TraceResult::Escaped { phi_total: phi }
+    } else {
+        TraceResult::Captured
+    }
+}
+
+/// Trace a null geodesic fired **toward the core** from a camera inside the horizon.
+///
+/// This is the companion to `trace_photon_interior` (which fires outward).  It models an
+/// interior observer turning around to look down at the regularized lattice core.
+///
+/// For future-directed null rays inside the horizon this is a plunging branch: the ray is
+/// initialized with inward radial momentum and integrated until it reaches the core shell.
+pub fn trace_photon_interior_core(
+    metric: &GutoeMetric,
+    r_cam: f64,
+    bx: f64,
+    by: f64,
+    max_phi: f64,
+    dphi: f64,
+) -> TraceResult {
+    let r_s = metric.r_s;
+    let r_c = metric.r_core();
+    let b = (bx * bx + by * by).sqrt();
+
+    // Radial center pixel: direct plunge.
+    if b < 1e-12 {
+        return TraceResult::DiskHit { r_eff: r_c, phi_orb: 0.0, n_cross: 1 };
+    }
+
+    // Start at camera radius with inward radial momentum.
+    let vr0_sq = orbit_vr_sq(r_cam, b, r_s, r_c).max(0.0);
+    let p_start = -vr0_sq.sqrt();
+
+    // Capture at the regularized core shell.
+    let re_core_cap = (1.02 * r_c).max(r_c + 1e-9);
+
+    let mut r = r_cam;
+    let mut p = p_start;
+    let mut phi = 0.0_f64;
+    let max_steps = (max_phi / dphi).ceil() as usize + 1;
+
+    for _step in 0..max_steps {
+        let (r_new, p_rk4) = rk4_step(r, p, b, r_s, r_c, dphi);
+        let vr2_new = orbit_vr_sq(r_new, b, r_s, r_c).max(0.0);
+        let p_new = if p_rk4 >= 0.0 { vr2_new.sqrt() } else { -vr2_new.sqrt() };
+        let phi_new = phi + dphi;
+        let re_new = (r_new * r_new + r_c * r_c).sqrt();
+
+        if re_new <= re_core_cap || r_new <= r_c * 0.01 {
+            return TraceResult::DiskHit { r_eff: re_new, phi_orb: phi_new, n_cross: 1 };
+        }
+
+        // Defensive escape classification for numerical edge-cases.
+        if p < 0.0 && p_new >= 0.0 && r_new > r_cam * 1.01 {
+            return TraceResult::Escaped { phi_total: phi_new };
+        }
+
+        r = r_new;
+        p = p_new;
+        phi = phi_new;
+    }
+
+    TraceResult::DiskHit { r_eff: re_core_cap, phi_orb: phi, n_cross: 1 }
+}
+
 // ── Render config ─────────────────────────────────────────────────────────────
 
 /// Configuration for rendering a black hole image.

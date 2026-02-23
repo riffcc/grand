@@ -15,10 +15,6 @@ fn main() {
     // ── CUDA (NVIDIA) ──────────────────────────────────────────────────────
     #[cfg(feature = "cuda")]
     {
-        let kernel_src = "kernels/cuda_main.cu";
-        let obj = out_dir.join("cuda_main.o");
-        let lib = out_dir.join("libschrodinger.a");
-
         // Detect GPU architecture from CUDA_ARCH env, default to sm_89 (RTX 4070 Ti / Ada)
         let arch = env::var("CUDA_ARCH").unwrap_or_else(|_| "sm_89".to_string());
 
@@ -31,23 +27,37 @@ fn main() {
             else { "nvcc".to_string() }
         });
 
-        let status = Command::new(&nvcc)
-            .args(&[
-                "-O3",
-                &format!("-arch={arch}"),
-                "-Xcompiler", "-fPIC",
-                "-c", kernel_src,
-                "-o", obj.to_str().unwrap(),
-            ])
-            .status()
-            .expect("nvcc not found — install CUDA toolkit or unset --features cuda");
+        // Compile all kernel sources to object files
+        let sources = [
+            ("kernels/cuda_main.cu", out_dir.join("cuda_main.o")),
+            ("kernels/tracer.cu",    out_dir.join("tracer_gpu.o")),
+        ];
+        let mut obj_paths: Vec<String> = Vec::new();
 
-        if !status.success() {
-            panic!("nvcc compilation failed");
+        for (src, obj) in &sources {
+            let status = Command::new(&nvcc)
+                .args(&[
+                    "-O3",
+                    &format!("-arch={arch}"),
+                    "-Xcompiler", "-fPIC",
+                    "-c", src,
+                    "-o", obj.to_str().unwrap(),
+                ])
+                .status()
+                .unwrap_or_else(|_| panic!("nvcc not found — install CUDA toolkit or unset --features cuda"));
+
+            if !status.success() {
+                panic!("nvcc compilation failed for {src}");
+            }
+            obj_paths.push(obj.to_str().unwrap().to_string());
         }
 
+        // Archive all objects into one static lib
+        let lib = out_dir.join("libschrodinger.a");
+        let mut ar_args = vec!["rcs".to_string(), lib.to_str().unwrap().to_string()];
+        ar_args.extend(obj_paths);
         Command::new("ar")
-            .args(&["rcs", lib.to_str().unwrap(), obj.to_str().unwrap()])
+            .args(&ar_args)
             .status()
             .expect("ar failed");
 
@@ -62,15 +72,12 @@ fn main() {
             .unwrap_or_else(|_| "/usr/local/cuda/lib64".to_string());
         println!("cargo:rustc-link-search=native={cuda_lib}");
         println!("cargo:rerun-if-changed=kernels/cuda_main.cu");
+        println!("cargo:rerun-if-changed=kernels/tracer.cu");
     }
 
     // ── ROCm / HIP (AMD) ───────────────────────────────────────────────────
     #[cfg(feature = "rocm")]
     {
-        let kernel_src = "kernels/cuda_main.cu"; // same source, HIP is compatible
-        let obj = out_dir.join("hip_main.o");
-        let lib = out_dir.join("libschrodinger.a");
-
         println!("cargo:warning=Compiling HIP kernels for ROCm...");
 
         // Find hipcc: honour HIPCC env, then /opt/rocm/bin, then PATH
@@ -81,30 +88,40 @@ fn main() {
         });
 
         // Optional offload arch (e.g. gfx1151 for Strix Halo)
-        let mut hipcc_args: Vec<String> = vec![
+        let mut base_args: Vec<String> = vec![
             "-O3".into(),
             "-fPIC".into(),
             "-D__HIP_PLATFORM_AMD__".into(),
         ];
         if let Ok(gfx) = env::var("GFX_ARCH") {
-            hipcc_args.push(format!("--offload-arch={gfx}"));
-        }
-        hipcc_args.extend(["-c".into(), kernel_src.into(), "-o".into(),
-                            obj.to_str().unwrap().to_string()]);
-
-        let status = Command::new(&hipcc)
-            .args(&hipcc_args)
-            .status()
-            .expect("hipcc not found — install ROCm or set HIPCC=/path/to/hipcc");
-
-        if !status.success() {
-            panic!("hipcc compilation failed");
+            base_args.push(format!("--offload-arch={gfx}"));
         }
 
-        Command::new("ar")
-            .args(&["rcs", lib.to_str().unwrap(), obj.to_str().unwrap()])
-            .status()
-            .expect("ar failed");
+        // Compile all kernel sources (same .cu sources work with HIP)
+        let sources = [
+            ("kernels/cuda_main.cu", out_dir.join("hip_main.o")),
+            ("kernels/tracer.cu",    out_dir.join("hip_tracer.o")),
+        ];
+        let mut obj_paths: Vec<String> = Vec::new();
+
+        for (src, obj) in &sources {
+            let mut args = base_args.clone();
+            args.extend(["-c".into(), src.to_string(), "-o".into(),
+                          obj.to_str().unwrap().to_string()]);
+            let status = Command::new(&hipcc)
+                .args(&args)
+                .status()
+                .expect("hipcc not found — install ROCm or set HIPCC=/path/to/hipcc");
+            if !status.success() {
+                panic!("hipcc compilation failed for {src}");
+            }
+            obj_paths.push(obj.to_str().unwrap().to_string());
+        }
+
+        let lib = out_dir.join("libschrodinger.a");
+        let mut ar_args = vec!["rcs".to_string(), lib.to_str().unwrap().to_string()];
+        ar_args.extend(obj_paths);
+        Command::new("ar").args(&ar_args).status().expect("ar failed");
 
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-link-lib=static=schrodinger");
@@ -115,5 +132,6 @@ fn main() {
         println!("cargo:rustc-link-search=native={rocm_lib}");
         println!("cargo:rustc-link-lib=amdhip64");
         println!("cargo:rerun-if-changed=kernels/cuda_main.cu");
+        println!("cargo:rerun-if-changed=kernels/tracer.cu");
     }
 }

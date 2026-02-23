@@ -75,6 +75,14 @@ impl GutoeMetric {
         Self { r_s, l_planck }
     }
 
+    /// Pure Schwarzschild metric (GR limit): l_P = 0, r_core = 0.
+    ///
+    /// All GUTOE corrections vanish. Use for comparison renders to quantify the
+    /// lattice regularisation effect (visible only at Planck scale: l_P / r_s ≈ 1).
+    pub fn schwarzschild(r_s: f64) -> Self {
+        Self { r_s, l_planck: 0.0 }
+    }
+
     /// Lattice core radius: r_core = √(C_∞) × l_P.
     ///
     /// This is the minimum physical radius in GUTOE — the "atom" of SC lattice space.
