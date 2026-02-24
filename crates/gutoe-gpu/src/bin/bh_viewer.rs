@@ -1585,8 +1585,13 @@ impl App {
         let spin = if self.auto_spin { " spin" } else { "" };
         let az_deg = self.camera.azimuth.to_degrees().rem_euclid(360.0);
         let roll_deg = self.camera.cam_roll.to_degrees();
+        let pad = match (self.pad_name.as_deref(), self.pad_dualsense) {
+            (Some(_), true) => "DualSense",
+            (Some(_), false) => "Gamepad",
+            (None, _) => "None",
+        };
         win.set_title(&format!(
-            "GUTOE BH  |  q{} {:.1}ms  {} r={:.2}r_h  inc {:.0}° az {:.0}° roll {:+.0}°  fov {:.1} r_s  disk {:.0} r_s  cam({:+.2},{:+.2},{:+.2})  [3D {}{}]",
+            "GUTOE BH  |  q{} {:.1}ms  {} r={:.2}r_h  inc {:.0}° az {:.0}° roll {:+.0}°  fov {:.1} r_s  disk {:.0} r_s  cam({:+.2},{:+.2},{:+.2})  pad:{}  [3D {}{}]",
             self.quality_tier as i32,
             self.avg_frame_ms,
             cam_mode,
@@ -1599,6 +1604,7 @@ impl App {
             self.camera.cam_x,
             self.camera.cam_y,
             self.camera.cam_z,
+            pad,
             core,
             spin,
         ));
@@ -1912,6 +1918,8 @@ fn main() {
     println!("    D-pad nudge camera · A toggle GUTOE/GR · B reset · X disk preset · Y fov preset");
     println!("    Start auto-spin · Back recenter azimuth · LB+RB+Guide quit");
     println!("    LT+RT+X hard reset (default M87 + GUTOE core)");
+    println!("    Env tuning: BH_PAD_DEADZONE, BH_PAD_LOOK_SENS, BH_PAD_MOVE_SENS, BH_PAD_TRIGGER_SENS");
+    println!("    Env invert: BH_PAD_INVERT_X, BH_PAD_INVERT_Y");
     println!("  Title bar shows live: inclination, azimuth, fov, disk size, mode");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
