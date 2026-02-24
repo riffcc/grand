@@ -429,8 +429,9 @@ int trace_photon_gpu_kerr(
     double r = r_start;
     double phi = 0.0;
     double sgn_r = -1.0;
-    // Match CPU Kerr tracer convention: dθ/dλ sign follows β sign.
-    double sgn_th = (by >= 0.0) ? 1.0 : -1.0;
+    // Match CPU Kerr tracer convention under this screen basis:
+    // +beta points toward decreasing θ, so dθ/dλ sign is opposite β.
+    double sgn_th = (by >= 0.0) ? -1.0 : 1.0;
     unsigned int n_cross = 0;
     int max_steps = (int)(max_lambda / dlambda) + 1;
 

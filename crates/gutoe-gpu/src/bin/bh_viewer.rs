@@ -581,7 +581,9 @@ fn trace_kerr3d(sx: f32, sy: f32) -> TraceHit3D {
     var th = theta_obs;
     var ph = 0.0;
     var sgn_r = -1.0;
-    var sgn_th = select(-1.0, 1.0, by >= 0.0);
+    // Keep Kerr polar branch consistent with CPU/CUDA tracer conventions:
+    // +beta (screen-up) maps to decreasing theta in this basis.
+    var sgn_th = select(1.0, -1.0, by >= 0.0);
     var n_cross = 0u;
     let max_steps_nominal = i32(P.max_phi / max(P.dphi, 1e-4)) + 1;
     let max_steps_cap = select(select(2200, 3200, P.quality_tier >= 1.0), 4600, P.quality_tier >= 1.5);

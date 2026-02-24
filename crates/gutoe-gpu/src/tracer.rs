@@ -314,8 +314,9 @@ pub fn trace_photon_kerr(
     // Ingoing branch from observer.
     let mut sgn_r = -1.0_f64;
     // Initial polar direction from image-plane beta sign.
-    // Use the standard Carter sign convention dθ/dλ ∝ β at the observer.
-    let mut sgn_th = if by >= 0.0 { 1.0 } else { -1.0 };
+    // In our screen convention, +beta is toward decreasing θ (toward +z),
+    // so the dθ/dλ sign is opposite beta.
+    let mut sgn_th = if by >= 0.0 { -1.0 } else { 1.0 };
 
     let mut lambda = 0.0_f64;
     let max_steps = (max_lambda / dlambda).ceil() as usize + 1;
