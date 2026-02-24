@@ -25,7 +25,7 @@ use gutoe_gpu::{
     geodesic3d::{reduce_3d_to_axisym, trace_photon_3d_schwarzschild, CameraFrame, Vec3},
     kerr::KerrMetric,
     metric::{GutoeMetric, C_INF, LAMBDA_QG, WATSON_SC},
-    synchrotron::{band_tint, band_weight, RenderSpectrum as SpectralBand},
+    synchrotron::{band_tint, band_weight_with_exposure, RenderSpectrum as SpectralBand},
     transfer::{covariant_absorption, covariant_emissivity, transfer_step},
     tracer::{
         b_critical, trace_photon, trace_photon_interior, trace_photon_interior_core,
@@ -186,6 +186,7 @@ extern "C" {
         plasma_model: i32,  // 0=nt, 1=grmhd profile proxy
         use_transfer: i32,  // 1 => use transfer_step path for disk intensity
         tau_scale: f64,     // optical-depth scale for transfer path
+        fixed_exposure: f64, // <0 => per-band default exposure; >=0 force fixed exposure
         adaptive_dphi: i32, // 1 => reduce dphi near critical impact parameter
         kerr_enable: i32,   // 1 => use Kerr tracer for exterior rays
         kerr_astar: f64,    // dimensionless spin a*
@@ -246,6 +247,7 @@ fn render_with_options_gpu(
             },
             use_transfer as i32,
             tau_scale,
+            fixed_exposure_override().unwrap_or(-1.0),
             adaptive_dphi as i32,
             kerr.is_some() as i32,
             kerr.map_or(0.0, |k| k.a_star),
@@ -627,7 +629,7 @@ fn pixel_color(
     // Relativistic transfer factor g⁴ (gravitational redshift × Doppler beaming).
     let transfer = disk_transfer_factor(r_eff, r_s, bx, phi_orb, sin_inc, doppler);
 
-    let spectral = band_weight(spectral_band, t_rel);
+    let spectral = band_weight_with_exposure(spectral_band, t_rel, fixed_exposure_override());
     let (j_scale, a_scale) = plasma_profile_scales(r_eff, r_s, n_cross, plasma_model);
     // Local covariant source proxy.
     let source_local = (t_rel * fade * outer_taper * spectral * j_scale).max(0.0);
@@ -901,6 +903,17 @@ fn parity_legacy_stars_enabled() -> bool {
         std::env::var("BH_PARITY_LEGACY_STARS")
             .ok()
             .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+    })
+}
+
+#[inline]
+fn fixed_exposure_override() -> Option<f64> {
+    static EXP: OnceLock<Option<f64>> = OnceLock::new();
+    *EXP.get_or_init(|| {
+        std::env::var("BH_FIXED_EXPOSURE")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(|v| v.max(0.0))
     })
 }
 
@@ -1842,6 +1855,10 @@ fn render_interstellar_spin(
     };
     let n = frames.max(1);
 
+    let prev_spectrum = std::env::var("BH_SPECTRUM").ok();
+    let prev_fixed_exposure = std::env::var("BH_FIXED_EXPOSURE").ok();
+    std::env::set_var("BH_SPECTRUM", "optical");
+    std::env::set_var("BH_FIXED_EXPOSURE", "1.4");
     std::env::set_var("BH_MAX_PHI_PI_OVERRIDE", "60.0");
     std::env::set_var("BH_DPHI_OVERRIDE", "0.0030");
 
@@ -1871,6 +1888,16 @@ fn render_interstellar_spin(
     std::env::remove_var("BH_MAX_PHI_PI_OVERRIDE");
     std::env::remove_var("BH_DPHI_OVERRIDE");
     std::env::remove_var("BH_SLUG_SUFFIX");
+    if let Some(v) = prev_spectrum {
+        std::env::set_var("BH_SPECTRUM", v);
+    } else {
+        std::env::remove_var("BH_SPECTRUM");
+    }
+    if let Some(v) = prev_fixed_exposure {
+        std::env::set_var("BH_FIXED_EXPOSURE", v);
+    } else {
+        std::env::remove_var("BH_FIXED_EXPOSURE");
+    }
 
     eprintln!(
         "Interstellar spin complete: {n} frames in {}",
@@ -2942,6 +2969,7 @@ fn run_transfer_parity_report(view: &View, width: usize, height: usize, out_dir:
     {
         use std::f64::consts::PI;
         use std::io::Write as _;
+        use std::time::Instant;
 
         let metric = if view.gr_mode {
             GutoeMetric::schwarzschild(1.0)
@@ -2986,7 +3014,7 @@ fn run_transfer_parity_report(view: &View, width: usize, height: usize, out_dir:
         let mut f = std::fs::File::create(&tmp_path).expect("create transfer parity tmp csv");
         writeln!(
             f,
-            "disk_model,use_transfer,tau_scale,mad,max_delta,centered_luma_mad,affine_luma_mad,bright_mask_luma_mad,bright_mask_coverage,gpu_mean_luma,cpu_mean_luma,gpu_delta_from_base,cpu_delta_from_base,transfer_delta_parity_abs,width,height"
+            "backend,disk_model,use_transfer,tau_scale,mad,max_delta,centered_luma_mad,affine_luma_mad,bright_mask_luma_mad,bright_mask_coverage,gpu_mean_luma,cpu_mean_luma,gpu_delta_from_base,cpu_delta_from_base,transfer_delta_parity_abs,gpu_ms,cpu_ms,width,height"
         )
         .expect("write transfer parity header");
 
@@ -3007,6 +3035,7 @@ fn run_transfer_parity_report(view: &View, width: usize, height: usize, out_dir:
         let mut riaf_gpu_base_luma: Option<f64> = None;
         let mut riaf_cpu_base_luma: Option<f64> = None;
         for (disk_model, use_transfer, tau_scale) in combos {
+            let t_gpu = Instant::now();
             let gpu = render_with_options_gpu(
                 &metric,
                 view.disk_inner,
@@ -3028,6 +3057,8 @@ fn run_transfer_parity_report(view: &View, width: usize, height: usize, out_dir:
                 0.5,
                 0.5,
             );
+            let gpu_ms = t_gpu.elapsed().as_secs_f64() * 1000.0;
+            let t_cpu = Instant::now();
             let cpu = render_with_options_cpu(
                 &metric,
                 kerr.as_ref(),
@@ -3049,6 +3080,7 @@ fn run_transfer_parity_report(view: &View, width: usize, height: usize, out_dir:
                 0.5,
                 0.5,
             );
+            let cpu_ms = t_cpu.elapsed().as_secs_f64() * 1000.0;
             let (mad, maxd) = pixel_diff_stats(&gpu, &cpu);
             let centered = centered_luma_mad(&gpu, &cpu);
             let affine = affine_luma_mad(&gpu, &cpu);
@@ -3067,25 +3099,7 @@ fn run_transfer_parity_report(view: &View, width: usize, height: usize, out_dir:
             let cpu_delta_from_base = cpu_mean_luma - cpu_base.unwrap_or(cpu_mean_luma);
             let transfer_delta_parity_abs = (gpu_delta_from_base - cpu_delta_from_base).abs();
             eprintln!(
-                "  {} transfer={} tau={:.2} -> MAD={:.4} max|Δ|={} centered={:.5} affine={:.5} bright={:.5} cov={:.4} | luma gpu={:.5} cpu={:.5} Δbase gpu={:+.5} cpu={:+.5} | |Δtransfer|={:.5}",
-                disk_model.as_label(),
-                use_transfer,
-                tau_scale,
-                mad,
-                maxd,
-                centered,
-                affine,
-                bright_mask_mad,
-                bright_mask_cov,
-                gpu_mean_luma,
-                cpu_mean_luma,
-                gpu_delta_from_base,
-                cpu_delta_from_base,
-                transfer_delta_parity_abs
-            );
-            writeln!(
-                f,
-                "{},{},{:.6},{:.9},{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{},{}",
+                "  {} transfer={} tau={:.2} -> MAD={:.4} max|Δ|={} centered={:.5} affine={:.5} bright={:.5} cov={:.4} | luma gpu={:.5} cpu={:.5} Δbase gpu={:+.5} cpu={:+.5} | |Δtransfer|={:.5} | gpu_ms={:.3} cpu_ms={:.3}",
                 disk_model.as_label(),
                 use_transfer,
                 tau_scale,
@@ -3100,6 +3114,29 @@ fn run_transfer_parity_report(view: &View, width: usize, height: usize, out_dir:
                 gpu_delta_from_base,
                 cpu_delta_from_base,
                 transfer_delta_parity_abs,
+                gpu_ms,
+                cpu_ms
+            );
+            writeln!(
+                f,
+                "{},{},{},{:.6},{:.9},{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.3},{:.3},{},{}",
+                backend_tag,
+                disk_model.as_label(),
+                use_transfer,
+                tau_scale,
+                mad,
+                maxd,
+                centered,
+                affine,
+                bright_mask_mad,
+                bright_mask_cov,
+                gpu_mean_luma,
+                cpu_mean_luma,
+                gpu_delta_from_base,
+                cpu_delta_from_base,
+                transfer_delta_parity_abs,
+                gpu_ms,
+                cpu_ms,
                 width,
                 height
             )
@@ -3750,6 +3787,7 @@ fn main() {
     // Detail env controls:
     //   BH_SUPERSCALE=2        (render at 2x linear resolution, box downsample)
     //   BH_SPP=4               (4 subpixel jittered samples, averaged)
+    //   BH_FIXED_EXPOSURE=1.4  (override per-band exposure for non-bolometric renders)
     //   BH_ADAPTIVE_DPHI=1     (smaller per-ray step near b≈b_crit)
     //   BH_KERR_PARITY=1       (with CUDA: run GPU and CPU, print diff stats)
     //   BH_DETAIL_PRESET=imax  (auto: superscale>=2, spp>=4, tighter dphi)

@@ -674,7 +674,7 @@ void bh_pixel_color(double r_eff, double r_isco, double r_outer, double r_s,
                      double bx_raw, double phi_orb, double sin_inc,
                      unsigned int n_cross, int doppler, int ring_mode, int spectral_band,
                      int plasma_model,
-                     int use_transfer, double tau_scale,
+                     int use_transfer, double tau_scale, double fixed_exposure,
                      unsigned char* r_o, unsigned char* g_o, unsigned char* b_o)
 {
     if (ring_mode) { bh_ring_order_color(n_cross, r_o, g_o, b_o); return; }
@@ -722,6 +722,7 @@ void bh_pixel_color(double r_eff, double r_isco, double r_outer, double r_s,
             case 7: x0 = 20.0; exposure = 4.0; break;  /* gamma */
             default: break;
         }
+        if (fixed_exposure >= 0.0) exposure = fixed_exposure;
         double x = x0 / fmax(t_rel, 1e-6);
         double planck = 0.0;
         if (x <= 80.0) {
@@ -785,12 +786,12 @@ void bh_riaf_composite_color(double r_eff, double r_isco, double r_outer, double
                               unsigned int n_cross, double phi_orb,
                               int doppler, int ring_mode, int spectral_band,
                               int plasma_model,
-                              int use_transfer, double tau_scale,
+                              int use_transfer, double tau_scale, double fixed_exposure,
                               unsigned char* r_o, unsigned char* g_o, unsigned char* b_o)
 {
     unsigned char dr, dg, db;
     bh_pixel_color(r_eff, r_isco, r_outer, r_s, bx_raw, phi_orb, sin_inc, n_cross,
-                   doppler, ring_mode, spectral_band, plasma_model, use_transfer, tau_scale,
+                   doppler, ring_mode, spectral_band, plasma_model, use_transfer, tau_scale, fixed_exposure,
                    &dr, &dg, &db);
 
     unsigned char br, bg, bb;
@@ -826,6 +827,7 @@ void bh_render_kernel(
     int plasma_model,
     int use_transfer,
     double tau_scale,
+    double fixed_exposure,
     int adaptive_dphi,
     int kerr_enable,
     double kerr_astar,
@@ -919,13 +921,13 @@ void bh_render_kernel(
                         n_cross, phi_total,
                         doppler, ring_mode, spectral_band,
                         plasma_model,
-                        use_transfer, tau_scale,
+                        use_transfer, tau_scale, fixed_exposure,
                         &r_px, &g_px, &b_px);
                 } else {
                     bh_pixel_color(
                         r_eff, r_isco, disk_outer, r_s, bx_raw, phi_total, sin_inc,
                         n_cross, doppler, ring_mode, spectral_band, plasma_model,
-                        use_transfer, tau_scale,
+                        use_transfer, tau_scale, fixed_exposure,
                         &r_px, &g_px, &b_px);
                 }
             }
@@ -956,6 +958,7 @@ void gutoe_render_bh(
     int plasma_model,
     int use_transfer,
     double tau_scale,
+    double fixed_exposure,
     int adaptive_dphi,
     int kerr_enable,
     double kerr_astar,
@@ -981,7 +984,7 @@ void gutoe_render_bh(
         r_s, r_c, disk_inner, disk_outer,
         max_phi, dphi, az_cos, az_sin,
         doppler, ring_mode, interior_mode, core_look_mode, spectral_band, disk_model, plasma_model,
-        use_transfer, tau_scale, adaptive_dphi,
+        use_transfer, tau_scale, fixed_exposure, adaptive_dphi,
         kerr_enable, kerr_astar,
         r_cam, jitter_x, jitter_y,
         d_pixels);

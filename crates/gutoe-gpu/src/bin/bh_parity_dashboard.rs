@@ -10,6 +10,8 @@ struct Stats {
     transfer_abs_max: f64,
     gpu_ms_sum: f64,
     gpu_ms_rows: usize,
+    cpu_ms_sum: f64,
+    cpu_ms_rows: usize,
 }
 
 fn main() {
@@ -52,6 +54,7 @@ fn main() {
             .iter()
             .position(|c| *c == "transfer_delta_parity_abs");
         let idx_gpu_ms = header_cols.iter().position(|c| *c == "gpu_ms");
+        let idx_cpu_ms = header_cols.iter().position(|c| *c == "cpu_ms");
 
         for line in lines {
             if line.trim().is_empty() {
@@ -76,6 +79,12 @@ fn main() {
                     stats.gpu_ms_rows += 1;
                 }
             }
+            if let Some(i) = idx_cpu_ms {
+                if let Some(v) = cols.get(i).and_then(|s| s.parse::<f64>().ok()) {
+                    stats.cpu_ms_sum += v;
+                    stats.cpu_ms_rows += 1;
+                }
+            }
             stats.rows += 1;
         }
         if stats.rows > 0 {
@@ -89,8 +98,8 @@ fn main() {
     let out = root.join("parity_dashboard.md");
     let mut md = String::new();
     md.push_str("# CUDA/CPU Transfer Parity Dashboard\n\n");
-    md.push_str("| view | backend | rows | mean MAD | max MAD | mean |Δtransfer| | max |Δtransfer| | mean gpu_ms |\n");
-    md.push_str("|---|---|---:|---:|---:|---:|---:|---:|\n");
+    md.push_str("| view | backend | rows | mean MAD | max MAD | mean |Δtransfer| | max |Δtransfer| | mean gpu_ms | mean cpu_ms | speedup (cpu/gpu) |\n");
+    md.push_str("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|\n");
     for (view, backend, s) in &per_case {
         let n = s.rows.max(1) as f64;
         let mad = s.mad_sum / n;
@@ -100,8 +109,18 @@ fn main() {
         } else {
             f64::NAN
         };
+        let cpu_ms = if s.cpu_ms_rows > 0 {
+            s.cpu_ms_sum / s.cpu_ms_rows as f64
+        } else {
+            f64::NAN
+        };
+        let speedup = if gpu_ms.is_finite() && cpu_ms.is_finite() && gpu_ms > 1e-9 {
+            cpu_ms / gpu_ms
+        } else {
+            f64::NAN
+        };
         md.push_str(&format!(
-            "| {view} | {backend} | {} | {:.6} | {:.6} | {:.6} | {:.6} | {} |\n",
+            "| {view} | {backend} | {} | {:.6} | {:.6} | {:.6} | {:.6} | {} | {} | {} |\n",
             s.rows,
             mad,
             s.mad_max,
@@ -109,6 +128,16 @@ fn main() {
             s.transfer_abs_max,
             if gpu_ms.is_finite() {
                 format!("{gpu_ms:.3}")
+            } else {
+                "-".to_string()
+            },
+            if cpu_ms.is_finite() {
+                format!("{cpu_ms:.3}")
+            } else {
+                "-".to_string()
+            },
+            if speedup.is_finite() {
+                format!("{speedup:.2}x")
             } else {
                 "-".to_string()
             }

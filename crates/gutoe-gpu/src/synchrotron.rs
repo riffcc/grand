@@ -99,9 +99,9 @@ pub fn synchrotron_emissivity_kerr(
 ///
 /// `t_rel` is local disk temperature relative to ISCO.
 #[inline]
-pub fn band_weight(band: RenderSpectrum, t_rel: f64) -> f64 {
+pub fn band_weight_with_exposure(band: RenderSpectrum, t_rel: f64, fixed_exposure: Option<f64>) -> f64 {
     let t = t_rel.max(1e-6);
-    let (x0, exposure) = match band {
+    let (x0, mut exposure) = match band {
         RenderSpectrum::Bolometric => return 1.0,
         RenderSpectrum::Radio => (0.02, 5.0),
         RenderSpectrum::Millimeter => (0.08, 3.5),
@@ -111,6 +111,9 @@ pub fn band_weight(band: RenderSpectrum, t_rel: f64) -> f64 {
         RenderSpectrum::Xray => (6.00, 2.4),
         RenderSpectrum::Gamma => (20.0, 4.0),
     };
+    if let Some(v) = fixed_exposure {
+        exposure = v.max(0.0);
+    }
     let x = x0 / t;
     let planck = if x > 80.0 {
         0.0
@@ -119,6 +122,11 @@ pub fn band_weight(band: RenderSpectrum, t_rel: f64) -> f64 {
     };
     let planck_ref = x0.powi(3) / (x0.exp() - 1.0);
     (exposure * planck / planck_ref.max(1e-12)).clamp(0.0, 64.0)
+}
+
+#[inline]
+pub fn band_weight(band: RenderSpectrum, t_rel: f64) -> f64 {
+    band_weight_with_exposure(band, t_rel, None)
 }
 
 #[inline]
@@ -160,5 +168,14 @@ mod tests {
         let boosted = synchrotron_emissivity_kerr(1.2, 0.5, 1.0, 1.0, &k, 2.0, 1.1);
         assert!(boosted >= base);
     }
-}
 
+    #[test]
+    fn fixed_exposure_override_changes_band_weight() {
+        let t_rel = 1.0;
+        let baseline = band_weight(RenderSpectrum::Optical, t_rel);
+        let dimmer = band_weight_with_exposure(RenderSpectrum::Optical, t_rel, Some(0.7));
+        let brighter = band_weight_with_exposure(RenderSpectrum::Optical, t_rel, Some(2.1));
+        assert!(dimmer < baseline, "dimmer={dimmer} baseline={baseline}");
+        assert!(brighter > baseline, "brighter={brighter} baseline={baseline}");
+    }
+}
