@@ -1708,6 +1708,7 @@ fn render_view_tiled(
     use std::f64::consts::PI;
     use std::io::{Seek, SeekFrom, Write};
     let parse_env_f64 = |k: &str| std::env::var(k).ok().and_then(|s| s.parse::<f64>().ok());
+    let parse_env_usize = |k: &str| std::env::var(k).ok().and_then(|s| s.parse::<usize>().ok());
     let parse_env_bool = |k: &str| {
         std::env::var(k).ok().is_some_and(|s| {
             matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON")
@@ -1781,6 +1782,11 @@ fn render_view_tiled(
         .unwrap_or(true);
     #[cfg(not(any(feature = "cuda", feature = "rocm")))]
     let tiled_gpu = false;
+    let faithful_guard = parse_env_bool("BH_TILED_FAITHFUL");
+    let probe_px = parse_env_usize("BH_TILED_PROBE_PX").unwrap_or(48).clamp(16, 128);
+    let probe_mad_max = parse_env_f64("BH_TILED_PROBE_MAD_MAX")
+        .unwrap_or(8.0)
+        .clamp(0.5, 64.0);
     eprintln!(
         "  tiled render {}: {}x{} in {}x{} tiles (tile={}px, backend={})",
         view.slug,
@@ -1807,7 +1813,7 @@ fn render_view_tiled(
                 max_phi: cfg.max_phi,
                 dphi: cfg.dphi,
             };
-            let tile_pixels = if tiled_gpu {
+            let mut tile_pixels = if tiled_gpu {
                 #[cfg(any(feature = "cuda", feature = "rocm"))]
                 {
                     render_with_options_gpu_window(
@@ -1869,6 +1875,92 @@ fn render_view_tiled(
                     0.5,
                 )
             };
+            if tiled_gpu && faithful_guard {
+                let pw = probe_px.min(tw);
+                let ph = probe_px.min(th);
+                let px0 = x0 + (tw - pw) / 2;
+                let py0 = y0 + (th - ph) / 2;
+                let cpu_probe = render_with_options_cpu_window(
+                    &metric,
+                    kerr_metric.as_ref(),
+                    view.disk_inner,
+                    view.disk_outer,
+                    width,
+                    height,
+                    px0,
+                    py0,
+                    pw,
+                    ph,
+                    &cfg,
+                    view.az,
+                    view.doppler,
+                    view.ring_mode,
+                    view.interior_mode,
+                    view.core_look_mode,
+                    spectral_band,
+                    disk_model,
+                    plasma_model,
+                    use_transfer,
+                    tau_scale,
+                    true,
+                    r_cam_rs,
+                    0.5,
+                    0.5,
+                );
+                let mut mad = 0.0_f64;
+                for py in 0..ph {
+                    let gy = py0 + py;
+                    let ty_local = gy - y0;
+                    let gpu_row = ty_local * tw;
+                    let cpu_row = py * pw;
+                    let tx_local0 = px0 - x0;
+                    for px in 0..pw {
+                        let g = tile_pixels[gpu_row + tx_local0 + px];
+                        let c = cpu_probe[cpu_row + px];
+                        mad += ((g[0].abs_diff(c[0]) as f64)
+                            + (g[1].abs_diff(c[1]) as f64)
+                            + (g[2].abs_diff(c[2]) as f64))
+                            / 3.0;
+                    }
+                }
+                mad /= (pw * ph).max(1) as f64;
+                if mad > probe_mad_max {
+                    eprintln!(
+                        "      [faithful-guard] probe MAD {:.2} > {:.2} on tile ({},{}); rerendering tile on CPU",
+                        mad,
+                        probe_mad_max,
+                        tx + 1,
+                        ty + 1
+                    );
+                    tile_pixels = render_with_options_cpu_window(
+                        &metric,
+                        kerr_metric.as_ref(),
+                        view.disk_inner,
+                        view.disk_outer,
+                        width,
+                        height,
+                        x0,
+                        y0,
+                        tw,
+                        th,
+                        &cfg,
+                        view.az,
+                        view.doppler,
+                        view.ring_mode,
+                        view.interior_mode,
+                        view.core_look_mode,
+                        spectral_band,
+                        disk_model,
+                        plasma_model,
+                        use_transfer,
+                        tau_scale,
+                        true,
+                        r_cam_rs,
+                        0.5,
+                        0.5,
+                    );
+                }
+            }
             for row in 0..th {
                 let dst_off = (y0 + row) * width + x0;
                 let src_off = row * tw;
