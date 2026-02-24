@@ -1069,7 +1069,18 @@ impl Gpu {
             Some("vulkan") => wgpu::Backends::VULKAN,
             Some("metal") => wgpu::Backends::METAL,
             Some("dx12") => wgpu::Backends::DX12,
-            _ => wgpu::Backends::PRIMARY,
+            Some("primary") => wgpu::Backends::PRIMARY,
+            _ => {
+                if cfg!(target_os = "linux") {
+                    wgpu::Backends::VULKAN
+                } else if cfg!(target_os = "windows") {
+                    wgpu::Backends::DX12
+                } else if cfg!(target_os = "macos") {
+                    wgpu::Backends::METAL
+                } else {
+                    wgpu::Backends::PRIMARY
+                }
+            }
         };
 
         let primary_init = try_backend(primary, Arc::clone(&window)).await;
