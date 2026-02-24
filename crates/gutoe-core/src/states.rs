@@ -25,7 +25,6 @@
 //! - TANGENT: tan = sin/cos — the slope/ratio state, diverges when cos = 0
 
 use num_complex::Complex64;
-use rust_decimal::Decimal;
 use std::fmt;
 
 /// Fundamental GUTOE constants derived from vector rail simulations

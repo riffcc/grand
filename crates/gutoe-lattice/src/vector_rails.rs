@@ -25,7 +25,6 @@
 //!  - Coherent field-like structures spanning entities"
 
 use super::hex_lattice::HexCoord;
-use gutoe_core::TriState;
 use std::collections::HashMap;
 
 /// A vector rail connection between two lattice points
