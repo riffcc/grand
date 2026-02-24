@@ -3,6 +3,7 @@ target/
 Cargo.lock
 
 # Lean build artifacts
+lean/.lake
 lean/.lake/build/
 lean/lakefile.lake
 
