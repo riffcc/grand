@@ -19,7 +19,12 @@ pub mod watson;
 pub mod speculative;
 pub mod metric;
 pub mod kerr;
+pub mod synchrotron;
+pub mod transfer;
 pub mod tracer;
+pub mod geodesic3d;
+pub mod snapshot;
+pub mod playback;
 
 use gutoe_em::quantum_lepton::{bohr_test_3d, BohrResult};
 

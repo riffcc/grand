@@ -87,6 +87,10 @@ void bh_rk4_step(double r, double p, double b, double r_s, double r_c, double dp
 #define TRACE_CAPTURED 0
 #define TRACE_DISKHIT  1
 #define TRACE_ESCAPED  2
+#define DISK_MODEL_THIN 0
+#define DISK_MODEL_RIAF 1
+#define PLASMA_MODEL_NT 0
+#define PLASMA_MODEL_GRMHD 1
 
 /* Trace a null geodesic through the GUTOE Schwarzschild metric.
  *
@@ -160,6 +164,7 @@ int trace_photon_gpu(
             if (re_cur >= disk_inner && re_cur <= disk_outer && p < 0.0) {
                 *out_r_eff   = re_cur;
                 *out_n_cross = 1;
+                *out_phi_total = phi;
                 return TRACE_DISKHIT;
             }
         } else {
@@ -173,6 +178,7 @@ int trace_photon_gpu(
                 if (re_cross >= disk_inner && re_cross <= disk_outer) {
                     *out_r_eff   = re_cross;
                     *out_n_cross = n_cross;
+                    *out_phi_total = target;
                     return TRACE_DISKHIT;
                 }
             }
@@ -272,6 +278,7 @@ int trace_photon_gpu_interior(
             if (!turned && re_cur >= disk_inner && re_cur <= disk_outer && p > 0.0) {
                 *out_r_eff   = re_cur;
                 *out_n_cross = 1;
+                *out_phi_total = phi;
                 return TRACE_DISKHIT;
             }
         } else {
@@ -284,6 +291,7 @@ int trace_photon_gpu_interior(
                 if (re_cross >= disk_inner && re_cross <= disk_outer) {
                     *out_r_eff   = re_cross;
                     *out_n_cross = n_cross;
+                    *out_phi_total = target;
                     return TRACE_DISKHIT;
                 }
             }
@@ -360,6 +368,132 @@ int trace_photon_gpu_interior_core(
     *out_r_eff = re_core_cap;
     *out_phi_total = phi;
     return TRACE_DISKHIT;
+}
+
+/* ── Experimental Kerr tracer (exterior camera) ───────────────────────────── */
+
+static __device__ __forceinline__
+double bh_kerr_mass(double r_s) { return 0.5 * r_s; }
+
+static __device__ __forceinline__
+double bh_kerr_a(double r_s, double a_star) { return a_star * bh_kerr_mass(r_s); }
+
+static __device__ __forceinline__
+double bh_kerr_sigma(double r, double th, double a)
+{
+    double c = cos(th);
+    return r*r + a*a*c*c;
+}
+
+static __device__ __forceinline__
+double bh_kerr_delta(double r, double r_s, double a)
+{
+    return r*r - r_s*r + a*a;
+}
+
+static __device__ __forceinline__
+void bh_kerr_image_constants(double bx, double by, double sin_inc, double a,
+                             double* xi, double* eta)
+{
+    // Screen coordinates are (alpha,beta); convert to Carter constants using
+    // observer inclination i from the disk normal:
+    //   xi  = -alpha sin(i)
+    //   eta = beta^2 + (alpha^2 - a^2) cos^2(i)
+    double s = fmax(fmin(sin_inc, 1.0), -1.0);
+    double c2 = fmax(1.0 - s*s, 0.0);
+    *xi = -bx * s;
+    *eta = by*by + (bx*bx - a*a) * c2;
+}
+
+static __device__
+int trace_photon_gpu_kerr(
+    double r_s, double a_star,
+    double disk_inner, double disk_outer,
+    double bx, double by, double sin_inc,
+    double max_lambda, double dlambda,
+    double* out_r_eff, unsigned int* out_n_cross, double* out_phi_total)
+{
+    double a = bh_kerr_a(r_s, a_star);
+    double m = bh_kerr_mass(r_s);
+    double disc = fmax(m*m - a*a, 0.0);
+    double r_plus = m + sqrt(disc);
+
+    double xi, eta;
+    bh_kerr_image_constants(bx, by, sin_inc, a, &xi, &eta);
+
+    double b = sqrt(bx*bx + by*by);
+    double r_start = fmax(fmax(40.0*r_s, 12.0*b), 20.0);
+    double theta_obs = asin(fmax(fmin(sin_inc, 1.0), -1.0));
+    theta_obs = fmax(fmin(theta_obs, TRACER_PI - 1e-4), 1e-4);
+    double theta = theta_obs;
+    double r = r_start;
+    double phi = 0.0;
+    double sgn_r = -1.0;
+    // Match CPU Kerr tracer convention: dθ/dλ sign follows β sign.
+    double sgn_th = (by >= 0.0) ? 1.0 : -1.0;
+    unsigned int n_cross = 0;
+    int max_steps = (int)(max_lambda / dlambda) + 1;
+
+    for (int step = 0; step < max_steps; step++) {
+        double sig = fmax(bh_kerr_sigma(r, theta, a), 1e-12);
+        double del = bh_kerr_delta(r, r_s, a);
+        double s = sin(theta), c = cos(theta);
+        double s2 = fmax(s*s, 1e-9);
+        double p = (r*r + a*a) - a*xi;
+        double rpot = p*p - del * ((xi - a)*(xi - a) + eta);
+        double cot2 = (c*c) / s2;
+        double tpot = eta + a*a*c*c - xi*xi*cot2;
+
+        if (rpot <= 1e-12) sgn_r = -sgn_r;
+        if (tpot <= 1e-12) sgn_th = -sgn_th;
+
+        double rr = sqrt(fmax(rpot, 0.0));
+        double thh = sqrt(fmax(tpot, 0.0));
+        double dr = sgn_r * rr / sig;
+        double dth = sgn_th * thh / sig;
+        double dphi = (fabs(del) < 1e-9)
+            ? ((xi / s2) - a) / sig
+            : ((xi / s2) - a + a * p / del) / sig;
+
+        double r_new = r + dlambda * dr;
+        double th_new = fmax(fmin(theta + dlambda * dth, TRACER_PI - 1e-4), 1e-4);
+        double phi_new = phi + dlambda * dphi;
+
+        if (!(isfinite(r_new) && isfinite(th_new) && isfinite(phi_new)))
+            return TRACE_CAPTURED;
+
+        if (r_new <= 1.001 * r_plus)
+            return TRACE_CAPTURED;
+
+        if (sgn_r > 0.0 && r_new >= 0.995 * r_start) {
+            *out_phi_total = fabs(phi_new);
+            return TRACE_ESCAPED;
+        }
+
+        double pi2 = 0.5 * TRACER_PI;
+        if ((theta - pi2) * (th_new - pi2) <= 0.0) {
+            n_cross++;
+            double t = (pi2 - theta) / (th_new - theta + 1e-12);
+            t = fmax(fmin(t, 1.0), 0.0);
+            double r_cross = r + t * (r_new - r);
+            if (r_cross >= disk_inner && r_cross <= disk_outer) {
+                *out_r_eff = r_cross;
+                *out_n_cross = n_cross;
+                *out_phi_total = fabs(phi_new);
+                return TRACE_DISKHIT;
+            }
+        }
+
+        r = r_new;
+        theta = th_new;
+        phi = phi_new;
+    }
+
+    if ((sgn_r > 0.0 && r > 0.5 * r_start) || r > fmax(3.0*r_s, 1.2*r_plus)) {
+        *out_phi_total = fabs(phi);
+        return TRACE_ESCAPED;
+    }
+    return TRACE_CAPTURED;
 }
 
 /* ── Colour functions (port of bh_render.rs) ─────────────────────────────── */
@@ -518,9 +652,29 @@ void bh_ring_order_color(unsigned int n_cross,
 
 /* Novikov–Thorne temperature colour with Reinhard tone mapping */
 static __device__
+void bh_plasma_profile_scales(double r_eff, double r_s, unsigned int n_cross, int plasma_model,
+                               double* j_scale, double* a_scale)
+{
+    if (plasma_model == PLASMA_MODEL_GRMHD) {
+        double x = fmax(r_eff / fmax(r_s, 1e-9), 1e-9);
+        double ne = pow(x, -1.1);
+        double te = pow(x, -0.8);
+        double bb = pow(x, -1.0);
+        double ring = 1.0 + (double)((n_cross > 0 ? n_cross - 1 : 0)) * 0.08;
+        *j_scale = fmin(fmax(ne * bb * sqrt(fmax(te, 1e-9)) * ring, 0.08), 6.0);
+        *a_scale = fmin(fmax(ne * bb / fmax(te, 1e-6) * ring, 0.05), 8.0);
+        return;
+    }
+    *j_scale = 1.0;
+    *a_scale = 1.0;
+}
+
+static __device__
 void bh_pixel_color(double r_eff, double r_isco, double r_outer, double r_s,
-                     double bx_raw, double sin_inc,
-                     unsigned int n_cross, int doppler, int ring_mode,
+                     double bx_raw, double phi_orb, double sin_inc,
+                     unsigned int n_cross, int doppler, int ring_mode, int spectral_band,
+                     int plasma_model,
+                     int use_transfer, double tau_scale,
                      unsigned char* r_o, unsigned char* g_o, unsigned char* b_o)
 {
     if (ring_mode) { bh_ring_order_color(n_cross, r_o, g_o, b_o); return; }
@@ -535,24 +689,125 @@ void bh_pixel_color(double r_eff, double r_isco, double r_outer, double r_s,
     /* Higher-order images dimmer */
     double fade = pow(0.65, (double)((int)n_cross - 1));
 
-    /* Relativistic Keplerian Doppler D⁴ */
-    double doppler_d4 = 1.0;
+    /* Relativistic transfer g⁴ = (g_gr * g_dop)^4 */
+    double transfer = 1.0;
+    double r_safe = fmax(r_eff, 1e-12);
+    double g_gr = sqrt(fmax(1.0 - r_s / r_safe, 0.0));
     if (doppler) {
-        double r_safe  = fmax(r_eff, 1e-12);
-        double beta    = fmin(sqrt(r_s / (2.0 * r_safe)), 0.5);
-        double beta_obs = beta * sin_inc * fmax(fmin(bx_raw / r_safe, 1.0), -1.0);
-        double D = 1.0 / (1.0 - beta_obs);
-        doppler_d4 = fmax(fmin(D*D*D*D, 200.0), 0.01);
+        double beta    = fmin(sqrt(r_s / (2.0 * r_safe)), 0.7);
+        double gamma   = 1.0 / sqrt(fmax(1.0 - beta*beta, 1e-12));
+        double mu_phi = fmax(fmin(sin(phi_orb), 1.0), -1.0);
+        double mu_screen = fmax(fmin(bx_raw / r_safe, 1.0), -1.0);
+        double mu = fmax(fmin(0.8 * mu_phi + 0.2 * mu_screen, 1.0), -1.0);
+        double beta_obs = beta * sin_inc * mu;
+        double g_dop = 1.0 / (gamma * (1.0 - beta_obs));
+        double g = g_gr * g_dop;
+        transfer = fmax(fmin(g*g*g*g, 300.0), 1e-6);
+    } else {
+        transfer = fmax(fmin(g_gr*g_gr*g_gr*g_gr, 300.0), 1e-6);
     }
 
-    /* Reinhard tone mapping */
-    double luminance = fmax(t_rel * fade * doppler_d4 * outer_taper, 0.0);
+    /* Band-limited emissivity proxy from Planck shape x^3/(e^x-1). */
+    double spectral = 1.0;
+    if (spectral_band != 0) {
+        double x0 = 1.0;
+        double exposure = 1.0;
+        switch (spectral_band) {
+            case 1: x0 = 0.02; exposure = 5.0; break;  /* radio */
+            case 2: x0 = 0.08; exposure = 3.5; break;  /* millimeter */
+            case 3: x0 = 0.40; exposure = 2.0; break;  /* infrared */
+            case 4: x0 = 1.00; exposure = 1.4; break;  /* optical */
+            case 5: x0 = 2.00; exposure = 1.1; break;  /* ultraviolet */
+            case 6: x0 = 6.00; exposure = 2.4; break;  /* xray */
+            case 7: x0 = 20.0; exposure = 4.0; break;  /* gamma */
+            default: break;
+        }
+        double x = x0 / fmax(t_rel, 1e-6);
+        double planck = 0.0;
+        if (x <= 80.0) {
+            planck = (x*x*x) / (exp(x) - 1.0);
+        }
+        double planck_ref = (x0*x0*x0) / (exp(x0) - 1.0);
+        spectral = fmax(fmin(exposure * planck / fmax(planck_ref, 1e-12), 64.0), 0.0);
+    }
+
+    /* Source proxy + optional covariant transfer integration */
+    double j_scale = 1.0, a_scale = 1.0;
+    bh_plasma_profile_scales(r_eff, r_s, n_cross, plasma_model, &j_scale, &a_scale);
+    double source_local = fmax(t_rel * fade * outer_taper * spectral * j_scale, 0.0);
+    double g_cov = pow(fmax(transfer, 1e-12), 0.25);
+    double alpha_base = (0.35 * fmax(tau_scale, 0.0) *
+        (1.0 + (double)((n_cross > 0 ? n_cross - 1 : 0)) * 0.15) * a_scale);
+    double luminance = 0.0;
+    if (use_transfer) {
+        const int steps = 8;
+        double path_scale = fmax(r_eff / fmax(r_s, 1e-12), 1e-9);
+        double intensity = 0.0;
+        for (int si = 0; si < steps; ++si) {
+            double u = ((double)si + 0.5) / (double)steps;
+            double local_mod = 1.0 + 0.20 * (1.0 - u);
+            double j_obs = fmax(source_local * local_mod, 0.0) * g_cov * g_cov * g_cov;
+            double alpha_obs = fmax(alpha_base * (0.7 + 0.6 * u), 0.0) * g_cov;
+            double tau_seg = fmax(alpha_obs * path_scale / (double)steps, 0.0);
+            double source_fn = (alpha_obs > 1e-12) ? (j_obs / alpha_obs) : j_obs;
+            double e = exp(-tau_seg);
+            intensity = intensity * e + source_fn * (1.0 - e);
+        }
+        luminance = fmax(intensity, 0.0);
+    } else {
+        luminance = fmax(source_local * transfer, 0.0);
+    }
     double bv = luminance / (1.0 + luminance);
 
+    /* Display tint per spectrum band (visualisation palette). */
+    double tr = 1.0, tg = 1.0, tb = 1.0;
+    switch (spectral_band) {
+        case 1: tr = 1.10; tg = 0.45; tb = 0.20; break; /* radio */
+        case 2: tr = 1.20; tg = 0.70; tb = 0.30; break; /* millimeter */
+        case 3: tr = 1.20; tg = 0.35; tb = 0.25; break; /* infrared */
+        case 4: tr = 1.00; tg = 1.00; tb = 1.00; break; /* optical */
+        case 5: tr = 0.55; tg = 0.80; tb = 1.20; break; /* ultraviolet */
+        case 6: tr = 0.35; tg = 0.90; tb = 1.25; break; /* xray */
+        case 7: tr = 0.90; tg = 0.55; tb = 1.20; break; /* gamma */
+        default: break;
+    }
+
     /* Orange-white thermal palette */
-    *r_o = (unsigned char)fmin(fmax(255.0 * pow(bv, 0.35), 0.0), 255.0);
-    *g_o = (unsigned char)fmin(fmax(210.0 * pow(bv, 0.60), 0.0), 255.0);
-    *b_o = (unsigned char)fmin(fmax(130.0 * pow(bv, 1.60), 0.0), 255.0);
+    *r_o = (unsigned char)fmin(fmax(255.0 * pow(bv, 0.35) * tr, 0.0), 255.0);
+    *g_o = (unsigned char)fmin(fmax(210.0 * pow(bv, 0.60) * tg, 0.0), 255.0);
+    *b_o = (unsigned char)fmin(fmax(130.0 * pow(bv, 1.60) * tb, 0.0), 255.0);
+}
+
+/* Low-optical-depth RIAF composite: disk transfer + transmitted star background. */
+static __device__
+void bh_riaf_composite_color(double r_eff, double r_isco, double r_outer, double r_s,
+                              double bx_raw, double bx, double by, double sin_inc,
+                              unsigned int n_cross, double phi_orb,
+                              int doppler, int ring_mode, int spectral_band,
+                              int plasma_model,
+                              int use_transfer, double tau_scale,
+                              unsigned char* r_o, unsigned char* g_o, unsigned char* b_o)
+{
+    unsigned char dr, dg, db;
+    bh_pixel_color(r_eff, r_isco, r_outer, r_s, bx_raw, phi_orb, sin_inc, n_cross,
+                   doppler, ring_mode, spectral_band, plasma_model, use_transfer, tau_scale,
+                   &dr, &dg, &db);
+
+    unsigned char br, bg, bb;
+    bh_star_field_color(bx, by, phi_orb + TRACER_PI, &br, &bg, &bb);
+
+    double tau = (0.45 * fmax(tau_scale, 0.0))
+        * pow(r_s / fmax(r_eff, 1e-9), 0.7)
+        * (1.0 + (double)((n_cross > 0 ? n_cross - 1 : 0)) * 0.10);
+    double trans = fmin(fmax(exp(-tau), 0.0), 1.0);
+    double gain = 1.6;
+    double drf = fmin((double)dr * gain, 255.0);
+    double dgf = fmin((double)dg * gain, 255.0);
+    double dbf = fmin((double)db * gain, 255.0);
+
+    *r_o = (unsigned char)fmin(fmax(round(drf * (1.0 - trans) + (double)br * trans), 0.0), 255.0);
+    *g_o = (unsigned char)fmin(fmax(round(dgf * (1.0 - trans) + (double)bg * trans), 0.0), 255.0);
+    *b_o = (unsigned char)fmin(fmax(round(dbf * (1.0 - trans) + (double)bb * trans), 0.0), 255.0);
 }
 
 /* ── Render kernel: one thread per pixel ─────────────────────────────────── */
@@ -566,7 +821,16 @@ void bh_render_kernel(
     double max_phi, double dphi,
     double az_cos, double az_sin,
     int doppler, int ring_mode, int interior_mode, int core_look_mode,
+    int spectral_band,
+    int disk_model,
+    int plasma_model,
+    int use_transfer,
+    double tau_scale,
+    int adaptive_dphi,
+    int kerr_enable,
+    double kerr_astar,
     double r_cam,                   /* 0.0 = exterior; >0 = interior camera */
+    double jitter_x, double jitter_y, /* subpixel jitter in [0,1) */
     unsigned char* pixels)          /* output: width*height*3 RGB bytes */
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -576,15 +840,30 @@ void bh_render_kernel(
     int ix = idx % width;
 
     /* Camera coordinates — orthographic, y-axis upward */
-    double scale  = 2.0 * fov_rs * r_s / (double)width;
-    double sx     = ((double)ix - 0.5 * ((double)width  - 1.0)) * scale;
-    double sy     = (0.5 * ((double)height - 1.0) - (double)iy) * scale;
+    int min_dim   = (width < height) ? width : height;
+    double scale  = 2.0 * fov_rs * r_s / (double)min_dim;
+    double dx     = jitter_x - 0.5;
+    double dy     = 0.5 - jitter_y;
+    double sx     = ((double)ix - 0.5 * ((double)width  - 1.0) + dx) * scale;
+    double sy     = (0.5 * ((double)height - 1.0) - (double)iy + dy) * scale;
     double bx_raw = sx;
-    double by_raw = sy * sin_inc;
+    /* Kerr uses raw beta + explicit inclination in image-constant mapping. */
+    double by_raw = kerr_enable ? sy : sy * sin_inc;
 
     /* Apply azimuth rotation in the screen plane */
     double bx = az_cos * bx_raw - az_sin * by_raw;
     double by = az_sin * bx_raw + az_cos * by_raw;
+    double b_mag = sqrt(bx*bx + by*by);
+    double b_crit = 1.5 * 1.7320508075688772935 * r_s;
+    double dphi_ray = dphi;
+    if (adaptive_dphi) {
+        double rel = fabs(b_mag / fmax(b_crit, 1e-12) - 1.0);
+        double scale = 1.0;
+        if      (rel < 0.01) scale = 0.20;
+        else if (rel < 0.03) scale = 0.35;
+        else if (rel < 0.08) scale = 0.60;
+        dphi_ray = fmax(dphi * scale, 8e-4);
+    }
 
     double r_eff = 0.0, phi_total = 0.0;
     unsigned int n_cross = 0;
@@ -594,27 +873,33 @@ void bh_render_kernel(
         if (core_look_mode) {
             /* Interior camera looking down toward the core. */
             result = trace_photon_gpu_interior_core(
-                r_s, r_c, r_cam, bx, by, max_phi, dphi, &r_eff, &phi_total);
+                r_s, r_c, r_cam, bx, by, max_phi, dphi_ray, &r_eff, &phi_total);
         } else {
             /* Interior camera: fire photons outward from r_cam */
             result = trace_photon_gpu_interior(r_s, r_c, disk_inner, disk_outer,
-                                                r_cam, bx, by, max_phi, dphi,
+                                                r_cam, bx, by, max_phi, dphi_ray,
                                                 &r_eff, &n_cross, &phi_total);
         }
     } else {
-        result = trace_photon_gpu(r_s, r_c, disk_inner, disk_outer, bx, by,
-                                   max_phi, dphi, &r_eff, &n_cross, &phi_total);
+        if (kerr_enable) {
+            result = trace_photon_gpu_kerr(
+                r_s, kerr_astar, disk_inner, disk_outer,
+                bx, by, sin_inc, max_phi * 1.2, dphi_ray,
+                &r_eff, &n_cross, &phi_total);
+        } else {
+            result = trace_photon_gpu(r_s, r_c, disk_inner, disk_outer, bx, by,
+                                      max_phi, dphi_ray, &r_eff, &n_cross, &phi_total);
+        }
     }
 
     unsigned char r_px, g_px, b_px;
     double r_isco = 3.0 * r_s;
-    double b_crit = 1.5 * 1.7320508075688772935 * r_s;
+    /* b_crit already computed above for adaptive stepping */
 
     switch (result) {
         case TRACE_CAPTURED:
             if (r_cam > 0.0) {
                 /* Photon turned around before photon sphere → GUTOE core glow */
-                double b_mag = sqrt(bx*bx + by*by);
                 bh_gutoe_core_color(b_mag, b_crit, &r_px, &g_px, &b_px);
             } else if (interior_mode) {
                 /* False-colour shadow: colour by half-orbit count before capture */
@@ -625,11 +910,24 @@ void bh_render_kernel(
             break;
         case TRACE_DISKHIT:
             if (r_cam > 0.0 && core_look_mode) {
-                double b_mag = sqrt(bx*bx + by*by);
                 bh_gutoe_core_physics_color(b_mag, b_crit, r_eff, phi_total, r_cam, r_c, &r_px, &g_px, &b_px);
             } else {
-                bh_pixel_color(r_eff, r_isco, disk_outer, r_s, bx_raw, sin_inc,
-                                n_cross, doppler, ring_mode, &r_px, &g_px, &b_px);
+                if (disk_model == DISK_MODEL_RIAF) {
+                    bh_riaf_composite_color(
+                        r_eff, r_isco, disk_outer, r_s,
+                        bx_raw, bx, by, sin_inc,
+                        n_cross, phi_total,
+                        doppler, ring_mode, spectral_band,
+                        plasma_model,
+                        use_transfer, tau_scale,
+                        &r_px, &g_px, &b_px);
+                } else {
+                    bh_pixel_color(
+                        r_eff, r_isco, disk_outer, r_s, bx_raw, phi_total, sin_inc,
+                        n_cross, doppler, ring_mode, spectral_band, plasma_model,
+                        use_transfer, tau_scale,
+                        &r_px, &g_px, &b_px);
+                }
             }
             break;
         default: /* TRACE_ESCAPED */
@@ -653,7 +951,16 @@ void gutoe_render_bh(
     double max_phi, double dphi,
     double az_deg,
     int doppler, int ring_mode, int interior_mode, int core_look_mode,
+    int spectral_band,
+    int disk_model,
+    int plasma_model,
+    int use_transfer,
+    double tau_scale,
+    int adaptive_dphi,
+    int kerr_enable,
+    double kerr_astar,
     double r_cam_rs,                /* 0.0 = exterior; >0 = interior camera at r_cam_rs * r_s */
+    double jitter_x, double jitter_y, /* subpixel jitter in [0,1) */
     unsigned char* out_pixels)      /* host output buffer: width*height*3 */
 {
     double sin_inc    = sin(inclination_deg * TRACER_PI / 180.0);
@@ -673,7 +980,10 @@ void gutoe_render_bh(
         width, height, fov_rs, sin_inc,
         r_s, r_c, disk_inner, disk_outer,
         max_phi, dphi, az_cos, az_sin,
-        doppler, ring_mode, interior_mode, core_look_mode, r_cam,
+        doppler, ring_mode, interior_mode, core_look_mode, spectral_band, disk_model, plasma_model,
+        use_transfer, tau_scale, adaptive_dphi,
+        kerr_enable, kerr_astar,
+        r_cam, jitter_x, jitter_y,
         d_pixels);
 
     TRACER_CUDA_CHECK(cudaDeviceSynchronize());

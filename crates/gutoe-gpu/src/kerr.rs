@@ -107,6 +107,55 @@ impl KerrMetric {
             2.0 * self.mass() * a * r / a_cap
         }
     }
+
+    /// Convert observer image-plane coordinates (alpha, beta) at inclination `theta_obs`
+    /// to Kerr impact parameters (xi=Lz/E, eta=Q/E²) for null geodesics with E=1.
+    ///
+    /// Conventions follow the standard Bardeen/Carter setup:
+    ///   xi  = -alpha * sin(theta_obs)
+    ///   eta = beta² + (alpha² - a²) cos²(theta_obs)
+    pub fn image_to_constants(
+        &self,
+        alpha: f64,
+        beta: f64,
+        theta_obs: f64,
+    ) -> (f64, f64) {
+        let s = theta_obs.sin();
+        let c = theta_obs.cos();
+        let a = self.a();
+        let xi = -alpha * s;
+        let eta = beta * beta + (alpha * alpha - a * a) * c * c;
+        (xi, eta)
+    }
+
+    /// Kerr radial potential for null geodesics (Carter form, E=1):
+    ///
+    /// R(r) = [(r² + a²) - a*xi]² - Δ * [(xi - a)² + eta]
+    ///
+    /// Real radial motion requires R(r) >= 0.
+    pub fn radial_potential(&self, r: f64, xi: f64, eta: f64) -> f64 {
+        let a = self.a();
+        let delta = self.delta(r);
+        let t = (r * r + a * a) - a * xi;
+        t * t - delta * ((xi - a) * (xi - a) + eta)
+    }
+
+    /// Polar potential for null geodesics (E=1):
+    ///
+    /// Θ(θ) = eta + a² cos²θ - xi² cot²θ
+    ///
+    /// Real polar motion requires Θ(θ) >= 0.
+    pub fn polar_potential(&self, theta: f64, xi: f64, eta: f64) -> f64 {
+        let c = theta.cos();
+        let s = theta.sin();
+        let a = self.a();
+        let cot2 = if s.abs() < 1e-15 {
+            f64::INFINITY
+        } else {
+            (c / s).powi(2)
+        };
+        eta + a * a * c * c - xi * xi * cot2
+    }
 }
 
 #[cfg(test)]
@@ -167,5 +216,29 @@ mod tests {
         let k = KerrMetric::new(2.0, 0.0).expect("valid");
         assert!(k.horizon_angular_velocity().abs() < 1e-12);
         assert!(k.frame_dragging_omega(4.0, PI / 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn image_plane_to_constants_schwarzschild_limit() {
+        let k = KerrMetric::new(2.0, 0.0).expect("valid");
+        let theta_obs = PI / 3.0;
+        let (xi, eta) = k.image_to_constants(2.0, 1.5, theta_obs);
+        assert!((xi + 2.0 * theta_obs.sin()).abs() < 1e-12);
+        // a=0 => eta = beta^2 + alpha^2 cos^2(theta_obs)
+        let expected = 1.5_f64.powi(2) + 2.0_f64.powi(2) * theta_obs.cos().powi(2);
+        assert!((eta - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn radial_potential_matches_schwarzschild_form_when_a_zero() {
+        let k = KerrMetric::new(2.0, 0.0).expect("valid");
+        let r = 8.0;
+        let xi = 1.25;
+        let eta = 3.5;
+        let rpot = k.radial_potential(r, xi, eta);
+        // a=0 => R = r^4 - Δ*(xi^2 + eta), with Δ=r^2-r_s*r
+        let delta = r * r - k.r_s * r;
+        let expected = r.powi(4) - delta * (xi * xi + eta);
+        assert!((rpot - expected).abs() < 1e-10, "rpot={rpot}, expected={expected}");
     }
 }

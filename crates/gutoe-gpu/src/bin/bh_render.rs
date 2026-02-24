@@ -16,23 +16,152 @@ use std::{
     net::{TcpListener, TcpStream},
     path::{Path, PathBuf},
     process::Command,
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 use rayon::prelude::*;
 
 use gutoe_gpu::{
+    geodesic3d::{reduce_3d_to_axisym, trace_photon_3d_schwarzschild, CameraFrame, Vec3},
     kerr::KerrMetric,
-    metric::GutoeMetric,
+    metric::{GutoeMetric, C_INF, LAMBDA_QG, WATSON_SC},
+    synchrotron::{band_tint, band_weight, RenderSpectrum as SpectralBand},
+    transfer::{covariant_absorption, covariant_emissivity, transfer_step},
     tracer::{
-        b_critical, trace_photon, trace_photon_interior, trace_photon_interior_core, write_ppm,
+        b_critical, trace_photon, trace_photon_interior, trace_photon_interior_core,
+        trace_photon_kerr, write_ppm,
         RenderConfig, TraceResult,
     },
 };
 
-// ── CUDA FFI (only available with --features cuda) ───────────────────────────
+#[derive(Debug, Clone, Copy)]
+struct KerrImageMetrics {
+    shadow_cx: f64,
+    shadow_cy: f64,
+    shadow_radius: f64,
+    shadow_diameter: f64,
+    ring_thickness: f64,
+    flux_left: f64,
+    flux_right: f64,
+    flux_asymmetry: f64,
+    closure_phase_deg: f64,
+}
 
-#[cfg(feature = "cuda")]
+struct StarMap {
+    w: usize,
+    h: usize,
+    rgb: Vec<[u8; 3]>,
+}
+
+impl StarMap {
+    fn sample(&self, u: f64, v: f64) -> [u8; 3] {
+        let uu = u.rem_euclid(1.0);
+        let vv = v.clamp(0.0, 1.0);
+        let x = uu * (self.w as f64 - 1.0);
+        let y = vv * (self.h as f64 - 1.0);
+        let x0 = x.floor() as usize;
+        let y0 = y.floor() as usize;
+        let x1 = (x0 + 1).min(self.w - 1);
+        let y1 = (y0 + 1).min(self.h - 1);
+        let tx = x - x0 as f64;
+        let ty = y - y0 as f64;
+        let p00 = self.rgb[y0 * self.w + x0];
+        let p10 = self.rgb[y0 * self.w + x1];
+        let p01 = self.rgb[y1 * self.w + x0];
+        let p11 = self.rgb[y1 * self.w + x1];
+        let lerp = |a: f64, b: f64, t: f64| a * (1.0 - t) + b * t;
+        let ch = |c: usize| -> u8 {
+            let a = lerp(p00[c] as f64, p10[c] as f64, tx);
+            let b = lerp(p01[c] as f64, p11[c] as f64, tx);
+            lerp(a, b, ty).round().clamp(0.0, 255.0) as u8
+        };
+        [ch(0), ch(1), ch(2)]
+    }
+}
+
+static STARMAP: OnceLock<Option<Arc<StarMap>>> = OnceLock::new();
+
+fn starmap() -> Option<&'static Arc<StarMap>> {
+    STARMAP
+        .get_or_init(|| {
+            let path = std::env::var("BH_STARMAP_PATH").ok()?;
+            let img = image::open(&path).ok()?.to_rgb8();
+            let (w, h) = img.dimensions();
+            let mut rgb = Vec::with_capacity((w * h) as usize);
+            for p in img.pixels() {
+                rgb.push([p[0], p[1], p[2]]);
+            }
+            eprintln!("    starmap=loaded {} ({}x{})", path, w, h);
+            Some(Arc::new(StarMap {
+                w: w as usize,
+                h: h as usize,
+                rgb,
+            }))
+        })
+        .as_ref()
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DiskModel {
+    Thin,
+    Riaf,
+}
+
+impl DiskModel {
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    fn as_i32(self) -> i32 {
+        match self {
+            Self::Thin => 0,
+            Self::Riaf => 1,
+        }
+    }
+
+    fn from_env() -> Self {
+        match std::env::var("BH_DISK_MODEL")
+            .ok()
+            .map(|s| s.to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("riaf") | Some("volumetric") => Self::Riaf,
+            _ => Self::Thin,
+        }
+    }
+    fn as_label(self) -> &'static str {
+        match self {
+            Self::Thin => "thin",
+            Self::Riaf => "riaf",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlasmaModel {
+    Nt,
+    Grmhd,
+}
+
+impl PlasmaModel {
+    fn from_env() -> Self {
+        match std::env::var("BH_PLASMA_MODEL")
+            .ok()
+            .map(|s| s.to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("grmhd") | Some("mad") | Some("sane") => Self::Grmhd,
+            _ => Self::Nt,
+        }
+    }
+    fn as_label(self) -> &'static str {
+        match self {
+            Self::Nt => "nt",
+            Self::Grmhd => "grmhd",
+        }
+    }
+}
+
+// ── GPU FFI (available with --features cuda or --features rocm) ──────────────
+
+#[cfg(any(feature = "cuda", feature = "rocm"))]
 extern "C" {
     /// GPU black hole renderer — one CUDA thread per pixel.
     /// Writes RGB triples to `out_pixels` (host buffer, width*height*3 bytes).
@@ -52,13 +181,23 @@ extern "C" {
         ring_mode: i32,
         interior_mode: i32,
         core_look_mode: i32,
+        spectral_band: i32, // 0..7, see SpectralBand
+        disk_model: i32,    // 0=thin, 1=riaf
+        plasma_model: i32,  // 0=nt, 1=grmhd profile proxy
+        use_transfer: i32,  // 1 => use transfer_step path for disk intensity
+        tau_scale: f64,     // optical-depth scale for transfer path
+        adaptive_dphi: i32, // 1 => reduce dphi near critical impact parameter
+        kerr_enable: i32,   // 1 => use Kerr tracer for exterior rays
+        kerr_astar: f64,    // dimensionless spin a*
         r_cam_rs: f64, // 0.0 = exterior; >0 = interior camera at r_cam_rs × r_s
+        jitter_x: f64, // subpixel jitter in [0,1)
+        jitter_y: f64, // subpixel jitter in [0,1)
         out_pixels: *mut u8,
     );
 }
 
-/// GPU render path — calls the CUDA kernel and returns the pixel buffer.
-#[cfg(feature = "cuda")]
+/// GPU render path — calls the CUDA/HIP kernel and returns the pixel buffer.
+#[cfg(any(feature = "cuda", feature = "rocm"))]
 fn render_with_options_gpu(
     metric: &GutoeMetric,
     disk_inner_rs: f64,
@@ -69,7 +208,16 @@ fn render_with_options_gpu(
     ring_mode: bool,
     interior_mode: bool,
     core_look_mode: bool,
+    spectral_band: SpectralBand,
+    disk_model: DiskModel,
+    plasma_model: PlasmaModel,
+    use_transfer: bool,
+    tau_scale: f64,
+    adaptive_dphi: bool,
+    kerr: Option<&KerrMetric>,
     r_cam_rs: f64,
+    jitter_x: f64,
+    jitter_y: f64,
 ) -> Vec<[u8; 3]> {
     let n = cfg.width * cfg.height;
     let mut flat = vec![0u8; n * 3];
@@ -90,7 +238,20 @@ fn render_with_options_gpu(
             ring_mode as i32,
             interior_mode as i32,
             core_look_mode as i32,
+            spectral_band.as_i32(),
+            disk_model.as_i32(),
+            match plasma_model {
+                PlasmaModel::Nt => 0,
+                PlasmaModel::Grmhd => 1,
+            },
+            use_transfer as i32,
+            tau_scale,
+            adaptive_dphi as i32,
+            kerr.is_some() as i32,
+            kerr.map_or(0.0, |k| k.a_star),
             r_cam_rs,
+            jitter_x,
+            jitter_y,
             flat.as_mut_ptr(),
         );
     }
@@ -435,10 +596,15 @@ fn pixel_color(
     r_outer: f64,
     r_s: f64,
     bx: f64,
+    phi_orb: f64,
     sin_inc: f64,
     n_cross: u32,
     doppler: bool,
     ring_mode: bool,
+    spectral_band: SpectralBand,
+    plasma_model: PlasmaModel,
+    use_transfer: bool,
+    tau_scale: f64,
 ) -> [u8; 3] {
     if ring_mode {
         return ring_order_color(n_cross);
@@ -458,28 +624,162 @@ fn pixel_color(
     // Higher-order images are dimmer (photon lost energy looping around)
     let fade = 0.65_f64.powi(n_cross as i32 - 1);
 
-    // Relativistic Keplerian Doppler: v_K = c · √(r_s / (2 r_eff))
-    // Observer-velocity alignment: β_obs ≈ v_K · sin_inc · (bx / r_eff)
-    // bx > 0 → disk material moving toward observer → blueshift → D > 1.
-    let doppler_d4 = if doppler {
-        let beta = (r_s / (2.0 * r_eff)).sqrt().min(0.5);
-        let beta_obs = beta * sin_inc * (bx / (r_eff.max(1e-12))).clamp(-1.0, 1.0);
-        // D = 1 / (1 − β_obs);  D⁴ for thermal emission (Stefan–Boltzmann)
-        (1.0 / (1.0 - beta_obs)).powi(4).clamp(0.01, 200.0)
-    } else {
-        1.0
-    };
+    // Relativistic transfer factor g⁴ (gravitational redshift × Doppler beaming).
+    let transfer = disk_transfer_factor(r_eff, r_s, bx, phi_orb, sin_inc, doppler);
 
-    // Reinhard tone mapping: luminance → luminance / (1 + luminance)
-    // Never clips; handles both dim and Doppler-boosted pixels uniformly.
-    let luminance = (t_rel * fade * doppler_d4 * outer_taper).max(0.0);
-    let b = luminance / (1.0 + luminance);
+    let spectral = band_weight(spectral_band, t_rel);
+    let (j_scale, a_scale) = plasma_profile_scales(r_eff, r_s, n_cross, plasma_model);
+    // Local covariant source proxy.
+    let source_local = (t_rel * fade * outer_taper * spectral * j_scale).max(0.0);
+    let g_cov = transfer.max(1e-9).powf(0.25);
+    let alpha_base = 0.35
+        * tau_scale.max(0.0)
+        * (1.0 + (n_cross.saturating_sub(1)) as f64 * 0.15)
+        * a_scale;
+    let luminance_raw = if use_transfer {
+        // Multi-step covariant transfer integration along an effective path
+        // segment through the emitting flow.
+        let steps = 8usize;
+        let path_scale = (r_eff / r_s.max(1e-9)).max(1e-9);
+        let mut intensity = 0.0_f64;
+        for si in 0..steps {
+            let u = (si as f64 + 0.5) / steps as f64; // 0..1
+            let local_mod = 1.0 + 0.20 * (1.0 - u);
+            let j_obs = covariant_emissivity((source_local * local_mod).max(0.0), g_cov);
+            let alpha_obs = covariant_absorption(alpha_base * (0.7 + 0.6 * u), g_cov);
+            let tau_seg = (alpha_obs * path_scale / steps as f64).max(0.0);
+            let source_fn = if alpha_obs > 1e-12 {
+                j_obs / alpha_obs
+            } else {
+                j_obs
+            };
+            intensity = transfer_step(intensity, source_fn, tau_seg);
+        }
+        intensity.max(0.0)
+    } else {
+        source_local * transfer
+    };
+    // Reinhard tone mapping: luminance → luminance / (1 + luminance).
+    let b = luminance_raw.max(0.0) / (1.0 + luminance_raw.max(0.0));
 
     // Orange-white thermal palette (hot inner disk white, outer disk orange-red)
-    let r = (255.0 * b.powf(0.35)).clamp(0.0, 255.0) as u8;
-    let g = (210.0 * b.powf(0.60)).clamp(0.0, 255.0) as u8;
-    let bl = (130.0 * b.powf(1.60)).clamp(0.0, 255.0) as u8;
+    let [tr, tg, tb] = band_tint(spectral_band);
+    let r = (255.0 * b.powf(0.35) * tr).clamp(0.0, 255.0) as u8;
+    let g = (210.0 * b.powf(0.60) * tg).clamp(0.0, 255.0) as u8;
+    let bl = (130.0 * b.powf(1.60) * tb).clamp(0.0, 255.0) as u8;
     [r, g, bl]
+}
+
+fn plasma_profile_scales(
+    r_eff: f64,
+    r_s: f64,
+    n_cross: u32,
+    plasma_model: PlasmaModel,
+) -> (f64, f64) {
+    match plasma_model {
+        PlasmaModel::Nt => (1.0, 1.0),
+        PlasmaModel::Grmhd => {
+            let x = (r_eff / r_s.max(1e-9)).max(1e-9);
+            // Simple GRMHD-inspired profile proxy:
+            // density ~ r^-1.1, temperature ~ r^-0.8, magnetic energy ~ r^-1.0
+            // emissivity boost ∝ n_e * B * T_e^0.5, absorption tracks n_e * B / T_e.
+            let ne = x.powf(-1.1);
+            let te = x.powf(-0.8);
+            let b = x.powf(-1.0);
+            let ring = 1.0 + n_cross.saturating_sub(1) as f64 * 0.08;
+            let j_scale = (ne * b * te.sqrt() * ring).clamp(0.08, 6.0);
+            let a_scale = (ne * b / te.max(1e-6) * ring).clamp(0.05, 8.0);
+            (j_scale, a_scale)
+        }
+    }
+}
+
+fn riaf_composite_color(
+    r_eff: f64,
+    r_isco: f64,
+    r_outer: f64,
+    r_s: f64,
+    bx_raw: f64,
+    bx: f64,
+    by: f64,
+    sin_inc: f64,
+    n_cross: u32,
+    phi_orb: f64,
+    doppler: bool,
+    ring_mode: bool,
+    spectral_band: SpectralBand,
+    plasma_model: PlasmaModel,
+    tau_scale: f64,
+) -> [u8; 3] {
+    let disk = pixel_color(
+        r_eff,
+        r_isco,
+        r_outer,
+        r_s,
+        bx_raw,
+        phi_orb,
+        sin_inc,
+        n_cross,
+        doppler,
+        ring_mode,
+        spectral_band,
+        plasma_model,
+        true,
+        tau_scale,
+    );
+    let bg = star_field_color(bx, by, phi_orb + std::f64::consts::PI);
+    // Low optical-depth RIAF proxy: hot diffuse flow, not an opaque wall.
+    let tau = (0.45 * tau_scale.max(0.0))
+        * (r_s / r_eff.max(1e-9)).powf(0.7)
+        * (1.0 + n_cross.saturating_sub(1) as f64 * 0.10);
+    let trans = (-tau).exp().clamp(0.0, 1.0);
+    let gain = 1.6;
+    [
+        (((disk[0] as f64) * gain).min(255.0) * (1.0 - trans) + (bg[0] as f64) * trans)
+            .round()
+            .clamp(0.0, 255.0) as u8,
+        (((disk[1] as f64) * gain).min(255.0) * (1.0 - trans) + (bg[1] as f64) * trans)
+            .round()
+            .clamp(0.0, 255.0) as u8,
+        (((disk[2] as f64) * gain).min(255.0) * (1.0 - trans) + (bg[2] as f64) * trans)
+            .round()
+            .clamp(0.0, 255.0) as u8,
+    ]
+}
+
+/// Disk radiative transfer proxy `g^4` where:
+/// - `g_gr = sqrt(1 - r_s/r)` (static gravitational redshift),
+/// - `g_dop = 1/(gamma * (1 - beta_obs))` (SR beaming factor),
+/// - total transfer is `(g_gr * g_dop)^4`.
+///
+/// This is still a Schwarzschild disk approximation, but closer to physical
+/// transfer than pure `D^4` and keeps GPU/CPU parity.
+fn disk_transfer_factor(
+    r_eff: f64,
+    r_s: f64,
+    bx: f64,
+    phi_orb: f64,
+    sin_inc: f64,
+    doppler: bool,
+) -> f64 {
+    let r_safe = r_eff.max(1e-12);
+    let g_gr = (1.0 - r_s / r_safe).max(0.0).sqrt();
+    if !doppler {
+        return g_gr.powi(4).clamp(1e-6, 300.0);
+    }
+
+    // Keplerian orbital speed proxy; capped for numerical robustness.
+    let beta = (r_s / (2.0 * r_safe)).sqrt().min(0.7);
+    let gamma = 1.0 / (1.0 - beta * beta).sqrt();
+    // More physical LOS projection: dominant azimuthal emitter angle, with a
+    // small screen-space blend to preserve continuity near direct hits.
+    let mu_phi = phi_orb.sin().clamp(-1.0, 1.0);
+    let mu_screen = (bx / r_safe).clamp(-1.0, 1.0);
+    let mu = (0.8 * mu_phi + 0.2 * mu_screen).clamp(-1.0, 1.0);
+    let beta_obs = beta * sin_inc * mu;
+    let g_dop = 1.0 / (gamma * (1.0 - beta_obs));
+    let g = g_gr * g_dop;
+    g.powi(4).clamp(1e-6, 300.0)
 }
 
 /// False-colour the shadow interior by capture depth.
@@ -594,6 +894,16 @@ fn star_hash(x: i64, y: i64) -> u64 {
     h
 }
 
+#[inline]
+fn parity_legacy_stars_enabled() -> bool {
+    static LEGACY: OnceLock<bool> = OnceLock::new();
+    *LEGACY.get_or_init(|| {
+        std::env::var("BH_PARITY_LEGACY_STARS")
+            .ok()
+            .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+    })
+}
+
 /// Returns an RGB pixel for an escaped (background) ray.
 ///
 /// Uses the **sky direction** (computed by rotating the impact parameter vector
@@ -608,6 +918,39 @@ fn star_hash(x: i64, y: i64) -> u64 {
 /// Star density ≈ 1.5 % of sky-grid cells.  Spectral distribution:
 ///   deep-red M-star · orange K · warm-white F/G · pure-white A · blue-white B/O
 fn star_field_color(bx: f64, by: f64, phi_total: f64) -> [u8; 3] {
+    // Diagnostics mode: match CUDA legacy stars exactly so parity checks isolate
+    // transfer/tone-map differences rather than background generator divergence.
+    if parity_legacy_stars_enabled() {
+        let sky_x = bx * phi_total.cos() - by * phi_total.sin();
+        let sky_y = bx * phi_total.sin() + by * phi_total.cos();
+        let hx = (sky_x * 50.0).round() as i64;
+        let hy = (sky_y * 50.0).round() as i64;
+        let h = star_hash(hx, hy);
+        if (h & 0xFFFF) >= 1000 {
+            let v = ((h >> 40) & 7) as u8;
+            return [v >> 2, v >> 2, (v >> 1).saturating_add(8)];
+        }
+        let bright_raw = ((h >> 16) & 0xFF) as u8;
+        let bright = 80u8.saturating_add(((bright_raw as u16 * 175) / 255) as u8);
+        let spec = ((h >> 24) & 0xF) as u8;
+        return if spec <= 1 {
+            [bright / 2, bright / 5, bright / 10]
+        } else if spec <= 4 {
+            [
+                bright,
+                ((bright as u16 * 68) / 100) as u8,
+                ((bright as u16 * 38) / 100) as u8,
+            ]
+        } else if spec <= 9 {
+            [bright, bright, ((bright as u16 * 88) / 100) as u8]
+        } else if spec <= 12 {
+            [bright, bright, bright]
+        } else {
+            let rg = ((bright as u16 * 82) / 100) as u8;
+            [rg, rg, bright]
+        };
+    }
+
     // Rotate impact-parameter vector (bx, by) by phi_total to get sky direction.
     // In the Schwarzschild geometry a photon starting from angle 0 exits at
     // phi_total → source is at angle phi_total from the observer direction.
@@ -616,51 +959,84 @@ fn star_field_color(bx: f64, by: f64, phi_total: f64) -> [u8; 3] {
     // phi_total ≫ π : photon ring regime  — rapidly changing star backgrounds
     let sky_x = bx * phi_total.cos() - by * phi_total.sin();
     let sky_y = bx * phi_total.sin() + by * phi_total.cos();
+    let map_rgb = starmap().map(|m| {
+        // Map asymptotic ray direction to equirectangular (lon/lat) UV.
+        let f = 1.0_f64;
+        let inv = 1.0 / (sky_x * sky_x + sky_y * sky_y + f * f).sqrt();
+        let dx = sky_x * inv;
+        let dy = sky_y * inv;
+        let dz = f * inv;
+        let lon = dx.atan2(dz); // [-pi,pi]
+        let lat = dy.asin(); // [-pi/2,pi/2]
+        let u = lon / (2.0 * std::f64::consts::PI) + 0.5;
+        let v = 0.5 - lat / std::f64::consts::PI;
+        m.sample(u, v)
+    });
 
-    // Map to integer sky-grid (one cell ≈ 0.02 r_s, fine enough for 4K)
-    const SKY_SCALE: f64 = 50.0;
-    let hx = (sky_x * SKY_SCALE).round() as i64;
-    let hy = (sky_y * SKY_SCALE).round() as i64;
-    let h = star_hash(hx, hy);
+    let mut r = 0.0015_f64;
+    let mut g = 0.0020_f64;
+    let mut b = 0.0060_f64;
 
-    // low 16 bits → density gate: 1000/65536 ≈ 1.5 %
-    if (h & 0xFFFF) as u32 >= 1000 {
-        // Background: very dark blue-black with a touch of variation
-        let v = ((h >> 40) & 7) as u8; // 0..7
-        return [v >> 2, v >> 2, (v >> 1) + 8]; // [0-1, 0-1, 8-11]
+    // Smooth Milky-Way-style band (no blocky per-cell "clouds").
+    let gx = sky_x * 0.035;
+    let gy = sky_y * 0.035;
+    let lat = (gy + 0.28 * (0.7 * gx).sin() + 0.14 * (1.3 * gx + 0.5).sin()).abs();
+    let band = (-(lat * lat) / 0.05).exp();
+    // Continuous pseudo-noise dust modulation.
+    let dust = ((sky_x * 0.11).sin() * (sky_y * 0.07 + 1.7).cos() * 0.5 + 0.5).powf(1.4);
+    let gal = band * (0.25 + 0.75 * dust);
+    r += 0.16 * gal;
+    g += 0.14 * gal;
+    b += 0.20 * gal;
+
+    // Sparse point stars only (avoid unresolved noise blanket).
+    let layers = [
+        (42.0_f64, 0.008_f64, 0.55_f64),
+        (86.0_f64, 0.020_f64, 0.20_f64),
+        (150.0_f64, 0.045_f64, 0.08_f64),
+    ];
+    for (scale, density, amp) in layers {
+        let hx = (sky_x * scale).round() as i64;
+        let hy = (sky_y * scale).round() as i64;
+        let h = star_hash(hx, hy);
+        let gate = ((h & 0xFFFF) as f64) / 65535.0;
+        if gate > density {
+            continue;
+        }
+        let bright_u = ((h >> 16) & 0xFF) as f64 / 255.0;
+        let bright = amp * (0.25 + 0.75 * bright_u.powf(1.8));
+        let (sr, sg, sb) = match (h >> 24) & 0xF {
+            0..=2 => (1.00, 0.62, 0.35),
+            3..=6 => (1.00, 0.92, 0.78),
+            7..=11 => (1.00, 1.00, 1.00),
+            _ => (0.78, 0.86, 1.00),
+        };
+        let boost = 1.0 + 0.6 * band;
+        r += bright * sr * boost;
+        g += bright * sg * boost;
+        b += bright * sb * boost;
     }
 
-    // Star brightness: bits 16-23 → 80..255
-    let bright_raw = ((h >> 16) & 0xFF) as u32;
-    let bright = (80 + bright_raw * 175 / 255) as u8;
-
-    // Spectral type from bits 24-27 (4 bits → 16 classes)
-    match (h >> 24) & 0xF {
-        0..=1 => {
-            // Deep red — cool M-dwarf
-            [bright / 2, bright / 5, bright / 10]
-        }
-        2..=4 => {
-            // Orange — K-star
-            let g = (bright as u32 * 68 / 100) as u8;
-            let b = (bright as u32 * 38 / 100) as u8;
-            [bright, g, b]
-        }
-        5..=9 => {
-            // Warm white — F/G (sun-like)
-            let b = (bright as u32 * 88 / 100) as u8;
-            [bright, bright, b]
-        }
-        10..=12 => {
-            // Pure white — A-star
-            [bright, bright, bright]
-        }
-        _ => {
-            // Blue-white — hot B/O star
-            let rg = (bright as u32 * 82 / 100) as u8;
-            [rg, rg, bright]
-        }
+    // Tone map + tiny dither to suppress visible banding.
+    let rr = (r / (1.0 + r)).powf(1.0 / 2.0);
+    let gg = (g / (1.0 + g)).powf(1.0 / 2.0);
+    let bb = (b / (1.0 + b)).powf(1.0 / 2.0);
+    let dh = star_hash((sky_x * 121.0) as i64, (sky_y * 157.0) as i64);
+    let d = (((dh >> 8) & 0xFF) as f64 / 255.0 - 0.5) * (0.7 / 255.0);
+    let proc = [
+        ((rr + d) * 255.0).clamp(0.0, 255.0) as u8,
+        ((gg + d) * 255.0).clamp(0.0, 255.0) as u8,
+        ((bb + d) * 255.0).clamp(0.0, 255.0) as u8,
+    ];
+    if let Some(map) = map_rgb {
+        // Keep a bit of procedural sparkle over real-sky texture.
+        return [
+            ((map[0] as f64 * 0.88) + (proc[0] as f64 * 0.12)).round().clamp(0.0, 255.0) as u8,
+            ((map[1] as f64 * 0.88) + (proc[1] as f64 * 0.12)).round().clamp(0.0, 255.0) as u8,
+            ((map[2] as f64 * 0.88) + (proc[2] as f64 * 0.12)).round().clamp(0.0, 255.0) as u8,
+        ];
     }
+    proc
 }
 
 // ── Gaussian PSF blur ─────────────────────────────────────────────────────────
@@ -741,6 +1117,190 @@ fn gaussian_blur(pixels: &[[u8; 3]], w: usize, h: usize, sigma: f64) -> Vec<[u8;
     out
 }
 
+/// Simple unsharp mask to recover ring detail after beam blur.
+#[allow(dead_code)]
+fn unsharp_mask(
+    pixels: &[[u8; 3]],
+    w: usize,
+    h: usize,
+    blur_sigma: f64,
+    amount: f64,
+) -> Vec<[u8; 3]> {
+    if blur_sigma < 0.5 || amount <= 0.0 {
+        return pixels.to_vec();
+    }
+    let low = gaussian_blur(pixels, w, h, blur_sigma);
+    let mut out = vec![[0u8; 3]; w * h];
+    for i in 0..(w * h) {
+        let mut p = [0u8; 3];
+        for c in 0..3 {
+            let hi = pixels[i][c] as f64;
+            let lo = low[i][c] as f64;
+            let v = (hi + amount * (hi - lo)).clamp(0.0, 255.0);
+            p[c] = v as u8;
+        }
+        out[i] = p;
+    }
+    out
+}
+
+fn save_png_rgb(path: &Path, pixels: &[[u8; 3]], w: usize, h: usize) {
+    let mut img = image::RgbImage::new(w as u32, h as u32);
+    for (i, p) in pixels.iter().enumerate() {
+        let x = (i % w) as u32;
+        let y = (i / w) as u32;
+        img.put_pixel(x, y, image::Rgb([p[0], p[1], p[2]]));
+    }
+    img.save(path).expect("save png");
+}
+
+fn moffat_kernel(alpha: f64, beta: f64, radius: usize) -> Vec<f64> {
+    let n = 2 * radius + 1;
+    let mut k = vec![0.0; n * n];
+    let mut sum = 0.0;
+    for y in 0..n {
+        for x in 0..n {
+            let dx = x as f64 - radius as f64;
+            let dy = y as f64 - radius as f64;
+            let r2 = dx * dx + dy * dy;
+            let v = (1.0 + r2 / (alpha * alpha).max(1e-6)).powf(-beta);
+            k[y * n + x] = v;
+            sum += v;
+        }
+    }
+    if sum > 0.0 {
+        for v in &mut k {
+            *v /= sum;
+        }
+    }
+    k
+}
+
+fn convolve_rgb_f64(input: &[[f64; 3]], w: usize, h: usize, kernel: &[f64], radius: usize) -> Vec<[f64; 3]> {
+    let n = 2 * radius + 1;
+    let mut out = vec![[0.0; 3]; w * h];
+    for y in 0..h {
+        for x in 0..w {
+            let mut acc = [0.0_f64; 3];
+            for ky in 0..n {
+                for kx in 0..n {
+                    let sx = (x + kx).saturating_sub(radius).min(w - 1);
+                    let sy = (y + ky).saturating_sub(radius).min(h - 1);
+                    let kw = kernel[ky * n + kx];
+                    let p = input[sy * w + sx];
+                    acc[0] += kw * p[0];
+                    acc[1] += kw * p[1];
+                    acc[2] += kw * p[2];
+                }
+            }
+            out[y * w + x] = acc;
+        }
+    }
+    out
+}
+
+fn richardson_lucy_rgb(observed: &[[u8; 3]], w: usize, h: usize, kernel: &[f64], radius: usize, iters: usize) -> Vec<[u8; 3]> {
+    let obs: Vec<[f64; 3]> = observed
+        .iter()
+        .map(|p| [p[0] as f64 / 255.0, p[1] as f64 / 255.0, p[2] as f64 / 255.0])
+        .collect();
+    let mut est = obs.clone();
+    for _ in 0..iters {
+        let conv = convolve_rgb_f64(&est, w, h, kernel, radius);
+        let mut ratio = vec![[0.0_f64; 3]; w * h];
+        for i in 0..(w * h) {
+            for c in 0..3 {
+                ratio[i][c] = obs[i][c] / conv[i][c].max(1e-6);
+            }
+        }
+        let corr = convolve_rgb_f64(&ratio, w, h, kernel, radius);
+        for i in 0..(w * h) {
+            for c in 0..3 {
+                est[i][c] = (est[i][c] * corr[i][c]).clamp(0.0, 2.0);
+            }
+        }
+    }
+    est.into_iter()
+        .map(|p| {
+            [
+                (p[0] * 255.0).clamp(0.0, 255.0) as u8,
+                (p[1] * 255.0).clamp(0.0, 255.0) as u8,
+                (p[2] * 255.0).clamp(0.0, 255.0) as u8,
+            ]
+        })
+        .collect()
+}
+
+/// Box-downsample an integer superscaled image back to base resolution.
+fn downsample_box(
+    pixels_hi: &[[u8; 3]],
+    width_hi: usize,
+    height_hi: usize,
+    superscale: usize,
+) -> Vec<[u8; 3]> {
+    assert!(superscale >= 1);
+    if superscale == 1 {
+        return pixels_hi.to_vec();
+    }
+    assert_eq!(width_hi % superscale, 0);
+    assert_eq!(height_hi % superscale, 0);
+
+    let width = width_hi / superscale;
+    let height = height_hi / superscale;
+    let norm = (superscale * superscale) as f64;
+    let mut out = vec![[0u8; 3]; width * height];
+
+    for y in 0..height {
+        for x in 0..width {
+            let mut acc = [0.0_f64; 3];
+            for sy in 0..superscale {
+                let yy = y * superscale + sy;
+                for sx in 0..superscale {
+                    let xx = x * superscale + sx;
+                    let p = pixels_hi[yy * width_hi + xx];
+                    acc[0] += p[0] as f64;
+                    acc[1] += p[1] as f64;
+                    acc[2] += p[2] as f64;
+                }
+            }
+            out[y * width + x] = [
+                (acc[0] / norm).round().clamp(0.0, 255.0) as u8,
+                (acc[1] / norm).round().clamp(0.0, 255.0) as u8,
+                (acc[2] / norm).round().clamp(0.0, 255.0) as u8,
+            ];
+        }
+    }
+    out
+}
+
+/// Deterministic subpixel jitter pattern.
+///
+/// Returns `(jx, jy)` in `[0,1)×[0,1)` for sample `i`.
+fn sample_jitter(i: usize, spp: usize) -> (f64, f64) {
+    if spp <= 1 {
+        return (0.5, 0.5);
+    }
+    let n = (spp as f64).sqrt().ceil() as usize;
+    let sx = i % n;
+    let sy = i / n;
+    (((sx as f64) + 0.5) / n as f64, ((sy as f64) + 0.5) / n as f64)
+}
+
+/// Reduce integration step near the critical impact parameter to sharpen rings.
+fn adaptive_dphi_for_b(base_dphi: f64, b: f64, b_crit: f64) -> f64 {
+    let rel = ((b / b_crit.max(1e-12)) - 1.0).abs();
+    let scale = if rel < 0.01 {
+        0.20
+    } else if rel < 0.03 {
+        0.35
+    } else if rel < 0.08 {
+        0.60
+    } else {
+        1.0
+    };
+    (base_dphi * scale).max(8e-4)
+}
+
 // ── Render & write ────────────────────────────────────────────────────────────
 
 /// Render one view and save as PNG.
@@ -757,6 +1317,12 @@ fn render_view(
 ) -> PathBuf {
     use std::f64::consts::PI;
     let parse_env_f64 = |k: &str| std::env::var(k).ok().and_then(|s| s.parse::<f64>().ok());
+    let parse_env_usize = |k: &str| std::env::var(k).ok().and_then(|s| s.parse::<usize>().ok());
+    let parse_env_bool = |k: &str| {
+        std::env::var(k).ok().is_some_and(|s| {
+            matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON")
+        })
+    };
     let width = if width_override > 0 {
         width_override
     } else {
@@ -773,9 +1339,27 @@ fn render_view(
     let dphi_override = parse_env_f64("BH_DPHI_OVERRIDE");
     let az_override = parse_env_f64("BH_AZ_OVERRIDE");
     let inc_override = parse_env_f64("BH_INC_OVERRIDE");
+    let detail_preset = std::env::var("BH_DETAIL_PRESET")
+        .ok()
+        .map(|s| s.to_ascii_lowercase());
+    let mut superscale = parse_env_usize("BH_SUPERSCALE").unwrap_or(1).clamp(1, 8);
+    let mut spp = parse_env_usize("BH_SPP").unwrap_or(1).clamp(1, 64);
+    let mut adaptive_dphi = parse_env_bool("BH_ADAPTIVE_DPHI");
+    let spectral_band = SpectralBand::from_env();
+    let disk_model = DiskModel::from_env();
+    let plasma_model = PlasmaModel::from_env();
+    let use_transfer = std::env::var("BH_USE_TRANSFER")
+        .ok()
+        .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+    let tau_scale = std::env::var("BH_TAU_SCALE")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(1.0)
+        .max(0.0);
+    let force_gr = parse_env_bool("BH_FORCE_GR");
     let effective_r_cam_frac = r_cam_override.unwrap_or(view.r_cam_frac);
     let effective_fov = fov_override.unwrap_or(view.fov);
-    let effective_max_phi_pi = max_phi_pi_override.unwrap_or(view.max_phi_pi);
+    let mut effective_max_phi_pi = max_phi_pi_override.unwrap_or(view.max_phi_pi);
     let effective_az = az_override.unwrap_or(view.az);
     let effective_inc = inc_override.unwrap_or(view.inc);
     // Use finer integration step at high resolution so the photon ring stays crisp
@@ -784,48 +1368,56 @@ fn render_view(
     } else {
         view.dphi
     };
-    let dphi = dphi_override.unwrap_or(base_dphi);
+    let mut dphi = dphi_override.unwrap_or(base_dphi);
+    if detail_preset.as_deref() == Some("imax") {
+        superscale = superscale.max(2);
+        spp = spp.max(4);
+        adaptive_dphi = true;
+        dphi = dphi.min(0.0025);
+        if max_phi_pi_override.is_none() {
+            effective_max_phi_pi *= 1.5;
+        }
+    }
     let blur_str = if blur_sigma >= 0.5 {
         format!("blur={blur_sigma:.1}")
     } else {
         "no blur".into()
     };
     eprintln!(
-        "  rendering {}  (inc={:.0}°, az={:.0}°, doppler={}, rings={}, gr={}, fov={:.2}, r_cam_frac={:.3}, max_phi_pi={:.1}, {}×{}, dphi={:.4}, {}) …",
+        "  rendering {}  (inc={:.0}°, az={:.0}°, doppler={}, rings={}, gr={}, fov={:.2}, r_cam_frac={:.3}, max_phi_pi={:.1}, {}×{}, dphi={:.4}, adaptive_dphi={}, superscale={}x, spp={}, {}) …",
         view.label, effective_inc, effective_az, view.doppler, view.ring_mode, view.gr_mode,
-        effective_fov, effective_r_cam_frac, effective_max_phi_pi, width, height, dphi, blur_str,
+        effective_fov, effective_r_cam_frac, effective_max_phi_pi, width, height, dphi,
+        adaptive_dphi, superscale, spp, blur_str,
+    );
+    eprintln!("    spectrum={} (BH_SPECTRUM)", spectral_band.as_label());
+    eprintln!("    disk_model={} (BH_DISK_MODEL)", disk_model.as_label());
+    eprintln!("    plasma_model={} (BH_PLASMA_MODEL)", plasma_model.as_label());
+    eprintln!(
+        "    transfer={} tau_scale={:.3} (BH_USE_TRANSFER/BH_TAU_SCALE)",
+        use_transfer, tau_scale
     );
 
-    let metric = if view.gr_mode {
+    let metric = if view.gr_mode || force_gr {
         GutoeMetric::schwarzschild(1.0)
     } else {
         GutoeMetric::planck_units(1.0)
     };
 
-    // Kerr is not wired into the geodesic integrator yet. If requested, report the
-    // exact Kerr invariants and require explicit placeholder opt-in.
-    if let Some(a_star) = parse_env_f64("BH_KERR_ASTAR") {
-        if let Some(kerr) = KerrMetric::new(metric.r_s, a_star) {
-            let (r_plus, r_minus) = kerr.horizons();
-            let r_erg_eq = kerr.ergosphere_radius(PI / 2.0);
-            let r_ph_pro = kerr.equatorial_photon_orbit_radius(true);
-            let r_ph_ret = kerr.equatorial_photon_orbit_radius(false);
-            eprintln!(
-                "    [KERR BASELINE] a*={:.3} r+={:.4} r-={:.4} r_erg,eq={:.4} r_ph,pro={:.4} r_ph,ret={:.4} Ω_H={:.5}",
-                a_star, r_plus, r_minus, r_erg_eq, r_ph_pro, r_ph_ret, kerr.horizon_angular_velocity()
-            );
-            let allow_placeholder = std::env::var("BH_ALLOW_KERR_PLACEHOLDER")
-                .ok()
-                .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
-            assert!(
-                allow_placeholder,
-                "BH_KERR_ASTAR is set but Kerr geodesic rendering is not implemented yet. \
-Set BH_ALLOW_KERR_PLACEHOLDER=1 only if you explicitly want Schwarzschild fallback while prototyping."
-            );
-        } else {
-            panic!("invalid BH_KERR_ASTAR={a_star}: expected |a*| <= 1");
-        }
-    }
+    let kerr_metric = if let Some(a_star) = parse_env_f64("BH_KERR_ASTAR") {
+        let kerr = KerrMetric::new(metric.r_s, a_star)
+            .unwrap_or_else(|| panic!("invalid BH_KERR_ASTAR={a_star}: expected |a*| <= 1"));
+        let (r_plus, r_minus) = kerr.horizons();
+        let r_erg_eq = kerr.ergosphere_radius(PI / 2.0);
+        let r_ph_pro = kerr.equatorial_photon_orbit_radius(true);
+        let r_ph_ret = kerr.equatorial_photon_orbit_radius(false);
+        eprintln!(
+            "    [KERR MODE] a*={:.3} r+={:.4} r-={:.4} r_erg,eq={:.4} r_ph,pro={:.4} r_ph,ret={:.4} Ω_H={:.5}",
+            a_star, r_plus, r_minus, r_erg_eq, r_ph_pro, r_ph_ret, kerr.horizon_angular_velocity()
+        );
+        Some(kerr)
+    } else {
+        None
+    };
 
     // Interior camera: compute r_cam in units of r_s from the horizon fraction.
     // r_cam_frac = 0 → exterior view.
@@ -838,8 +1430,11 @@ Set BH_ALLOW_KERR_PLACEHOLDER=1 only if you explicitly want Schwarzschild fallba
     } else {
         0.0
     };
+    if kerr_metric.is_some() && r_cam_rs > 0.0 {
+        eprintln!("    [KERR MODE] interior camera currently uses Schwarzschild interior tracer.");
+    }
 
-    let cfg = RenderConfig {
+    let cfg_base = RenderConfig {
         width,
         height,
         fov_rs: effective_fov,
@@ -848,23 +1443,108 @@ Set BH_ALLOW_KERR_PLACEHOLDER=1 only if you explicitly want Schwarzschild fallba
         dphi,
     };
 
-    let raw = render_with_options(
-        &metric,
-        view.disk_inner,
-        view.disk_outer,
-        &cfg,
-        effective_az,
-        view.doppler,
-        view.ring_mode,
-        view.interior_mode,
-        view.core_look_mode,
-        r_cam_rs,
-    );
+    let cfg_render = if superscale > 1 {
+        let width_hi = width
+            .checked_mul(superscale)
+            .expect("BH_SUPERSCALE causes width overflow");
+        let height_hi = height
+            .checked_mul(superscale)
+            .expect("BH_SUPERSCALE causes height overflow");
+        RenderConfig {
+            width: width_hi,
+            height: height_hi,
+            ..cfg_base.clone()
+        }
+    } else {
+        cfg_base.clone()
+    };
+
+    let raw_hi = if spp == 1 {
+        render_with_options(
+            &metric,
+            kerr_metric.as_ref(),
+            view.disk_inner,
+            view.disk_outer,
+            &cfg_render,
+            effective_az,
+            view.doppler,
+            view.ring_mode,
+            view.interior_mode,
+            view.core_look_mode,
+            spectral_band,
+            disk_model,
+            plasma_model,
+            use_transfer,
+            tau_scale,
+            adaptive_dphi,
+            r_cam_rs,
+            0.5,
+            0.5,
+        )
+    } else {
+        let npx = cfg_render.width * cfg_render.height;
+        let mut acc = vec![[0_u32; 3]; npx];
+        for si in 0..spp {
+            let (jx, jy) = sample_jitter(si, spp);
+            eprintln!(
+                "    sample {}/{} (jitter={:.3},{:.3}) …",
+                si + 1,
+                spp,
+                jx,
+                jy
+            );
+            let sample = render_with_options(
+                &metric,
+                kerr_metric.as_ref(),
+                view.disk_inner,
+                view.disk_outer,
+                &cfg_render,
+                effective_az,
+                view.doppler,
+                view.ring_mode,
+                view.interior_mode,
+                view.core_look_mode,
+                spectral_band,
+                disk_model,
+                plasma_model,
+                use_transfer,
+                tau_scale,
+                adaptive_dphi,
+                r_cam_rs,
+                jx,
+                jy,
+            );
+            for (a, p) in acc.iter_mut().zip(sample.iter()) {
+                a[0] += p[0] as u32;
+                a[1] += p[1] as u32;
+                a[2] += p[2] as u32;
+            }
+        }
+        acc.into_iter()
+            .map(|a| {
+                [
+                    ((a[0] as f64 / spp as f64).round().clamp(0.0, 255.0)) as u8,
+                    ((a[1] as f64 / spp as f64).round().clamp(0.0, 255.0)) as u8,
+                    ((a[2] as f64 / spp as f64).round().clamp(0.0, 255.0)) as u8,
+                ]
+            })
+            .collect()
+    };
+
+    let raw = if superscale > 1 {
+        eprintln!(
+            "    downsampling {}×{} -> {}×{} ({}x box)",
+            cfg_render.width, cfg_render.height, cfg_base.width, cfg_base.height, superscale
+        );
+        downsample_box(&raw_hi, cfg_render.width, cfg_render.height, superscale)
+    } else {
+        raw_hi
+    };
 
     // Apply Gaussian PSF blur (EHT beam simulation) if requested
     let pixels = if blur_sigma >= 0.5 {
         eprintln!("    applying Gaussian blur σ={blur_sigma:.1} …");
-        gaussian_blur(&raw, cfg.width, cfg.height, blur_sigma)
+        gaussian_blur(&raw, cfg_base.width, cfg_base.height, blur_sigma)
     } else {
         raw
     };
@@ -880,7 +1560,11 @@ Set BH_ALLOW_KERR_PLACEHOLDER=1 only if you explicitly want Schwarzschild fallba
     let ppm_path = out_dir.join(format!("{}.ppm", output_slug));
     let png_path = out_dir.join(format!("{}.png", output_slug));
 
-    fs::write(&ppm_path, write_ppm(&pixels, cfg.width, cfg.height)).expect("write ppm");
+    fs::write(
+        &ppm_path,
+        write_ppm(&pixels, cfg_base.width, cfg_base.height),
+    )
+    .expect("write ppm");
 
     let status = Command::new("convert")
         .arg(&ppm_path)
@@ -889,6 +1573,170 @@ Set BH_ALLOW_KERR_PLACEHOLDER=1 only if you explicitly want Schwarzschild fallba
         .expect("ImageMagick convert not found");
     assert!(status.success(), "convert failed for {}", output_slug);
 
+    // Per-render provenance sidecar for reproducibility/audit trails.
+    let git_sha = Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "unknown".to_string());
+    let sidecar_path = out_dir.join(format!("{}.json", output_slug));
+    let mut sidecar = String::new();
+    sidecar.push_str("{\n");
+    sidecar.push_str(&format!("  \"slug\": \"{}\",\n", output_slug.replace('"', "\\\"")));
+    sidecar.push_str(&format!("  \"label\": \"{}\",\n", view.label.replace('"', "\\\"")));
+    sidecar.push_str(&format!("  \"git_sha\": \"{}\",\n", git_sha));
+    sidecar.push_str(&format!("  \"png\": \"{}\",\n", png_path.display()));
+    sidecar.push_str(&format!("  \"width\": {},\n", cfg_base.width));
+    sidecar.push_str(&format!("  \"height\": {},\n", cfg_base.height));
+    sidecar.push_str(&format!("  \"inclination_deg\": {:.6},\n", effective_inc));
+    sidecar.push_str(&format!("  \"azimuth_deg\": {:.6},\n", effective_az));
+    sidecar.push_str(&format!("  \"fov_rs\": {:.6},\n", effective_fov));
+    sidecar.push_str(&format!("  \"r_cam_frac\": {:.6},\n", effective_r_cam_frac));
+    sidecar.push_str(&format!("  \"max_phi_pi\": {:.6},\n", effective_max_phi_pi));
+    sidecar.push_str(&format!("  \"dphi\": {:.8},\n", dphi));
+    sidecar.push_str(&format!("  \"adaptive_dphi\": {},\n", adaptive_dphi));
+    sidecar.push_str(&format!("  \"superscale\": {},\n", superscale));
+    sidecar.push_str(&format!("  \"spp\": {},\n", spp));
+    sidecar.push_str(&format!("  \"blur_sigma\": {:.6},\n", blur_sigma));
+    sidecar.push_str(&format!("  \"disk_model\": \"{}\",\n", disk_model.as_label()));
+    sidecar.push_str(&format!("  \"plasma_model\": \"{}\",\n", plasma_model.as_label()));
+    sidecar.push_str(&format!("  \"spectrum\": \"{}\",\n", spectral_band.as_label()));
+    sidecar.push_str(&format!("  \"use_transfer\": {},\n", use_transfer));
+    sidecar.push_str(&format!("  \"tau_scale\": {:.6},\n", tau_scale));
+    sidecar.push_str(&format!("  \"gutoe_mode\": {},\n", !(view.gr_mode || force_gr)));
+    sidecar.push_str(&format!("  \"kerr_astar\": {},\n", parse_env_f64("BH_KERR_ASTAR").unwrap_or(0.0)));
+    sidecar.push_str(&format!("  \"starmap_path\": \"{}\",\n", std::env::var("BH_STARMAP_PATH").unwrap_or_default().replace('"', "\\\"")));
+    let parity_check = parse_env_bool("BH_KERR_PARITY") || parse_env_bool("BH_VALIDATE_GPU");
+    sidecar.push_str(&format!("  \"cpu_gpu_parity_check\": {}\n", parity_check));
+    sidecar.push_str("}\n");
+    fs::write(&sidecar_path, sidecar).expect("write provenance sidecar json");
+
+    fs::remove_file(&ppm_path).ok();
+    eprintln!(
+        "  → saved {} (+ {})",
+        png_path.display(),
+        sidecar_path.display()
+    );
+    png_path
+}
+
+fn render_view_tiled(
+    out_dir: &Path,
+    view: &View,
+    width: usize,
+    height: usize,
+    tile_px: usize,
+    blur_sigma: f64,
+) -> PathBuf {
+    use std::f64::consts::PI;
+    let parse_env_f64 = |k: &str| std::env::var(k).ok().and_then(|s| s.parse::<f64>().ok());
+    let parse_env_bool = |k: &str| {
+        std::env::var(k).ok().is_some_and(|s| {
+            matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON")
+        })
+    };
+    let spectral_band = SpectralBand::from_env();
+    let disk_model = DiskModel::from_env();
+    let plasma_model = PlasmaModel::from_env();
+    let use_transfer = std::env::var("BH_USE_TRANSFER")
+        .ok()
+        .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+    let tau_scale = std::env::var("BH_TAU_SCALE")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(1.0)
+        .max(0.0);
+    let force_gr = parse_env_bool("BH_FORCE_GR");
+    let metric = if view.gr_mode || force_gr {
+        GutoeMetric::schwarzschild(1.0)
+    } else {
+        GutoeMetric::planck_units(1.0)
+    };
+    let kerr_metric = parse_env_f64("BH_KERR_ASTAR")
+        .and_then(|a| KerrMetric::new(metric.r_s, a));
+    let r_cam_rs = if view.r_cam_frac > 0.0 {
+        metric
+            .r_horizon()
+            .map(|rh| (view.r_cam_frac * rh / metric.r_s).min(0.99 * rh / metric.r_s))
+            .unwrap_or(0.0)
+    } else {
+        0.0
+    };
+    let cfg = RenderConfig {
+        width,
+        height,
+        fov_rs: view.fov,
+        inclination_deg: view.inc,
+        max_phi: view.max_phi_pi * PI,
+        dphi: view.dphi,
+    };
+    let mut full = vec![[0_u8; 3]; width * height];
+    let tile = tile_px.clamp(128, 4096);
+    let tx_count = width.div_ceil(tile);
+    let ty_count = height.div_ceil(tile);
+    eprintln!(
+        "  tiled render {}: {}x{} in {}x{} tiles (tile={}px)",
+        view.slug, width, height, tx_count, ty_count, tile
+    );
+    for ty in 0..ty_count {
+        for tx in 0..tx_count {
+            let x0 = tx * tile;
+            let y0 = ty * tile;
+            let tw = (width - x0).min(tile);
+            let th = (height - y0).min(tile);
+            eprintln!("    tile ({},{})  x={} y={}  {}x{}", tx + 1, ty + 1, x0, y0, tw, th);
+            let tile_pixels = render_with_options_cpu_window(
+                &metric,
+                kerr_metric.as_ref(),
+                view.disk_inner,
+                view.disk_outer,
+                width,
+                height,
+                x0,
+                y0,
+                tw,
+                th,
+                &cfg,
+                view.az,
+                view.doppler,
+                view.ring_mode,
+                view.interior_mode,
+                view.core_look_mode,
+                spectral_band,
+                disk_model,
+                plasma_model,
+                use_transfer,
+                tau_scale,
+                true,
+                r_cam_rs,
+                0.5,
+                0.5,
+            );
+            for row in 0..th {
+                let dst_off = (y0 + row) * width + x0;
+                let src_off = row * tw;
+                full[dst_off..dst_off + tw].copy_from_slice(&tile_pixels[src_off..src_off + tw]);
+            }
+        }
+    }
+    let pixels = if blur_sigma >= 0.5 {
+        gaussian_blur(&full, width, height, blur_sigma)
+    } else {
+        full
+    };
+    let output_slug = format!("{}__tiled", view.slug);
+    let ppm_path = out_dir.join(format!("{}.ppm", output_slug));
+    let png_path = out_dir.join(format!("{}.png", output_slug));
+    fs::write(&ppm_path, write_ppm(&pixels, width, height)).expect("write tiled ppm");
+    let status = Command::new("convert")
+        .arg(&ppm_path)
+        .arg(&png_path)
+        .status()
+        .expect("ImageMagick convert not found");
+    assert!(status.success(), "convert failed for {}", output_slug);
     fs::remove_file(&ppm_path).ok();
     eprintln!("  → saved {}", png_path.display());
     png_path
@@ -1030,14 +1878,148 @@ fn render_interstellar_spin(
     );
 }
 
+/// Render a fixed camera view across spectrum bands.
+///
+/// Output slugs: `{view.slug}__spec_{band}`.
+fn render_spectrum_sweep(
+    out_dir: &Path,
+    view: &View,
+    width_override: usize,
+    height_override: usize,
+    blur_sigma: f64,
+) {
+    let bands: &[(SpectralBand, &str)] = &[
+        (SpectralBand::Bolometric, "bolo"),
+        (SpectralBand::Radio, "radio"),
+        (SpectralBand::Millimeter, "mm"),
+        (SpectralBand::Infrared, "ir"),
+        (SpectralBand::Optical, "optical"),
+        (SpectralBand::Ultraviolet, "uv"),
+        (SpectralBand::Xray, "xray"),
+        (SpectralBand::Gamma, "gamma"),
+    ];
+
+    let prev_spec = std::env::var("BH_SPECTRUM").ok();
+    let prev_suffix = std::env::var("BH_SLUG_SUFFIX").ok();
+
+    for &(band, slug) in bands {
+        std::env::set_var("BH_SPECTRUM", band.as_label());
+        std::env::set_var("BH_SLUG_SUFFIX", format!("spec_{slug}"));
+        render_view(out_dir, view, width_override, height_override, blur_sigma);
+    }
+
+    if let Some(v) = prev_spec {
+        std::env::set_var("BH_SPECTRUM", v);
+    } else {
+        std::env::remove_var("BH_SPECTRUM");
+    }
+    if let Some(v) = prev_suffix {
+        std::env::set_var("BH_SLUG_SUFFIX", v);
+    } else {
+        std::env::remove_var("BH_SLUG_SUFFIX");
+    }
+
+    eprintln!("Spectrum sweep complete for {}.", view.slug);
+}
+
+fn make_diff_map_png(base: &Path, other: &Path, out: &Path) {
+    let status = Command::new("convert")
+        .arg(base)
+        .arg(other)
+        .arg("-compose")
+        .arg("difference")
+        .arg("-composite")
+        .arg(out)
+        .status()
+        .expect("ImageMagick convert not found");
+    assert!(status.success(), "difference-map convert failed");
+}
+
+/// For one view, render GUTOE + forced-GR per band and write residual maps.
+fn render_spectrum_diff_sweep(
+    out_dir: &Path,
+    view: &View,
+    width_override: usize,
+    height_override: usize,
+    blur_sigma: f64,
+) {
+    let bands: &[(SpectralBand, &str)] = &[
+        (SpectralBand::Bolometric, "bolo"),
+        (SpectralBand::Radio, "radio"),
+        (SpectralBand::Millimeter, "mm"),
+        (SpectralBand::Infrared, "ir"),
+        (SpectralBand::Optical, "optical"),
+        (SpectralBand::Ultraviolet, "uv"),
+        (SpectralBand::Xray, "xray"),
+        (SpectralBand::Gamma, "gamma"),
+    ];
+
+    let prev_spec = std::env::var("BH_SPECTRUM").ok();
+    let prev_suffix = std::env::var("BH_SLUG_SUFFIX").ok();
+    let prev_force_gr = std::env::var("BH_FORCE_GR").ok();
+
+    for &(band, slug) in bands {
+        std::env::set_var("BH_SPECTRUM", band.as_label());
+
+        std::env::set_var("BH_FORCE_GR", "0");
+        std::env::set_var("BH_SLUG_SUFFIX", format!("spec_{slug}_gutoe"));
+        let gutoe_png = render_view(out_dir, view, width_override, height_override, blur_sigma);
+
+        std::env::set_var("BH_FORCE_GR", "1");
+        std::env::set_var("BH_SLUG_SUFFIX", format!("spec_{slug}_gr"));
+        let gr_png = render_view(out_dir, view, width_override, height_override, blur_sigma);
+
+        let diff_png = out_dir.join(format!("{}__spec_{}_diff.png", view.slug, slug));
+        make_diff_map_png(&gutoe_png, &gr_png, &diff_png);
+        eprintln!("  → saved {}", diff_png.display());
+    }
+
+    if let Some(v) = prev_spec {
+        std::env::set_var("BH_SPECTRUM", v);
+    } else {
+        std::env::remove_var("BH_SPECTRUM");
+    }
+    if let Some(v) = prev_suffix {
+        std::env::set_var("BH_SLUG_SUFFIX", v);
+    } else {
+        std::env::remove_var("BH_SLUG_SUFFIX");
+    }
+    if let Some(v) = prev_force_gr {
+        std::env::set_var("BH_FORCE_GR", v);
+    } else {
+        std::env::remove_var("BH_FORCE_GR");
+    }
+
+    eprintln!("Spectrum+diff sweep complete for {}.", view.slug);
+}
+
+/// Run the current BH science campaign for target views.
+/// Produces `{slug}__spec_*_{gutoe,gr,diff}.png`.
+fn render_bh_campaign(
+    out_dir: &Path,
+    width_override: usize,
+    height_override: usize,
+    blur_sigma: f64,
+) {
+    for slug in ["m87star", "sgr_astar"] {
+        let Some(view) = VIEWS.iter().find(|v| v.slug == slug) else {
+            eprintln!("campaign view missing: {slug}");
+            continue;
+        };
+        eprintln!("\n== Campaign target: {} ==", view.slug);
+        render_spectrum_diff_sweep(out_dir, view, width_override, height_override, blur_sigma);
+    }
+}
+
 // ── Full render with options ──────────────────────────────────────────────────
 //
 // Pixel loop: azimuth rotation + Doppler + ring-mode colouring.
 // When az=0 and doppler=false and ring_mode=false, delegates to the fast
 // tracer::render() which skips the per-pixel boxing overhead.
 
-fn render_with_options(
+fn render_with_options_cpu(
     metric: &GutoeMetric,
+    kerr: Option<&KerrMetric>,
     disk_inner_rs: f64,
     disk_outer_rs: f64,
     cfg: &RenderConfig,
@@ -1046,19 +2028,427 @@ fn render_with_options(
     ring_mode: bool,
     interior_mode: bool,
     core_look_mode: bool,
+    spectral_band: SpectralBand,
+    disk_model: DiskModel,
+    plasma_model: PlasmaModel,
+    use_transfer: bool,
+    tau_scale: f64,
+    adaptive_dphi: bool,
     r_cam_rs: f64, // 0.0 = exterior; >0 = camera inside at r_cam = r_cam_rs × r_s
+    jitter_x: f64, // subpixel jitter in [0,1)
+    jitter_y: f64, // subpixel jitter in [0,1)
 ) -> Vec<[u8; 3]> {
-    // GPU path: delegate to CUDA kernel (all pixels in one launch, ~1 second)
-    #[cfg(feature = "cuda")]
+    let r_s = metric.r_s;
+    let disk_inner = disk_inner_rs * r_s;
+    let disk_outer = disk_outer_rs * r_s;
+    let r_isco = 3.0 * r_s;
+    let b_crit = b_critical(r_s);
+    let sin_inc = cfg.inclination_deg.to_radians().sin();
+    let scale = 2.0 * cfg.fov_rs * r_s / (cfg.width.min(cfg.height) as f64);
+    let az_rad = az_deg.to_radians();
+    let (ca, sa) = (az_rad.cos(), az_rad.sin());
+    let width = cfg.width;
+    let height = cfg.height;
+    let r_cam = r_cam_rs * r_s; // 0.0 = exterior
+    let true3d = std::env::var("BH_TRUE3D_TRACE")
+        .ok()
+        .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+    let z_obs = 60.0 * r_s;
+    let true3d_cam = if true3d && kerr.is_none() && r_cam <= 0.0 {
+        let inc = cfg.inclination_deg.to_radians();
+        let obs = Vec3::new(
+            z_obs * inc.sin() * az_rad.cos(),
+            z_obs * inc.sin() * az_rad.sin(),
+            z_obs * inc.cos(),
+        );
+        let fwd = Vec3::new(-obs.x, -obs.y, -obs.z);
+        let world_up = if inc.sin().abs() > 0.995 {
+            Vec3::new(0.0, 1.0, 0.0)
+        } else {
+            Vec3::new(0.0, 0.0, 1.0)
+        };
+        let half_view_y = cfg.fov_rs * r_s * (height as f64 / width.min(height) as f64);
+        let fov_y = 2.0 * (half_view_y / z_obs).atan();
+        CameraFrame::new(
+            obs,
+            fwd,
+            world_up,
+            fov_y.clamp(1e-4, std::f64::consts::PI - 1e-4),
+            width as f64 / height as f64,
+        )
+    } else {
+        None
+    };
+
+    (0..height * width)
+        .into_par_iter()
+        .map(|idx| {
+            let iy = idx / width;
+            let ix = idx % width;
+            let dx = jitter_x - 0.5;
+            let dy = 0.5 - jitter_y;
+            let sx = (ix as f64 - 0.5 * (width as f64 - 1.0) + dx) * scale;
+            let sy = (0.5 * (height as f64 - 1.0) - iy as f64 + dy) * scale;
+            let bx_raw = sx;
+            // Schwarzschild tracer uses by scaled by sin(i) to encode orbit-plane
+            // inclination in its reduced 2D formulation. Kerr tracer expects raw
+            // screen beta with inclination supplied separately.
+            let by_raw = if kerr.is_some() { sy } else { sy * sin_inc };
+            let mut bx = ca * bx_raw - sa * by_raw;
+            let mut by = sa * bx_raw + ca * by_raw;
+            let mut b_mag = (bx * bx + by * by).sqrt();
+            let dphi_ray = if adaptive_dphi {
+                adaptive_dphi_for_b(cfg.dphi, b_mag, b_crit)
+            } else {
+                cfg.dphi
+            };
+
+            let result = if let Some(cam3d) = true3d_cam.as_ref() {
+                let x = ((ix as f64 + jitter_x) / width as f64).clamp(0.0, 1.0);
+                let y = ((iy as f64 + jitter_y) / height as f64).clamp(0.0, 1.0);
+                let ndc_x = 2.0 * x - 1.0;
+                let ndc_y = 1.0 - 2.0 * y;
+                let ray_dir = cam3d.ray_dir_from_ndc(ndc_x, ndc_y);
+                if let Some(red) = reduce_3d_to_axisym(cam3d.position, ray_dir) {
+                    bx = red.bx;
+                    by = red.by;
+                    b_mag = red.b;
+                }
+                trace_photon_3d_schwarzschild(
+                    metric,
+                    disk_inner,
+                    disk_outer,
+                    cam3d.position,
+                    ray_dir,
+                    cfg.max_phi,
+                    dphi_ray,
+                )
+            } else if r_cam > 0.0 {
+                if core_look_mode {
+                    trace_photon_interior_core(metric, r_cam, bx, by, cfg.max_phi, dphi_ray)
+                } else {
+                    trace_photon_interior(
+                        metric,
+                        disk_inner,
+                        disk_outer,
+                        r_cam,
+                        bx,
+                        by,
+                        cfg.max_phi,
+                        dphi_ray,
+                    )
+                }
+            } else if let Some(km) = kerr {
+                trace_photon_kerr(
+                    km,
+                    disk_inner,
+                    disk_outer,
+                    bx,
+                    by,
+                    cfg.inclination_deg,
+                    cfg.max_phi * 1.2,
+                    dphi_ray,
+                )
+            } else {
+                trace_photon(metric, disk_inner, disk_outer, bx, by, cfg.max_phi, dphi_ray)
+            };
+
+            match result {
+                TraceResult::Captured => {
+                    if r_cam > 0.0 {
+                        gutoe_core_color(b_mag, b_crit)
+                    } else if interior_mode {
+                        shadow_interior_color(bx, by, r_s)
+                    } else {
+                        [0, 0, 0]
+                    }
+                }
+                TraceResult::Escaped { phi_total } => star_field_color(bx, by, phi_total),
+                TraceResult::DiskHit {
+                    r_eff,
+                    n_cross,
+                    phi_orb,
+                } => {
+                    if r_cam > 0.0 && core_look_mode {
+                        gutoe_core_physics_color(b_mag, b_crit, r_eff, phi_orb, r_cam, metric.r_core())
+                    } else {
+                        match disk_model {
+                            DiskModel::Thin => pixel_color(
+                                r_eff,
+                                r_isco,
+                                disk_outer,
+                                r_s,
+                                bx_raw,
+                                phi_orb,
+                                sin_inc,
+                                n_cross,
+                                doppler,
+                                ring_mode,
+                                spectral_band,
+                                plasma_model,
+                                use_transfer,
+                                tau_scale,
+                            ),
+                            DiskModel::Riaf => riaf_composite_color(
+                                r_eff,
+                                r_isco,
+                                disk_outer,
+                                r_s,
+                                bx_raw,
+                                bx,
+                                by,
+                                sin_inc,
+                                n_cross,
+                                phi_orb,
+                                doppler,
+                                ring_mode,
+                                spectral_band,
+                                plasma_model,
+                                tau_scale,
+                            ),
+                        }
+                    }
+                }
+            }
+        })
+        .collect()
+}
+
+fn render_with_options_cpu_window(
+    metric: &GutoeMetric,
+    kerr: Option<&KerrMetric>,
+    disk_inner_rs: f64,
+    disk_outer_rs: f64,
+    total_width: usize,
+    total_height: usize,
+    x0: usize,
+    y0: usize,
+    tile_width: usize,
+    tile_height: usize,
+    cfg: &RenderConfig,
+    az_deg: f64,
+    doppler: bool,
+    ring_mode: bool,
+    interior_mode: bool,
+    core_look_mode: bool,
+    spectral_band: SpectralBand,
+    disk_model: DiskModel,
+    plasma_model: PlasmaModel,
+    use_transfer: bool,
+    tau_scale: f64,
+    adaptive_dphi: bool,
+    r_cam_rs: f64,
+    jitter_x: f64,
+    jitter_y: f64,
+) -> Vec<[u8; 3]> {
+    let r_s = metric.r_s;
+    let disk_inner = disk_inner_rs * r_s;
+    let disk_outer = disk_outer_rs * r_s;
+    let r_isco = 3.0 * r_s;
+    let b_crit = b_critical(r_s);
+    let sin_inc = cfg.inclination_deg.to_radians().sin();
+    let scale = 2.0 * cfg.fov_rs * r_s / (total_width.min(total_height) as f64);
+    let az_rad = az_deg.to_radians();
+    let (ca, sa) = (az_rad.cos(), az_rad.sin());
+    let r_cam = r_cam_rs * r_s;
+    let true3d = std::env::var("BH_TRUE3D_TRACE")
+        .ok()
+        .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+    let z_obs = 60.0 * r_s;
+    let true3d_cam = if true3d && kerr.is_none() && r_cam <= 0.0 {
+        let inc = cfg.inclination_deg.to_radians();
+        let obs = Vec3::new(
+            z_obs * inc.sin() * az_rad.cos(),
+            z_obs * inc.sin() * az_rad.sin(),
+            z_obs * inc.cos(),
+        );
+        let fwd = Vec3::new(-obs.x, -obs.y, -obs.z);
+        let world_up = if inc.sin().abs() > 0.995 {
+            Vec3::new(0.0, 1.0, 0.0)
+        } else {
+            Vec3::new(0.0, 0.0, 1.0)
+        };
+        let half_view_y = cfg.fov_rs * r_s * (total_height as f64 / total_width.min(total_height) as f64);
+        let fov_y = 2.0 * (half_view_y / z_obs).atan();
+        CameraFrame::new(
+            obs,
+            fwd,
+            world_up,
+            fov_y.clamp(1e-4, std::f64::consts::PI - 1e-4),
+            total_width as f64 / total_height as f64,
+        )
+    } else {
+        None
+    };
+
+    (0..tile_height * tile_width)
+        .into_par_iter()
+        .map(|idx| {
+            let iy = idx / tile_width;
+            let ix = idx % tile_width;
+            let gx = x0 + ix;
+            let gy = y0 + iy;
+            let dx = jitter_x - 0.5;
+            let dy = 0.5 - jitter_y;
+            let sx = (gx as f64 - 0.5 * (total_width as f64 - 1.0) + dx) * scale;
+            let sy = (0.5 * (total_height as f64 - 1.0) - gy as f64 + dy) * scale;
+            let bx_raw = sx;
+            let by_raw = if kerr.is_some() { sy } else { sy * sin_inc };
+            let mut bx = ca * bx_raw - sa * by_raw;
+            let mut by = sa * bx_raw + ca * by_raw;
+            let mut b_mag = (bx * bx + by * by).sqrt();
+            let dphi_ray = if adaptive_dphi {
+                adaptive_dphi_for_b(cfg.dphi, b_mag, b_crit)
+            } else {
+                cfg.dphi
+            };
+
+            let result = if let Some(cam3d) = true3d_cam.as_ref() {
+                let x = ((gx as f64 + jitter_x) / total_width as f64).clamp(0.0, 1.0);
+                let y = ((gy as f64 + jitter_y) / total_height as f64).clamp(0.0, 1.0);
+                let ndc_x = 2.0 * x - 1.0;
+                let ndc_y = 1.0 - 2.0 * y;
+                let ray_dir = cam3d.ray_dir_from_ndc(ndc_x, ndc_y);
+                if let Some(red) = reduce_3d_to_axisym(cam3d.position, ray_dir) {
+                    bx = red.bx;
+                    by = red.by;
+                    b_mag = red.b;
+                }
+                trace_photon_3d_schwarzschild(
+                    metric,
+                    disk_inner,
+                    disk_outer,
+                    cam3d.position,
+                    ray_dir,
+                    cfg.max_phi,
+                    dphi_ray,
+                )
+            } else if r_cam > 0.0 {
+                if core_look_mode {
+                    trace_photon_interior_core(metric, r_cam, bx, by, cfg.max_phi, dphi_ray)
+                } else {
+                    trace_photon_interior(
+                        metric,
+                        disk_inner,
+                        disk_outer,
+                        r_cam,
+                        bx,
+                        by,
+                        cfg.max_phi,
+                        dphi_ray,
+                    )
+                }
+            } else if let Some(km) = kerr {
+                trace_photon_kerr(
+                    km,
+                    disk_inner,
+                    disk_outer,
+                    bx,
+                    by,
+                    cfg.inclination_deg,
+                    cfg.max_phi * 1.2,
+                    dphi_ray,
+                )
+            } else {
+                trace_photon(metric, disk_inner, disk_outer, bx, by, cfg.max_phi, dphi_ray)
+            };
+
+            match result {
+                TraceResult::Captured => {
+                    if r_cam > 0.0 {
+                        gutoe_core_color(b_mag, b_crit)
+                    } else if interior_mode {
+                        shadow_interior_color(bx, by, r_s)
+                    } else {
+                        [0, 0, 0]
+                    }
+                }
+                TraceResult::Escaped { phi_total } => star_field_color(bx, by, phi_total),
+                TraceResult::DiskHit {
+                    r_eff,
+                    n_cross,
+                    phi_orb,
+                } => {
+                    if r_cam > 0.0 && core_look_mode {
+                        gutoe_core_physics_color(b_mag, b_crit, r_eff, phi_orb, r_cam, metric.r_core())
+                    } else {
+                        match disk_model {
+                            DiskModel::Thin => pixel_color(
+                                r_eff,
+                                r_isco,
+                                disk_outer,
+                                r_s,
+                                bx_raw,
+                                phi_orb,
+                                sin_inc,
+                                n_cross,
+                                doppler,
+                                ring_mode,
+                                spectral_band,
+                                plasma_model,
+                                use_transfer,
+                                tau_scale,
+                            ),
+                            DiskModel::Riaf => riaf_composite_color(
+                                r_eff,
+                                r_isco,
+                                disk_outer,
+                                r_s,
+                                bx_raw,
+                                bx,
+                                by,
+                                sin_inc,
+                                n_cross,
+                                phi_orb,
+                                doppler,
+                                ring_mode,
+                                spectral_band,
+                                plasma_model,
+                                tau_scale,
+                            ),
+                        }
+                    }
+                }
+            }
+        })
+        .collect()
+}
+
+fn render_with_options(
+    metric: &GutoeMetric,
+    kerr: Option<&KerrMetric>,
+    disk_inner_rs: f64,
+    disk_outer_rs: f64,
+    cfg: &RenderConfig,
+    az_deg: f64,
+    doppler: bool,
+    ring_mode: bool,
+    interior_mode: bool,
+    core_look_mode: bool,
+    spectral_band: SpectralBand,
+    disk_model: DiskModel,
+    plasma_model: PlasmaModel,
+    use_transfer: bool,
+    tau_scale: f64,
+    adaptive_dphi: bool,
+    r_cam_rs: f64,
+    jitter_x: f64,
+    jitter_y: f64,
+) -> Vec<[u8; 3]> {
+    // GPU path with optional CPU parity check.
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
     {
+        if kerr.is_some() {
+            eprintln!("    [GPU] Kerr mode enabled (experimental).");
+        }
         eprintln!(
-            "    [GPU] launching CUDA kernel ({} × {} = {} pixels) …",
+            "    [GPU] launching GPU kernel ({} × {} = {} pixels) …",
             cfg.width,
             cfg.height,
             cfg.width * cfg.height
         );
         let t0 = std::time::Instant::now();
-        let result = render_with_options_gpu(
+        let gpu = render_with_options_gpu(
             metric,
             disk_inner_rs,
             disk_outer_rs,
@@ -1068,104 +2458,1000 @@ fn render_with_options(
             ring_mode,
             interior_mode,
             core_look_mode,
+            spectral_band,
+            disk_model,
+            plasma_model,
+            use_transfer,
+            tau_scale,
+            adaptive_dphi,
+            kerr,
             r_cam_rs,
+            jitter_x,
+            jitter_y,
         );
         eprintln!("    [GPU] done in {:.2}s", t0.elapsed().as_secs_f64());
-        return result;
+
+        let parity = std::env::var("BH_KERR_PARITY")
+            .ok()
+            .or_else(|| std::env::var("BH_VALIDATE_GPU").ok())
+            .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+        if parity {
+            eprintln!("    [PARITY] running CPU reference …");
+            let cpu = render_with_options_cpu(
+                metric,
+                kerr,
+                disk_inner_rs,
+                disk_outer_rs,
+                cfg,
+                az_deg,
+                doppler,
+                ring_mode,
+                interior_mode,
+                core_look_mode,
+                spectral_band,
+                disk_model,
+                plasma_model,
+                use_transfer,
+                tau_scale,
+                adaptive_dphi,
+                r_cam_rs,
+                jitter_x,
+                jitter_y,
+            );
+            let mut mad = 0.0_f64;
+            let mut maxd = 0_u8;
+            for (g, c) in gpu.iter().zip(cpu.iter()) {
+                let d0 = g[0].abs_diff(c[0]);
+                let d1 = g[1].abs_diff(c[1]);
+                let d2 = g[2].abs_diff(c[2]);
+                mad += (d0 as f64 + d1 as f64 + d2 as f64) / 3.0;
+                maxd = maxd.max(d0.max(d1.max(d2)));
+            }
+            mad /= gpu.len().max(1) as f64;
+            eprintln!("    [PARITY] GPU↔CPU mean|Δ|={mad:.3} max|Δ|={maxd}");
+        }
+        return gpu;
     }
 
-    // CPU path: rayon parallel pixel loop (16 threads on local machine)
     #[allow(unreachable_code)]
-    {
-        let r_s = metric.r_s;
-        let disk_inner = disk_inner_rs * r_s;
-        let disk_outer = disk_outer_rs * r_s;
-        let r_isco = 3.0 * r_s;
-        let b_crit = b_critical(r_s);
-        let sin_inc = cfg.inclination_deg.to_radians().sin();
-        let scale = 2.0 * cfg.fov_rs * r_s / cfg.width as f64;
-        let az_rad = az_deg.to_radians();
-        let (ca, sa) = (az_rad.cos(), az_rad.sin());
-        let width = cfg.width;
-        let height = cfg.height;
-        let r_cam = r_cam_rs * r_s; // 0.0 = exterior
+    render_with_options_cpu(
+        metric,
+        kerr,
+        disk_inner_rs,
+        disk_outer_rs,
+        cfg,
+        az_deg,
+        doppler,
+        ring_mode,
+        interior_mode,
+        core_look_mode,
+        spectral_band,
+        disk_model,
+        plasma_model,
+        use_transfer,
+        tau_scale,
+        adaptive_dphi,
+        r_cam_rs,
+        jitter_x,
+        jitter_y,
+    )
+}
 
-        (0..height * width)
-            .into_par_iter()
-            .map(|idx| {
-                let iy = idx / width;
-                let ix = idx % width;
-                let sx = (ix as f64 - 0.5 * (width as f64 - 1.0)) * scale;
-                let sy = (0.5 * (height as f64 - 1.0) - iy as f64) * scale;
-                let bx_raw = sx;
-                let by_raw = sy * sin_inc;
-                let bx = ca * bx_raw - sa * by_raw;
-                let by = sa * bx_raw + ca * by_raw;
-
-                let result = if r_cam > 0.0 {
-                    if core_look_mode {
-                        trace_photon_interior_core(metric, r_cam, bx, by, cfg.max_phi, cfg.dphi)
-                    } else {
-                        trace_photon_interior(
-                            metric,
-                            disk_inner,
-                            disk_outer,
-                            r_cam,
-                            bx,
-                            by,
-                            cfg.max_phi,
-                            cfg.dphi,
-                        )
-                    }
-                } else {
-                    trace_photon(
-                        metric,
-                        disk_inner,
-                        disk_outer,
-                        bx,
-                        by,
-                        cfg.max_phi,
-                        cfg.dphi,
-                    )
-                };
-
-                let b_mag = (bx * bx + by * by).sqrt();
-                match result {
-                    TraceResult::Captured => {
-                        if r_cam > 0.0 {
-                            gutoe_core_color(b_mag, b_crit)
-                        } else if interior_mode {
-                            shadow_interior_color(bx, by, r_s)
-                        } else {
-                            [0, 0, 0]
-                        }
-                    }
-                    TraceResult::Escaped { phi_total } => star_field_color(bx, by, phi_total),
-                    TraceResult::DiskHit {
-                        r_eff,
-                        n_cross,
-                        phi_orb,
-                    } => {
-                        if r_cam > 0.0 && core_look_mode {
-                            gutoe_core_physics_color(
-                                b_mag,
-                                b_crit,
-                                r_eff,
-                                phi_orb,
-                                r_cam,
-                                metric.r_core(),
-                            )
-                        } else {
-                            pixel_color(
-                                r_eff, r_isco, disk_outer, r_s, bx_raw, sin_inc, n_cross, doppler,
-                                ring_mode,
-                            )
-                        }
-                    }
-                }
-            })
-            .collect()
+fn pixel_diff_stats(a: &[[u8; 3]], b: &[[u8; 3]]) -> (f64, u8) {
+    assert_eq!(a.len(), b.len());
+    let mut mad = 0.0_f64;
+    let mut maxd = 0_u8;
+    for (pa, pb) in a.iter().zip(b.iter()) {
+        let d0 = pa[0].abs_diff(pb[0]);
+        let d1 = pa[1].abs_diff(pb[1]);
+        let d2 = pa[2].abs_diff(pb[2]);
+        mad += (d0 as f64 + d1 as f64 + d2 as f64) / 3.0;
+        maxd = maxd.max(d0.max(d1.max(d2)));
     }
+    (mad / a.len().max(1) as f64, maxd)
+}
+
+#[cfg(any(feature = "cuda", feature = "rocm"))]
+fn mean_luma_img(img: &[[u8; 3]]) -> f64 {
+    if img.is_empty() {
+        return 0.0;
+    }
+    let mut sum = 0.0_f64;
+    for &px in img {
+        sum += luminance(px);
+    }
+    sum / img.len() as f64
+}
+
+#[cfg(any(feature = "cuda", feature = "rocm"))]
+fn centered_luma_mad(a: &[[u8; 3]], b: &[[u8; 3]]) -> f64 {
+    if a.is_empty() || b.is_empty() || a.len() != b.len() {
+        return 0.0;
+    }
+    let ma = mean_luma_img(a);
+    let mb = mean_luma_img(b);
+    let mut acc = 0.0_f64;
+    for (&pa, &pb) in a.iter().zip(b.iter()) {
+        let da = luminance(pa) - ma;
+        let db = luminance(pb) - mb;
+        acc += (da - db).abs();
+    }
+    acc / a.len() as f64
+}
+
+#[cfg(any(feature = "cuda", feature = "rocm"))]
+fn luma_mean_std(img: &[[u8; 3]]) -> (f64, f64) {
+    if img.is_empty() {
+        return (0.0, 1.0);
+    }
+    let m = mean_luma_img(img);
+    let mut var = 0.0_f64;
+    for &px in img {
+        let d = luminance(px) - m;
+        var += d * d;
+    }
+    var /= img.len() as f64;
+    (m, var.sqrt().max(1e-12))
+}
+
+#[cfg(any(feature = "cuda", feature = "rocm"))]
+fn affine_luma_mad(a: &[[u8; 3]], b: &[[u8; 3]]) -> f64 {
+    if a.is_empty() || b.is_empty() || a.len() != b.len() {
+        return 0.0;
+    }
+    let (ma, sa) = luma_mean_std(a);
+    let (mb, sb) = luma_mean_std(b);
+    // Affine-normalize a to b's global luminance moments:
+    // a' = ((a - ma) * (sb/sa)) + mb
+    let scale = sb / sa;
+    let mut acc = 0.0_f64;
+    for (&pa, &pb) in a.iter().zip(b.iter()) {
+        let la = luminance(pa);
+        let lb = luminance(pb);
+        let la_aff = (la - ma) * scale + mb;
+        acc += (la_aff - lb).abs();
+    }
+    acc / a.len() as f64
+}
+
+#[cfg(any(feature = "cuda", feature = "rocm"))]
+fn bright_mask_luma_mad(a: &[[u8; 3]], b: &[[u8; 3]]) -> (f64, f64) {
+    if a.is_empty() || b.is_empty() || a.len() != b.len() {
+        return (0.0, 0.0);
+    }
+    let (ma, sa) = luma_mean_std(a);
+    let (mb, sb) = luma_mean_std(b);
+    let ta = ma + 2.0 * sa;
+    let tb = mb + 2.0 * sb;
+    let mut acc = 0.0_f64;
+    let mut n = 0usize;
+    for (&pa, &pb) in a.iter().zip(b.iter()) {
+        let la = luminance(pa);
+        let lb = luminance(pb);
+        if la >= ta && lb >= tb {
+            acc += (la - lb).abs();
+            n += 1;
+        }
+    }
+    if n == 0 {
+        (0.0, 0.0)
+    } else {
+        (acc / n as f64, n as f64 / a.len() as f64)
+    }
+}
+
+fn luminance(px: [u8; 3]) -> f64 {
+    let r = px[0] as f64 / 255.0;
+    let g = px[1] as f64 / 255.0;
+    let b = px[2] as f64 / 255.0;
+    0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+fn visibility_dft(img: &[[u8; 3]], width: usize, height: usize, u: f64, v: f64) -> (f64, f64) {
+    let mut re = 0.0_f64;
+    let mut im = 0.0_f64;
+    let mut norm = 0.0_f64;
+    let w = width as f64;
+    let h = height as f64;
+    for y in 0..height {
+        let yn = (y as f64 + 0.5) / h - 0.5;
+        for x in 0..width {
+            let idx = y * width + x;
+            let l = luminance(img[idx]);
+            let xn = (x as f64 + 0.5) / w - 0.5;
+            let ph = -2.0 * std::f64::consts::PI * (u * xn + v * yn);
+            re += l * ph.cos();
+            im += l * ph.sin();
+            norm += l;
+        }
+    }
+    if norm > 0.0 {
+        (re / norm, im / norm)
+    } else {
+        (0.0, 0.0)
+    }
+}
+
+fn closure_phase_proxy_deg(img: &[[u8; 3]], width: usize, height: usize) -> f64 {
+    // Simple EHT-style closure proxy using three synthetic baselines in uv space.
+    // u,v units are cycles across the image extent.
+    let (v1r, v1i) = visibility_dft(img, width, height, 8.0, 0.0);
+    let (v2r, v2i) = visibility_dft(img, width, height, 0.0, 8.0);
+    let (v3r, v3i) = visibility_dft(img, width, height, -8.0, -8.0);
+    // Product V12 * V23 * V31
+    let p12r = v1r * v2r - v1i * v2i;
+    let p12i = v1r * v2i + v1i * v2r;
+    let pr = p12r * v3r - p12i * v3i;
+    let pi = p12r * v3i + p12i * v3r;
+    pi.atan2(pr).to_degrees()
+}
+
+fn compute_kerr_image_metrics(img: &[[u8; 3]], width: usize, height: usize) -> KerrImageMetrics {
+    let mut flux_left = 0.0_f64;
+    let mut flux_right = 0.0_f64;
+    let mut dark_mass = 0.0_f64;
+    let mut dark_count = 0usize;
+    let mut dark_x = 0.0_f64;
+    let mut dark_y = 0.0_f64;
+    let mut radial_lum = vec![0.0_f64; width.max(height)];
+    let mut radial_count = vec![0_u32; width.max(height)];
+
+    for y in 0..height {
+        for x in 0..width {
+            let idx = y * width + x;
+            let l = luminance(img[idx]);
+            if x < width / 2 {
+                flux_left += l;
+            } else {
+                flux_right += l;
+            }
+            if l < 0.045 {
+                dark_count += 1;
+                let w = 1.0 - (l / 0.045).clamp(0.0, 1.0);
+                dark_mass += w;
+                dark_x += w * x as f64;
+                dark_y += w * y as f64;
+            }
+        }
+    }
+
+    let cx = if dark_mass > 0.0 {
+        dark_x / dark_mass
+    } else {
+        (width as f64 - 1.0) * 0.5
+    };
+    let cy = if dark_mass > 0.0 {
+        dark_y / dark_mass
+    } else {
+        (height as f64 - 1.0) * 0.5
+    };
+
+    for y in 0..height {
+        for x in 0..width {
+            let idx = y * width + x;
+            let l = luminance(img[idx]);
+            let dx = x as f64 - cx;
+            let dy = y as f64 - cy;
+            let r = (dx * dx + dy * dy).sqrt();
+            let ri = r.floor() as usize;
+            if ri < radial_lum.len() {
+                radial_lum[ri] += l;
+                radial_count[ri] += 1;
+            }
+        }
+    }
+
+    let mut radial = Vec::new();
+    for i in 0..radial_lum.len() {
+        if radial_count[i] > 0 {
+            radial.push(radial_lum[i] / radial_count[i] as f64);
+        }
+    }
+    let mut shadow_r = radial
+        .iter()
+        .enumerate()
+        .min_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(i, _)| i as f64)
+        .unwrap_or((width.min(height) as f64) * 0.2);
+    // Robust fallback: if radial-min degenerates near 0, use equivalent radius
+    // of the dark-pixel area.
+    if shadow_r < 1.0 && dark_count > 0 {
+        shadow_r = ((dark_count as f64) / std::f64::consts::PI).sqrt();
+    }
+    let peak = radial
+        .iter()
+        .copied()
+        .fold(0.0_f64, |m, v| if v > m { v } else { m });
+    let half = 0.5 * peak;
+    let mut rin = shadow_r;
+    let mut rout = shadow_r;
+    for (i, v) in radial.iter().enumerate() {
+        let r = i as f64;
+        if r <= shadow_r && *v >= half {
+            rin = r;
+        }
+        if r >= shadow_r && *v >= half {
+            rout = r;
+            break;
+        }
+    }
+    let ring_thickness = (rout - rin).max(0.0);
+    let flux_asymmetry =
+        (flux_left - flux_right) / (flux_left + flux_right).max(1e-12);
+    let shadow_diameter = 2.0 * shadow_r;
+    let closure_phase_deg = closure_phase_proxy_deg(img, width, height);
+
+    KerrImageMetrics {
+        shadow_cx: cx,
+        shadow_cy: cy,
+        shadow_radius: shadow_r,
+        shadow_diameter,
+        ring_thickness,
+        flux_left,
+        flux_right,
+        flux_asymmetry,
+        closure_phase_deg,
+    }
+}
+
+fn estimate_bcrit_numeric(metric: &GutoeMetric, max_phi: f64, dphi: f64) -> f64 {
+    let disk_inner = 10.0 * metric.r_s;
+    let disk_outer = 3.0 * metric.r_s; // disable disk hits (inner > outer)
+    let bcrit = b_critical(metric.r_s);
+    let classify_capture = |b: f64| -> bool {
+        matches!(
+            trace_photon(metric, disk_inner, disk_outer, b, 0.0, max_phi, dphi),
+            TraceResult::Captured
+        )
+    };
+
+    let mut lo = 0.7 * bcrit;
+    let mut hi = 1.3 * bcrit;
+    // Ensure brackets: lo captured, hi escaped
+    for _ in 0..24 {
+        if !classify_capture(lo) {
+            lo *= 0.95;
+        }
+        if classify_capture(hi) {
+            hi *= 1.05;
+        }
+    }
+    for _ in 0..48 {
+        let mid = 0.5 * (lo + hi);
+        if classify_capture(mid) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    0.5 * (lo + hi)
+}
+
+fn run_validation_report(view: &View, width: usize, height: usize) {
+    use std::f64::consts::PI;
+    let metric = if view.gr_mode {
+        GutoeMetric::schwarzschild(1.0)
+    } else {
+        GutoeMetric::planck_units(1.0)
+    };
+    let kerr = std::env::var("BH_KERR_ASTAR")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .and_then(|a| KerrMetric::new(metric.r_s, a));
+    let spectral_band = SpectralBand::from_env();
+    let use_transfer = std::env::var("BH_USE_TRANSFER")
+        .ok()
+        .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+    let tau_scale = std::env::var("BH_TAU_SCALE")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(1.0)
+        .max(0.0);
+    let disk_model = DiskModel::from_env();
+    let plasma_model = PlasmaModel::from_env();
+    let cfg_lo = RenderConfig {
+        width,
+        height,
+        fov_rs: view.fov,
+        inclination_deg: view.inc,
+        max_phi: view.max_phi_pi * PI,
+        dphi: view.dphi,
+    };
+    let cfg_hi = RenderConfig {
+        width: width * 2,
+        height: height * 2,
+        ..cfg_lo.clone()
+    };
+    let r_cam_rs = if view.r_cam_frac > 0.0 {
+        metric
+            .r_horizon()
+            .map(|rh| (view.r_cam_frac * rh / metric.r_s).min(0.99 * rh / metric.r_s))
+            .unwrap_or(0.0)
+    } else {
+        0.0
+    };
+
+    let lo = render_with_options(
+        &metric,
+        kerr.as_ref(),
+        view.disk_inner,
+        view.disk_outer,
+        &cfg_lo,
+        view.az,
+        view.doppler,
+        view.ring_mode,
+        view.interior_mode,
+        view.core_look_mode,
+        spectral_band,
+        disk_model,
+        plasma_model,
+        use_transfer,
+        tau_scale,
+        true,
+        r_cam_rs,
+        0.5,
+        0.5,
+    );
+    let hi = render_with_options(
+        &metric,
+        kerr.as_ref(),
+        view.disk_inner,
+        view.disk_outer,
+        &cfg_hi,
+        view.az,
+        view.doppler,
+        view.ring_mode,
+        view.interior_mode,
+        view.core_look_mode,
+        spectral_band,
+        disk_model,
+        plasma_model,
+        use_transfer,
+        tau_scale,
+        true,
+        r_cam_rs,
+        0.5,
+        0.5,
+    );
+    let hi_ds = downsample_box(&hi, cfg_hi.width, cfg_hi.height, 2);
+    let (mad, maxd) = pixel_diff_stats(&lo, &hi_ds);
+
+    let b_analytic = b_critical(metric.r_s);
+    let b_numeric = estimate_bcrit_numeric(&metric, 80.0 * PI, 0.0015);
+    let rel = ((b_numeric - b_analytic) / b_analytic).abs();
+
+    eprintln!("\nValidation report: {}", view.slug);
+    eprintln!("  convergence MAD={mad:.4} max|Δ|={maxd}");
+    eprintln!(
+        "  b_crit analytic={:.8} numeric={:.8} rel_err={:.3e}",
+        b_analytic, b_numeric, rel
+    );
+}
+
+fn run_transfer_parity_report(view: &View, width: usize, height: usize, out_dir: &Path) {
+    #[cfg(not(any(feature = "cuda", feature = "rocm")))]
+    {
+        let _ = (view, width, height, out_dir);
+        eprintln!(
+            "transfer_parity requires `--features cuda` or `--features rocm` so CPU/GPU covariant transfer can be compared."
+        );
+        return;
+    }
+
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    {
+        use std::f64::consts::PI;
+        use std::io::Write as _;
+
+        let metric = if view.gr_mode {
+            GutoeMetric::schwarzschild(1.0)
+        } else {
+            GutoeMetric::planck_units(1.0)
+        };
+        let kerr = std::env::var("BH_KERR_ASTAR")
+            .ok()
+            .and_then(|s| s.parse::<f64>().ok())
+            .and_then(|a| KerrMetric::new(metric.r_s, a));
+        let cfg = RenderConfig {
+            width,
+            height,
+            fov_rs: view.fov,
+            inclination_deg: view.inc,
+            max_phi: view.max_phi_pi * PI,
+            dphi: view.dphi,
+        };
+        let r_cam_rs = if view.r_cam_frac > 0.0 {
+            metric
+                .r_horizon()
+                .map(|rh| (view.r_cam_frac * rh / metric.r_s).min(0.99 * rh / metric.r_s))
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        };
+
+        let csv_path = out_dir.join(format!("transfer_parity_{}.csv", view.slug));
+        let tmp_path = out_dir.join(format!("transfer_parity_{}.csv.tmp", view.slug));
+        let mut f = std::fs::File::create(&tmp_path).expect("create transfer parity tmp csv");
+        writeln!(
+            f,
+            "disk_model,use_transfer,tau_scale,mad,max_delta,centered_luma_mad,affine_luma_mad,bright_mask_luma_mad,bright_mask_coverage,gpu_mean_luma,cpu_mean_luma,gpu_delta_from_base,cpu_delta_from_base,transfer_delta_parity_abs,width,height"
+        )
+        .expect("write transfer parity header");
+
+        let combos = [
+            (DiskModel::Thin, false, 0.0),
+            (DiskModel::Thin, true, 1.0),
+            (DiskModel::Thin, true, 1.5),
+            (DiskModel::Riaf, false, 0.0),
+            (DiskModel::Riaf, true, 1.0),
+            (DiskModel::Riaf, true, 1.5),
+        ];
+
+        eprintln!("\nTransfer parity report: {} @ {}x{}", view.slug, width, height);
+        let prev_legacy = std::env::var("BH_PARITY_LEGACY_STARS").ok();
+        std::env::set_var("BH_PARITY_LEGACY_STARS", "1");
+        let mut thin_gpu_base_luma: Option<f64> = None;
+        let mut thin_cpu_base_luma: Option<f64> = None;
+        let mut riaf_gpu_base_luma: Option<f64> = None;
+        let mut riaf_cpu_base_luma: Option<f64> = None;
+        for (disk_model, use_transfer, tau_scale) in combos {
+            let gpu = render_with_options_gpu(
+                &metric,
+                view.disk_inner,
+                view.disk_outer,
+                &cfg,
+                view.az,
+                view.doppler,
+                view.ring_mode,
+                view.interior_mode,
+                view.core_look_mode,
+                SpectralBand::Bolometric,
+                disk_model,
+                PlasmaModel::Grmhd,
+                use_transfer,
+                tau_scale,
+                false,
+                kerr.as_ref(),
+                r_cam_rs,
+                0.5,
+                0.5,
+            );
+            let cpu = render_with_options_cpu(
+                &metric,
+                kerr.as_ref(),
+                view.disk_inner,
+                view.disk_outer,
+                &cfg,
+                view.az,
+                view.doppler,
+                view.ring_mode,
+                view.interior_mode,
+                view.core_look_mode,
+                SpectralBand::Bolometric,
+                disk_model,
+                PlasmaModel::Grmhd,
+                use_transfer,
+                tau_scale,
+                false,
+                r_cam_rs,
+                0.5,
+                0.5,
+            );
+            let (mad, maxd) = pixel_diff_stats(&gpu, &cpu);
+            let centered = centered_luma_mad(&gpu, &cpu);
+            let affine = affine_luma_mad(&gpu, &cpu);
+            let (bright_mask_mad, bright_mask_cov) = bright_mask_luma_mad(&gpu, &cpu);
+            let gpu_mean_luma = mean_luma_img(&gpu);
+            let cpu_mean_luma = mean_luma_img(&cpu);
+            let (gpu_base, cpu_base) = match disk_model {
+                DiskModel::Thin => (&mut thin_gpu_base_luma, &mut thin_cpu_base_luma),
+                DiskModel::Riaf => (&mut riaf_gpu_base_luma, &mut riaf_cpu_base_luma),
+            };
+            if !use_transfer {
+                *gpu_base = Some(gpu_mean_luma);
+                *cpu_base = Some(cpu_mean_luma);
+            }
+            let gpu_delta_from_base = gpu_mean_luma - gpu_base.unwrap_or(gpu_mean_luma);
+            let cpu_delta_from_base = cpu_mean_luma - cpu_base.unwrap_or(cpu_mean_luma);
+            let transfer_delta_parity_abs = (gpu_delta_from_base - cpu_delta_from_base).abs();
+            eprintln!(
+                "  {} transfer={} tau={:.2} -> MAD={:.4} max|Δ|={} centered={:.5} affine={:.5} bright={:.5} cov={:.4} | luma gpu={:.5} cpu={:.5} Δbase gpu={:+.5} cpu={:+.5} | |Δtransfer|={:.5}",
+                disk_model.as_label(),
+                use_transfer,
+                tau_scale,
+                mad,
+                maxd,
+                centered,
+                affine,
+                bright_mask_mad,
+                bright_mask_cov,
+                gpu_mean_luma,
+                cpu_mean_luma,
+                gpu_delta_from_base,
+                cpu_delta_from_base,
+                transfer_delta_parity_abs
+            );
+            writeln!(
+                f,
+                "{},{},{:.6},{:.9},{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{},{}",
+                disk_model.as_label(),
+                use_transfer,
+                tau_scale,
+                mad,
+                maxd,
+                centered,
+                affine,
+                bright_mask_mad,
+                bright_mask_cov,
+                gpu_mean_luma,
+                cpu_mean_luma,
+                gpu_delta_from_base,
+                cpu_delta_from_base,
+                transfer_delta_parity_abs,
+                width,
+                height
+            )
+            .expect("write transfer parity row");
+        }
+        if let Some(v) = prev_legacy {
+            std::env::set_var("BH_PARITY_LEGACY_STARS", v);
+        } else {
+            std::env::remove_var("BH_PARITY_LEGACY_STARS");
+        }
+
+        std::fs::rename(&tmp_path, &csv_path).expect("commit transfer parity csv");
+        eprintln!("  wrote {}", csv_path.display());
+    }
+}
+
+fn parse_csv_f64_env(var: &str, default: &[f64]) -> Vec<f64> {
+    std::env::var(var)
+        .ok()
+        .map(|s| {
+            s.split(',')
+                .filter_map(|v| v.trim().parse::<f64>().ok())
+                .collect::<Vec<_>>()
+        })
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| default.to_vec())
+}
+
+fn run_kerr_metrics_report(view: &View, width: usize, height: usize, out_dir: &Path) {
+    use std::f64::consts::PI;
+    use std::io::Write as _;
+
+    let metric = if view.gr_mode {
+        GutoeMetric::schwarzschild(1.0)
+    } else {
+        GutoeMetric::planck_units(1.0)
+    };
+    let spectral_band = SpectralBand::from_env();
+    let use_transfer = std::env::var("BH_USE_TRANSFER")
+        .ok()
+        .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+    let tau_scale = std::env::var("BH_TAU_SCALE")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(1.0)
+        .max(0.0);
+    let disk_model = DiskModel::from_env();
+    let plasma_model = PlasmaModel::from_env();
+    let spins = parse_csv_f64_env("BH_KERR_SWEEP", &[0.0, 0.3, 0.6, 0.9]);
+
+    let cfg = RenderConfig {
+        width,
+        height,
+        fov_rs: view.fov,
+        inclination_deg: view.inc,
+        max_phi: view.max_phi_pi * PI,
+        dphi: view.dphi,
+    };
+    let r_cam_rs = if view.r_cam_frac > 0.0 {
+        metric
+            .r_horizon()
+            .map(|rh| (view.r_cam_frac * rh / metric.r_s).min(0.99 * rh / metric.r_s))
+            .unwrap_or(0.0)
+    } else {
+        0.0
+    };
+    let csv_path = out_dir.join(format!("kerr_metrics_{}.csv", view.slug));
+    let mut f = std::fs::File::create(&csv_path).expect("create kerr metrics csv");
+    writeln!(
+        f,
+        "a_star,shadow_cx_px,shadow_cy_px,shadow_radius_px,shadow_diameter_px,ring_thickness_px,flux_left,flux_right,flux_asymmetry,closure_phase_deg"
+    )
+    .expect("write csv header");
+
+    eprintln!("\nKerr metrics sweep: {} @ {}x{}", view.slug, width, height);
+    for a in spins {
+        let kerr = KerrMetric::new(metric.r_s, a).expect("invalid sweep a*");
+        let img = render_with_options(
+            &metric,
+            Some(&kerr),
+            view.disk_inner,
+            view.disk_outer,
+            &cfg,
+            view.az,
+            view.doppler,
+            view.ring_mode,
+            view.interior_mode,
+            view.core_look_mode,
+            spectral_band,
+            disk_model,
+            plasma_model,
+            use_transfer,
+            tau_scale,
+            true,
+            r_cam_rs,
+            0.5,
+            0.5,
+        );
+        let m = compute_kerr_image_metrics(&img, width, height);
+        writeln!(
+            f,
+            "{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.9},{:.9},{:.9},{:.6}",
+            a,
+            m.shadow_cx,
+            m.shadow_cy,
+            m.shadow_radius,
+            m.shadow_diameter,
+            m.ring_thickness,
+            m.flux_left,
+            m.flux_right,
+            m.flux_asymmetry,
+            m.closure_phase_deg,
+        )
+        .expect("write csv row");
+        eprintln!(
+            "  a*={:.2}  cx={:.2} cy={:.2}  D_sh={:.2}  ring_w={:.2}  A_LR={:+.4}  CP={:+.2}°",
+            a,
+            m.shadow_cx,
+            m.shadow_cy,
+            m.shadow_diameter,
+            m.ring_thickness,
+            m.flux_asymmetry,
+            m.closure_phase_deg
+        );
+    }
+    eprintln!("  wrote {}", csv_path.display());
+}
+
+fn run_sgr_astar_eht_report(out_dir: &Path, width: usize, height: usize, blur_sigma: f64) {
+    use std::f64::consts::PI;
+    use std::io::Write as _;
+
+    let Some(view) = VIEWS.iter().find(|v| v.slug == "sgr_astar") else {
+        eprintln!("sgr_astar view not found");
+        return;
+    };
+
+    let prev_spec = std::env::var("BH_SPECTRUM").ok();
+    let prev_disk = std::env::var("BH_DISK_MODEL").ok();
+    let prev_tx = std::env::var("BH_USE_TRANSFER").ok();
+    let prev_tau = std::env::var("BH_TAU_SCALE").ok();
+    let prev_suffix = std::env::var("BH_SLUG_SUFFIX").ok();
+    let plasma_model = PlasmaModel::from_env();
+
+    std::env::set_var("BH_SPECTRUM", "millimeter");
+    std::env::set_var("BH_DISK_MODEL", "riaf");
+    std::env::set_var("BH_USE_TRANSFER", "1");
+    std::env::set_var("BH_TAU_SCALE", "1.0");
+
+    let psf_alpha = if blur_sigma > 0.0 { blur_sigma } else { 1.2 };
+
+    std::env::set_var("BH_SLUG_SUFFIX", "intrinsic_230ghz");
+    let intrinsic_png = render_view(out_dir, view, width, height, 0.0);
+    std::env::set_var("BH_SLUG_SUFFIX", "eht_230ghz");
+    let observed_png = render_view(out_dir, view, width, height, 0.0);
+
+    let metric = GutoeMetric::planck_units(1.0);
+    let cfg = RenderConfig {
+        width,
+        height,
+        fov_rs: view.fov,
+        inclination_deg: view.inc,
+        max_phi: view.max_phi_pi * PI,
+        dphi: view.dphi,
+    };
+    let raw = render_with_options(
+        &metric,
+        None,
+        view.disk_inner,
+        view.disk_outer,
+        &cfg,
+        view.az,
+        view.doppler,
+        view.ring_mode,
+        view.interior_mode,
+        view.core_look_mode,
+        SpectralBand::Millimeter,
+        DiskModel::Riaf,
+        plasma_model,
+        true,
+        1.0,
+        true,
+        0.0,
+        0.5,
+        0.5,
+    );
+    let m_intr = compute_kerr_image_metrics(&raw, width, height);
+    let m_obs = compute_kerr_image_metrics(&raw, width, height);
+
+    // Non-Gaussian observational proxy: Moffat PSF + Richardson-Lucy reconstruction.
+    let radius = ((3.0 * psf_alpha).ceil() as usize).clamp(2, 8);
+    let k = moffat_kernel(psf_alpha, 2.6, radius);
+    let raw_f: Vec<[f64; 3]> = raw
+        .iter()
+        .map(|p| [p[0] as f64 / 255.0, p[1] as f64 / 255.0, p[2] as f64 / 255.0])
+        .collect();
+    let dirty_f = convolve_rgb_f64(&raw_f, width, height, &k, radius);
+    let dirty: Vec<[u8; 3]> = dirty_f
+        .into_iter()
+        .map(|p| {
+            [
+                (p[0] * 255.0).clamp(0.0, 255.0) as u8,
+                (p[1] * 255.0).clamp(0.0, 255.0) as u8,
+                (p[2] * 255.0).clamp(0.0, 255.0) as u8,
+            ]
+        })
+        .collect();
+    let recon = richardson_lucy_rgb(&dirty, width, height, &k, radius, 8);
+    let dirty_png = out_dir.join("sgr_astar__eht_dirty_230ghz.png");
+    let recon_png = out_dir.join("sgr_astar__eht_recon_230ghz.png");
+    save_png_rgb(&dirty_png, &dirty, width, height);
+    save_png_rgb(&recon_png, &recon, width, height);
+    let m_dirty = compute_kerr_image_metrics(&dirty, width, height);
+    let m_recon = compute_kerr_image_metrics(&recon, width, height);
+
+    let csv_path = out_dir.join("sgr_astar_eht_metrics.csv");
+    let mut f = std::fs::File::create(&csv_path).expect("create sgr_astar_eht_metrics.csv");
+    writeln!(
+        f,
+        "mode,width,height,beam_sigma_px,shadow_diameter_px,ring_thickness_px,flux_asymmetry,closure_phase_deg"
+    )
+    .expect("write csv header");
+    writeln!(
+        f,
+        "intrinsic_230ghz,{width},{height},0.0,{:.6},{:.6},{:.9},{:.6}",
+        m_intr.shadow_diameter, m_intr.ring_thickness, m_intr.flux_asymmetry, m_intr.closure_phase_deg
+    )
+    .expect("write intrinsic row");
+    writeln!(
+        f,
+        "eht_observed_230ghz_nobeam,{width},{height},0.000,{:.6},{:.6},{:.9},{:.6}",
+        m_obs.shadow_diameter, m_obs.ring_thickness, m_obs.flux_asymmetry, m_obs.closure_phase_deg
+    )
+    .expect("write observed row");
+    writeln!(
+        f,
+        "eht_dirty_moffat,{width},{height},{psf_alpha:.3},{:.6},{:.6},{:.9},{:.6}",
+        m_dirty.shadow_diameter, m_dirty.ring_thickness, m_dirty.flux_asymmetry, m_dirty.closure_phase_deg
+    )
+    .expect("write dirty row");
+    writeln!(
+        f,
+        "eht_recon_rl,{width},{height},{psf_alpha:.3},{:.6},{:.6},{:.9},{:.6}",
+        m_recon.shadow_diameter, m_recon.ring_thickness, m_recon.flux_asymmetry, m_recon.closure_phase_deg
+    )
+    .expect("write recon row");
+
+    eprintln!("\nSgr A* EHT report:");
+    eprintln!("  intrinsic: {}", intrinsic_png.display());
+    eprintln!("  observed : {}", observed_png.display());
+    eprintln!("  dirty    : {}", dirty_png.display());
+    eprintln!("  recon    : {}", recon_png.display());
+    eprintln!("  metrics  : {}", csv_path.display());
+
+    if let Some(v) = prev_spec {
+        std::env::set_var("BH_SPECTRUM", v);
+    } else {
+        std::env::remove_var("BH_SPECTRUM");
+    }
+    if let Some(v) = prev_disk {
+        std::env::set_var("BH_DISK_MODEL", v);
+    } else {
+        std::env::remove_var("BH_DISK_MODEL");
+    }
+    if let Some(v) = prev_tx {
+        std::env::set_var("BH_USE_TRANSFER", v);
+    } else {
+        std::env::remove_var("BH_USE_TRANSFER");
+    }
+    if let Some(v) = prev_tau {
+        std::env::set_var("BH_TAU_SCALE", v);
+    } else {
+        std::env::remove_var("BH_TAU_SCALE");
+    }
+    if let Some(v) = prev_suffix {
+        std::env::set_var("BH_SLUG_SUFFIX", v);
+    } else {
+        std::env::remove_var("BH_SLUG_SUFFIX");
+    }
+}
+
+fn run_metric_report(out_dir: &Path) {
+    use std::io::Write as _;
+
+    let r_s = std::env::var("BH_RS")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(1.0)
+        .max(1e-9);
+    let l_p = std::env::var("BH_LP")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(1.0)
+        .max(0.0);
+    let r_max = std::env::var("BH_METRIC_R_MAX")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(8.0)
+        .max(0.2);
+    let samples = std::env::var("BH_METRIC_SAMPLES")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(64)
+        .clamp(8, 4096);
+
+    let metric = if l_p == 0.0 {
+        GutoeMetric::schwarzschild(r_s)
+    } else {
+        GutoeMetric::new(r_s, l_p)
+    };
+    let rc = metric.r_core();
+    let rh = metric.r_horizon();
+    let rph = metric.r_photon_sphere();
+    let risco = metric.r_isco();
+    let th = metric.hawking_temperature();
+    let th_gr = metric.gr_hawking_temperature();
+    let frac = metric.hawking_correction_fraction();
+
+    let csv_path = out_dir.join("metric_report.csv");
+    let mut f = std::fs::File::create(&csv_path).expect("create metric_report.csv");
+    writeln!(f, "# GUTOE metric report").expect("write metric report header");
+    writeln!(f, "# C_INF,{C_INF:.10}").expect("write metric report header");
+    writeln!(f, "# LAMBDA_QG,{LAMBDA_QG:.10}").expect("write metric report header");
+    writeln!(f, "# WATSON_SC,{WATSON_SC:.10}").expect("write metric report header");
+    writeln!(f, "# r_s,{r_s:.10}").expect("write metric report header");
+    writeln!(f, "# l_p,{l_p:.10}").expect("write metric report header");
+    writeln!(f, "# r_core,{rc:.10}").expect("write metric report header");
+    writeln!(f, "# r_horizon,{}", rh.map(|v| format!("{v:.10}")).unwrap_or_else(|| "none".into()))
+        .expect("write metric report header");
+    writeln!(
+        f,
+        "# r_photon_sphere,{}",
+        rph.map(|v| format!("{v:.10}")).unwrap_or_else(|| "none".into())
+    )
+    .expect("write metric report header");
+    writeln!(f, "# r_isco,{}", risco.map(|v| format!("{v:.10}")).unwrap_or_else(|| "none".into()))
+        .expect("write metric report header");
+    writeln!(f, "# T_hawking,{th:.12}").expect("write metric report header");
+    writeln!(f, "# T_gr,{th_gr:.12}").expect("write metric report header");
+    writeln!(f, "# dT_over_T,{frac:.12}").expect("write metric report header");
+    writeln!(f, "r,reff,g_tt,g_rr,g_theta,g_phi_eq").expect("write metric report columns");
+
+    for i in 0..samples {
+        let t = i as f64 / (samples.saturating_sub(1).max(1) as f64);
+        let r = 1e-6 + t * r_max;
+        let re = metric.r_eff(r);
+        let gtt = metric.g_tt(r);
+        let grr = metric.g_rr(r);
+        let gth = metric.g_theta(r);
+        let gph = metric.g_phi(r, std::f64::consts::FRAC_PI_2);
+        writeln!(f, "{r:.10},{re:.10},{gtt:.12},{grr:.12},{gth:.12},{gph:.12}")
+            .expect("write metric report row");
+    }
+
+    eprintln!("\nMetric report:");
+    eprintln!("  r_s={r_s:.6} l_p={l_p:.6} r_core={rc:.6}");
+    eprintln!(
+        "  horizon={} photon_sphere={} isco={}",
+        rh.map(|v| format!("{v:.6}")).unwrap_or_else(|| "none".into()),
+        rph.map(|v| format!("{v:.6}")).unwrap_or_else(|| "none".into()),
+        risco.map(|v| format!("{v:.6}")).unwrap_or_else(|| "none".into())
+    );
+    eprintln!("  T_h={th:.8e} T_gr={th_gr:.8e} dT/T={frac:.8e}");
+    eprintln!("  csv: {}", csv_path.display());
 }
 
 // ── HTML gallery ──────────────────────────────────────────────────────────────
@@ -1255,7 +3541,14 @@ fn build_html() -> String {
 
 fn serve_http(out_dir: Arc<PathBuf>, html: Arc<String>) {
     let addr = "0.0.0.0:52345";
-    let listener = TcpListener::bind(addr).expect("bind 0.0.0.0:52345");
+    let listener = match TcpListener::bind(addr) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("\nGallery server skipped ({} busy): {e}", addr);
+            eprintln!("Images are still saved under /tmp/bh_renders\n");
+            return;
+        }
+    };
     eprintln!("\nGallery live at  http://10.7.1.200:52345/");
     eprintln!("Press Ctrl-C to stop.\n");
 
@@ -1341,6 +3634,66 @@ fn looks_like_resolution(s: &str) -> bool {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn downsample_box_2x_preserves_constant_color() {
+        let hi = vec![[12, 34, 56]; 4 * 4];
+        let lo = downsample_box(&hi, 4, 4, 2);
+        assert_eq!(lo.len(), 4);
+        assert!(lo.iter().all(|&px| px == [12, 34, 56]));
+    }
+
+    #[test]
+    fn parse_resolution_and_detector() {
+        assert_eq!(parse_resolution("3840x2160"), (3840, 2160));
+        assert_eq!(parse_resolution("1200"), (1200, 0));
+        assert!(looks_like_resolution("512x512"));
+        assert!(looks_like_resolution("768"));
+        assert!(!looks_like_resolution("camera_core"));
+    }
+
+    #[test]
+    fn sample_jitter_bounds() {
+        for i in 0..16 {
+            let (jx, jy) = sample_jitter(i, 16);
+            assert!((0.0..1.0).contains(&jx));
+            assert!((0.0..1.0).contains(&jy));
+        }
+        assert_eq!(sample_jitter(0, 1), (0.5, 0.5));
+    }
+
+    #[test]
+    fn transfer_factor_has_doppler_asymmetry() {
+        let r = 3.0;
+        let r_s = 1.0;
+        let sin_inc = 0.9;
+        let approaching = disk_transfer_factor(r, r_s, 0.8, std::f64::consts::FRAC_PI_2, sin_inc, true);
+        let receding = disk_transfer_factor(r, r_s, -0.8, -std::f64::consts::FRAC_PI_2, sin_inc, true);
+        assert!(approaching > receding);
+    }
+
+    #[test]
+    fn adaptive_dphi_tightens_near_critical() {
+        let base = 0.005;
+        let bcrit = 2.598_076_211;
+        let near = adaptive_dphi_for_b(base, 1.01 * bcrit, bcrit);
+        let far = adaptive_dphi_for_b(base, 2.0 * bcrit, bcrit);
+        assert!(near < far);
+        assert!(far <= base);
+    }
+
+    #[test]
+    fn spectral_band_parsing_aliases() {
+        assert_eq!(SpectralBand::parse("mm"), Some(SpectralBand::Millimeter));
+        assert_eq!(SpectralBand::parse("x-ray"), Some(SpectralBand::Xray));
+        assert_eq!(SpectralBand::parse("all"), Some(SpectralBand::Bolometric));
+        assert_eq!(SpectralBand::parse("unknown"), None);
+    }
+}
+
 fn main() {
     // CLI:
     //   bh_render                        → all 10 views at default res (1200)
@@ -1353,14 +3706,37 @@ fn main() {
     //   bh_render camera_core_sweep 1024 → sweep at 1024×1024
     //   bh_render interstellar_spin      → rotating camera/disk sequence (Schwarzschild geodesics)
     //   bh_render interstellar_spin 400  → sequence with 400 frames
+    //   bh_render spectrum_sweep m87star [WxH] [blur] → render all bands for one view
+    //   bh_render campaign_bh [WxH] [blur] → m87star+sgr_astar, GUTOE+GR+difference per band
+    //   bh_render validate_bh [slug] [WxH] → convergence + b_crit validation report
+    //   bh_render kerr_metrics [slug] [WxH] → sweep Kerr spins and write asymmetry CSV
+    //   bh_render transfer_parity [slug] [WxH] → CPU/CUDA covariant-transfer parity CSV
+    //   bh_render sgr_astar_eht [WxH] [beam_sigma] → intrinsic + EHT-like 230 GHz pair + metrics
+    //   bh_render metric_report → dump GUTOE metric table + invariants CSV
+    //   bh_render tiled <slug> <WxH> [tile_px] [blur] → deterministic tiled render
     // Sweep env overrides:
     //   BH_SWEEP_R_CAMS="0.60,0.68,0.76"
     //   BH_SWEEP_FOVS="1.4,2.2,3.6"
     //   BH_SWEEP_MAX_PHI_PI=160
     //   BH_SWEEP_DPHI=0.0012
+    // Detail env controls:
+    //   BH_SUPERSCALE=2        (render at 2x linear resolution, box downsample)
+    //   BH_SPP=4               (4 subpixel jittered samples, averaged)
+    //   BH_ADAPTIVE_DPHI=1     (smaller per-ray step near b≈b_crit)
+    //   BH_KERR_PARITY=1       (with CUDA: run GPU and CPU, print diff stats)
+    //   BH_DETAIL_PRESET=imax  (auto: superscale>=2, spp>=4, tighter dphi)
+    //   BH_SPECTRUM=radio|mm|infrared|optical|uv|xray|gamma|bolometric
     let args: Vec<String> = std::env::args().collect();
     let run_core_sweep = args.get(1).is_some_and(|s| s == "camera_core_sweep");
     let run_interstellar_spin = args.get(1).is_some_and(|s| s == "interstellar_spin");
+    let run_spectrum_sweep = args.get(1).is_some_and(|s| s == "spectrum_sweep");
+    let run_campaign_bh = args.get(1).is_some_and(|s| s == "campaign_bh");
+    let run_validate_bh = args.get(1).is_some_and(|s| s == "validate_bh");
+    let run_kerr_metrics = args.get(1).is_some_and(|s| s == "kerr_metrics");
+    let run_transfer_parity = args.get(1).is_some_and(|s| s == "transfer_parity");
+    let run_sgr_astar_eht = args.get(1).is_some_and(|s| s == "sgr_astar_eht");
+    let run_metric_report_cmd = args.get(1).is_some_and(|s| s == "metric_report");
+    let run_tiled = args.get(1).is_some_and(|s| s == "tiled");
 
     // Arg 1 is a slug if it matches a known view slug.
     // Otherwise, if it looks like a resolution, treat it as global res for all views.
@@ -1383,6 +3759,58 @@ fn main() {
                 let (w, h) = args.get(3).map(|x| parse_resolution(x)).unwrap_or((0, 0));
                 let blur = args
                     .get(4)
+                    .and_then(|x| x.parse::<f64>().ok())
+                    .unwrap_or(0.0);
+                (None, w, h, blur)
+            }
+            Some("spectrum_sweep") => {
+                // bh_render spectrum_sweep <slug> [WxH] [blur]
+                let (w, h) = args.get(3).map(|x| parse_resolution(x)).unwrap_or((0, 0));
+                let blur = args
+                    .get(4)
+                    .and_then(|x| x.parse::<f64>().ok())
+                    .unwrap_or(0.0);
+                (None, w, h, blur)
+            }
+            Some("campaign_bh") => {
+                // bh_render campaign_bh [WxH] [blur]
+                let (w, h) = args.get(2).map(|x| parse_resolution(x)).unwrap_or((0, 0));
+                let blur = args
+                    .get(3)
+                    .and_then(|x| x.parse::<f64>().ok())
+                    .unwrap_or(0.0);
+                (None, w, h, blur)
+            }
+            Some("validate_bh") => {
+                // bh_render validate_bh [slug] [WxH]
+                let (w, h) = args.get(3).map(|x| parse_resolution(x)).unwrap_or((0, 0));
+                (None, w, h, 0.0)
+            }
+            Some("kerr_metrics") => {
+                // bh_render kerr_metrics [slug] [WxH]
+                let (w, h) = args.get(3).map(|x| parse_resolution(x)).unwrap_or((0, 0));
+                (None, w, h, 0.0)
+            }
+            Some("transfer_parity") => {
+                // bh_render transfer_parity [slug] [WxH]
+                let (w, h) = args.get(3).map(|x| parse_resolution(x)).unwrap_or((0, 0));
+                (None, w, h, 0.0)
+            }
+            Some("sgr_astar_eht") => {
+                // bh_render sgr_astar_eht [WxH] [beam_sigma]
+                let (w, h) = args.get(2).map(|x| parse_resolution(x)).unwrap_or((0, 0));
+                let blur = args
+                    .get(3)
+                    .and_then(|x| x.parse::<f64>().ok())
+                    .unwrap_or(0.0);
+                (None, w, h, blur)
+            }
+            Some("metric_report") => (None, 0, 0, 0.0),
+            Some("tiled") => {
+                // bh_render tiled <slug> <WxH> [tile_px] [blur]
+                let (w, h) = args.get(3).map(|x| parse_resolution(x)).unwrap_or((0, 0));
+                let blur = args
+                    .get(5)
                     .and_then(|x| x.parse::<f64>().ok())
                     .unwrap_or(0.0);
                 (None, w, h, blur)
@@ -1423,6 +3851,12 @@ fn main() {
         }
         eprintln!("Special mode:");
         eprintln!("  camera_core_sweep [WxH] [blur]");
+        eprintln!("  spectrum_sweep <slug> [WxH] [blur]");
+        eprintln!("  kerr_metrics [slug] [WxH]");
+        eprintln!("  transfer_parity [slug] [WxH]");
+        eprintln!("  sgr_astar_eht [WxH] [beam_sigma]");
+        eprintln!("  metric_report");
+        eprintln!("  tiled <slug> <WxH> [tile_px] [blur]");
         std::process::exit(1);
     }
 
@@ -1442,6 +3876,85 @@ fn main() {
             .unwrap_or(240);
         eprintln!("GUTOE Black Hole Gallery — interstellar spin sequence …\n");
         render_interstellar_spin(&out_dir, width_override, height_override, blur_sigma, frames);
+        return;
+    }
+
+    if run_spectrum_sweep {
+        let sweep_slug = args.get(2).map(String::as_str).unwrap_or("m87star");
+        let Some(view) = VIEWS.iter().find(|v| v.slug == sweep_slug) else {
+            eprintln!("spectrum_sweep view slug not found: {sweep_slug}");
+            std::process::exit(1);
+        };
+        eprintln!(
+            "GUTOE Black Hole Gallery — spectrum sweep for {} …\n",
+            view.slug
+        );
+        render_spectrum_sweep(&out_dir, view, width_override, height_override, blur_sigma);
+        return;
+    }
+
+    if run_campaign_bh {
+        eprintln!("GUTOE Black Hole Gallery — BH campaign (spectrum + GR diff) …\n");
+        render_bh_campaign(&out_dir, width_override, height_override, blur_sigma);
+        return;
+    }
+    if run_validate_bh {
+        let slug = args.get(2).map(String::as_str).unwrap_or("m87star");
+        let Some(view) = VIEWS.iter().find(|v| v.slug == slug) else {
+            eprintln!("validate_bh view slug not found: {slug}");
+            std::process::exit(1);
+        };
+        let w = if width_override > 0 { width_override } else { 960 };
+        let h = if height_override > 0 { height_override } else { w };
+        run_validation_report(view, w, h);
+        return;
+    }
+    if run_kerr_metrics {
+        let slug = args.get(2).map(String::as_str).unwrap_or("m87star");
+        let Some(view) = VIEWS.iter().find(|v| v.slug == slug) else {
+            eprintln!("kerr_metrics view slug not found: {slug}");
+            std::process::exit(1);
+        };
+        let w = if width_override > 0 { width_override } else { 960 };
+        let h = if height_override > 0 { height_override } else { w };
+        run_kerr_metrics_report(view, w, h, &out_dir);
+        return;
+    }
+    if run_transfer_parity {
+        let slug = args.get(2).map(String::as_str).unwrap_or("m87star");
+        let Some(view) = VIEWS.iter().find(|v| v.slug == slug) else {
+            eprintln!("transfer_parity view slug not found: {slug}");
+            std::process::exit(1);
+        };
+        let w = if width_override > 0 { width_override } else { 960 };
+        let h = if height_override > 0 { height_override } else { w };
+        run_transfer_parity_report(view, w, h, &out_dir);
+        return;
+    }
+    if run_sgr_astar_eht {
+        let w = if width_override > 0 { width_override } else { 1920 };
+        let h = if height_override > 0 { height_override } else { 1080 };
+        run_sgr_astar_eht_report(&out_dir, w, h, blur_sigma);
+        return;
+    }
+    if run_metric_report_cmd {
+        run_metric_report(&out_dir);
+        return;
+    }
+    if run_tiled {
+        let slug = args.get(2).map(String::as_str).unwrap_or("m87star");
+        let Some(view) = VIEWS.iter().find(|v| v.slug == slug) else {
+            eprintln!("tiled view slug not found: {slug}");
+            std::process::exit(1);
+        };
+        let (rw, rh) = args.get(3).map(|x| parse_resolution(x)).unwrap_or((0, 0));
+        let w = if rw > 0 { rw } else { 7680 };
+        let h = if rh > 0 { rh } else { w };
+        let tile_px = args
+            .get(4)
+            .and_then(|x| x.parse::<usize>().ok())
+            .unwrap_or(1024);
+        render_view_tiled(&out_dir, view, w, h, tile_px, blur_sigma);
         return;
     }
 

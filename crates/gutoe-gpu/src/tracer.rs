@@ -40,6 +40,7 @@
 
 use std::f64::consts::PI;
 
+use crate::kerr::KerrMetric;
 use crate::metric::GutoeMetric;
 
 // ── Critical impact parameter ─────────────────────────────────────────────────
@@ -273,6 +274,130 @@ pub fn trace_photon(
     // Ran out of steps. Classify by current position.
     if r >= r_start * 0.5 {
         TraceResult::Escaped { phi_total: phi }
+    } else {
+        TraceResult::Captured
+    }
+}
+
+/// Experimental Kerr null-geodesic tracer (exterior camera, CPU path).
+///
+/// Integrates Carter first-order equations in Boyer-Lindquist form using an
+/// affine-like step parameter. This is intended as a physically grounded spin
+/// path (not a shader warp), but still an experimental integrator.
+pub fn trace_photon_kerr(
+    kerr: &KerrMetric,
+    disk_inner_re: f64,
+    disk_outer_re: f64,
+    bx: f64,
+    by: f64,
+    inclination_deg: f64,
+    max_lambda: f64,
+    dlambda: f64,
+) -> TraceResult {
+    let r_s = kerr.r_s;
+    let (r_plus, _) = kerr.horizons();
+    // Kerr image constants must use the true observer inclination.
+    // The renderer passes Kerr screen coordinates as (alpha,beta) without
+    // pre-applying inclination to beta, so we map with theta_obs directly.
+    let theta_obs = inclination_deg.to_radians().clamp(1e-4, PI - 1e-4);
+    let (xi, eta) = kerr.image_to_constants(bx, by, theta_obs);
+
+    // Start far away so image-plane mapping approximates asymptotic observer.
+    let b = (bx * bx + by * by).sqrt();
+    let r_start = (40.0 * r_s).max(12.0 * b).max(20.0);
+
+    let mut r = r_start;
+    let mut theta = theta_obs;
+    let mut phi = 0.0_f64;
+    let mut n_cross = 0_u32;
+
+    // Ingoing branch from observer.
+    let mut sgn_r = -1.0_f64;
+    // Initial polar direction from image-plane beta sign.
+    // Use the standard Carter sign convention dθ/dλ ∝ β at the observer.
+    let mut sgn_th = if by >= 0.0 { 1.0 } else { -1.0 };
+
+    let mut lambda = 0.0_f64;
+    let max_steps = (max_lambda / dlambda).ceil() as usize + 1;
+
+    for _ in 0..max_steps {
+        let a = kerr.a();
+        let sin_th = theta.sin();
+        let sin2 = (sin_th * sin_th).max(1e-9);
+        let sigma = kerr.sigma(r, theta).max(1e-12);
+        let delta = kerr.delta(r);
+        let p = (r * r + a * a) - a * xi;
+
+        let rpot = kerr.radial_potential(r, xi, eta);
+        if rpot <= 1e-12 {
+            sgn_r = -sgn_r;
+        }
+        let tpot = kerr.polar_potential(theta, xi, eta);
+        if tpot <= 1e-12 {
+            sgn_th = -sgn_th;
+        }
+
+        let rr = rpot.max(0.0).sqrt();
+        let thh = tpot.max(0.0).sqrt();
+
+        let dr = sgn_r * rr / sigma;
+        let dth = sgn_th * thh / sigma;
+
+        // Carter azimuth equation: Σ dφ/dλ = ξ csc²θ - a + aP/Δ
+        // Clamp near Δ→0 to keep integration stable at horizon edge.
+        let dphi = if delta.abs() < 1e-9 {
+            (xi / sin2 - a) / sigma
+        } else {
+            (xi / sin2 - a + a * p / delta) / sigma
+        };
+
+        let r_new = r + dlambda * dr;
+        let th_new = (theta + dlambda * dth).clamp(1e-4, PI - 1e-4);
+        let phi_new = phi + dlambda * dphi;
+
+        if !r_new.is_finite() || !th_new.is_finite() || !phi_new.is_finite() {
+            return TraceResult::Captured;
+        }
+
+        // Capture: crossed outer horizon.
+        if r_new <= r_plus * 1.001 {
+            return TraceResult::Captured;
+        }
+
+        // Escape: returned to asymptotic radius on outgoing branch.
+        if sgn_r > 0.0 && r_new >= r_start * 0.995 {
+            return TraceResult::Escaped { phi_total: phi_new.abs() };
+        }
+
+        // Disk crossing at θ = π/2.
+        let pi2 = PI * 0.5;
+        if (theta - pi2) * (th_new - pi2) <= 0.0 {
+            n_cross += 1;
+            let t = ((pi2 - theta) / (th_new - theta)).clamp(0.0, 1.0);
+            let r_cross = r + t * (r_new - r);
+            if r_cross >= disk_inner_re && r_cross <= disk_outer_re {
+                return TraceResult::DiskHit {
+                    r_eff: r_cross,
+                    phi_orb: phi_new.abs(),
+                    n_cross,
+                };
+            }
+        }
+
+        r = r_new;
+        theta = th_new;
+        phi = phi_new;
+        lambda += dlambda;
+        if lambda >= max_lambda {
+            break;
+        }
+    }
+
+    if sgn_r > 0.0 && r > 0.5 * r_start {
+        TraceResult::Escaped { phi_total: phi.abs() }
+    } else if r > (3.0 * r_s).max(1.2 * r_plus) {
+        // Conservative timeout classification: still far outside strong-field region.
+        TraceResult::Escaped { phi_total: phi.abs() }
     } else {
         TraceResult::Captured
     }
@@ -645,6 +770,7 @@ pub fn write_ppm_ascii(pixels: &[[u8; 3]], width: usize, height: usize) -> Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::kerr::KerrMetric;
     use crate::metric::GutoeMetric;
 
     const R_S: f64 = 1.0; // unit Schwarzschild radius
@@ -908,5 +1034,24 @@ mod tests {
         let ppm = write_ppm_ascii(&pixels, 1, 1);
         assert!(ppm.starts_with("P3\n1 1\n255\n"));
         assert!(ppm.contains("10 20 30"));
+    }
+
+    #[test]
+    fn kerr_tracer_large_b_escapes() {
+        let k = KerrMetric::new(1.0, 0.6).expect("valid");
+        // No disk interception: inner > outer.
+        let r = trace_photon_kerr(&k, 2.0, 1.0, 12.0, 0.0, 70.0, 80.0, 0.01);
+        match r {
+            TraceResult::Escaped { .. } => {}
+            _ => panic!("large-b Kerr ray should escape, got {r:?}"),
+        }
+    }
+
+    #[test]
+    fn kerr_tracer_captures_small_b() {
+        let k = KerrMetric::new(1.0, 0.9).expect("valid");
+        // No disk interception: inner > outer.
+        let r = trace_photon_kerr(&k, 2.0, 1.0, 0.2, 0.0, 75.0, 80.0, 0.01);
+        assert_eq!(r, TraceResult::Captured);
     }
 }

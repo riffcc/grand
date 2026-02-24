@@ -12,8 +12,13 @@
 //!   R                      — reset camera
 //!   Q / Escape             — quit
 
-use std::sync::Arc;
+use std::{
+    panic::{self, AssertUnwindSafe},
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
+use gilrs::{Axis, Button, Gilrs};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
@@ -22,6 +27,32 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::{Window, WindowId},
 };
+
+#[derive(Default, Clone, Copy)]
+struct PadPrev {
+    south: bool,
+    east: bool,
+    west: bool,
+    north: bool,
+    left_thumb: bool,
+    start: bool,
+    select: bool,
+    mode: bool,
+}
+
+#[derive(Default, Clone, Copy)]
+struct HeldKeys {
+    fwd: bool,
+    back: bool,
+    left: bool,
+    right: bool,
+    up: bool,
+    down: bool,
+    roll_pos: bool,
+    roll_neg: bool,
+    zoom_in: bool,
+    zoom_out: bool,
+}
 
 // ── WGSL shader ───────────────────────────────────────────────────────────────
 
@@ -47,9 +78,22 @@ struct Params {
     max_phi  : f32,   // max integration angle (radians)
     dphi     : f32,   // RK4 step size (radians)
     az       : f32,   // azimuth offset (rotates disk orientation on screen)
-    _pad     : f32,
+    cam_x    : f32,   // freecam world-space x offset (r_s units)
+    cam_y    : f32,   // freecam world-space y offset (r_s units)
+    cam_z    : f32,   // freecam world-space z offset (r_s units)
+    cam_roll : f32,   // camera roll (radians)
+    interior_mode : f32, // 1 = interior camera
+    core_look_mode: f32, // 1 = interior camera looking at core
+    r_cam_frac    : f32, // r_cam = r_cam_frac * r_horizon (coordinate)
+    quality_tier  : f32, // 0=low, 1=medium, 2=high
+    use_transfer  : f32, // 1 => run multi-step covariant transfer integration
+    tau_scale     : f32, // optical-depth scale for transfer mode
+    disk_model    : f32, // 0=thin, 1=riaf composite
+    _pad1         : f32,
 }
 @group(0) @binding(0) var<uniform> P : Params;
+@group(0) @binding(1) var star_tex : texture_2d<f32>;
+@group(0) @binding(2) var star_samp : sampler;
 
 // ── Hash / Noise ──────────────────────────────────────────────────────────────
 
@@ -60,33 +104,110 @@ fn hash21(p: vec2<f32>) -> f32 {
 }
 
 // ── Star field ────────────────────────────────────────────────────────────────
-// Sample a procedural star field at sky direction 'sky' (in r_s units).
-// ~8% of cells contain a star; magnitude and color vary per cell.
+// Procedural star field matched to bh_render's hash/band model for parity.
 
-fn starfield(sky: vec2<f32>) -> vec3<f32> {
-    let cell_size = P.r_s * 0.50;          // angular cell size in r_s units
-    let cell      = floor(sky / cell_size);
-    let local     = fract(sky / cell_size) - 0.5;  // local coords in [-0.5, 0.5]²
+fn starfield_from_dir(dir_in: vec3<f32>) -> vec3<f32> {
+    let dir = safe_normalize(dir_in, vec3(0.0, 0.0, 1.0));
+    let lon = atan2(dir.x, dir.z);
+    let lat = asin(clamp(dir.y, -1.0, 1.0));
+    let sky = vec2(lon * 57.2957795, lat * 114.591559);
+    var col = vec3(0.0015, 0.0020, 0.0060); // dark sky baseline
 
-    let h = hash21(cell);
-    if h > 0.92 { return vec3(0.0); }      // only ~8% of cells have a star
+    // Milky-Way-like galactic band with smooth dust modulation.
+    let gx = sky.x * 0.035;
+    let gy = sky.y * 0.035;
+    let gal_lat = abs(gy + 0.28 * sin(0.7 * gx) + 0.14 * sin(1.3 * gx + 0.5));
+    let band = exp(-(gal_lat * gal_lat) / 0.05);
+    let dust = pow(sin(sky.x * 0.11) * cos(sky.y * 0.07 + 1.7) * 0.5 + 0.5, 1.4);
+    let gal = band * (0.25 + 0.75 * dust);
+    col += vec3(0.16, 0.14, 0.20) * gal;
 
-    let magnitude = 1.0 - h / 0.92;        // [0,1]: h≈0 → bright, h≈0.92 → faint
+    // Multi-scale stellar population with sub-pixel PSF, avoiding "cloudy" blocks.
+    {
+        let scale = 42.0;
+        let p = sky * scale;
+        let cell = floor(p);
+        let local = fract(p) - 0.5;
+        let gate = hash21(cell);
+        if (gate <= 0.010) {
+            let cseed = cell + vec2(hash21(cell + 0.41), hash21(cell + 0.73));
+            let center = vec2(hash21(cseed + 1.2), hash21(cseed + 2.6)) - 0.5;
+            let d = local - center;
+            let r2 = dot(d, d);
+            let psf = exp(-r2 * 320.0);
+            let temp = hash21(cell + 0.99);
+            let star_col = select(
+                select(
+                    select(vec3(1.00, 0.62, 0.35), vec3(1.00, 0.92, 0.78), temp > 0.20),
+                    vec3(1.00, 1.00, 1.00),
+                    temp > 0.45
+                ),
+                vec3(0.78, 0.86, 1.00),
+                temp > 0.75
+            );
+            let bright = 0.95 * (0.25 + 0.75 * pow(hash21(cell + 0.37), 1.8));
+            col += star_col * bright * psf * (1.0 + 0.6 * band);
+        }
+    }
+    {
+        let scale = 86.0;
+        let p = sky * scale;
+        let cell = floor(p);
+        let local = fract(p) - 0.5;
+        let gate = hash21(cell);
+        if (P.quality_tier >= 1.0 && gate <= 0.025) {
+            let cseed = cell + vec2(hash21(cell + 1.41), hash21(cell + 1.73));
+            let center = vec2(hash21(cseed + 3.2), hash21(cseed + 4.6)) - 0.5;
+            let d = local - center;
+            let r2 = dot(d, d);
+            let psf = exp(-r2 * 420.0);
+            let temp = hash21(cell + 0.99);
+            let star_col = select(
+                select(
+                    select(vec3(1.00, 0.62, 0.35), vec3(1.00, 0.92, 0.78), temp > 0.20),
+                    vec3(1.00, 1.00, 1.00),
+                    temp > 0.45
+                ),
+                vec3(0.78, 0.86, 1.00),
+                temp > 0.75
+            );
+            let bright = 0.30 * (0.25 + 0.75 * pow(hash21(cell + 0.37), 1.8));
+            col += star_col * bright * psf * (1.0 + 0.6 * band);
+        }
+    }
+    {
+        let scale = 150.0;
+        let p = sky * scale;
+        let cell = floor(p);
+        let local = fract(p) - 0.5;
+        let gate = hash21(cell);
+        if (P.quality_tier >= 1.5 && gate <= 0.050) {
+            let cseed = cell + vec2(hash21(cell + 2.41), hash21(cell + 2.73));
+            let center = vec2(hash21(cseed + 5.2), hash21(cseed + 6.6)) - 0.5;
+            let d = local - center;
+            let r2 = dot(d, d);
+            let psf = exp(-r2 * 520.0);
+            let temp = hash21(cell + 0.99);
+            let star_col = select(
+                select(
+                    select(vec3(1.00, 0.62, 0.35), vec3(1.00, 0.92, 0.78), temp > 0.20),
+                    vec3(1.00, 1.00, 1.00),
+                    temp > 0.45
+                ),
+                vec3(0.78, 0.86, 1.00),
+                temp > 0.75
+            );
+            let bright = 0.12 * (0.25 + 0.75 * pow(hash21(cell + 0.37), 1.8));
+            col += star_col * bright * psf * (1.0 + 0.6 * band);
+        }
+    }
 
-    // Star position within cell (sub-cell random offset)
-    let jitter    = vec2(hash21(cell + 0.31), hash21(cell + 0.73)) - 0.5;
-    let d2        = dot(local - jitter * 0.7, local - jitter * 0.7);
-
-    // PSF: sharp Airy-like core + faint diffraction halo
-    let sigma     = 0.003 * (0.15 + magnitude);
-    let core      = exp(-d2 / sigma);
-    let halo      = exp(-d2 / (sigma * 8.0)) * 0.12;
-
-    // Color temperature: blue-white (hot) ↔ orange-red (cool)
-    let temp      = hash21(cell + 0.99);
-    let star_col  = mix(vec3(1.0, 0.50, 0.20), vec3(0.70, 0.85, 1.0), temp);
-
-    return star_col * (core + halo) * magnitude * 2.5;
+    // Optional real-sky map overlay (same equirect projection used by bh_render).
+    let uv = vec2(lon / (2.0 * 3.14159265359) + 0.5, 0.5 - lat / 3.14159265359);
+    let map_sample = textureSampleLevel(star_tex, star_samp, uv, 0.0);
+    let map_col = map_sample.rgb;
+    let map_mix = 0.88 * clamp(map_sample.a, 0.0, 1.0);
+    return mix(col, map_col, map_mix);
 }
 
 // ── Orbit integrator ──────────────────────────────────────────────────────────
@@ -117,6 +238,19 @@ fn rk4(r: f32, p: f32, b: f32, r_s: f32, r_c: f32, h: f32) -> vec2<f32> {
     );
 }
 
+fn safe_normalize(v: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
+    let n = length(v);
+    if n > 1e-6 {
+        return v / n;
+    }
+    return fallback;
+}
+
+struct TraceHit3D {
+    hit: vec4<f32>,
+    sky_dir: vec3<f32>,
+}
+
 // ── Tracer ────────────────────────────────────────────────────────────────────
 // Returns vec4(r_eff_hit, phi_total, f32(n_cross), kind)
 //   kind 0 = captured, 1 = disk hit, 2 = escaped
@@ -133,6 +267,12 @@ fn trace(bx_in: f32, by_in: f32) -> vec4<f32> {
 
     let r_s   = P.r_s;
     let r_c   = P.r_c;
+    // Fast-path: far-field rays are weakly deflected and do not cross the disk.
+    // This removes a huge amount of unnecessary integration in live mode.
+    let far_cut = select(10.0 * r_s, 14.0 * r_s, P.quality_tier >= 1.5);
+    if b > far_cut {
+        return vec4(0.0, 3.14159265359, 0.0, 2.0);
+    }
 
     // Deep-shadow shortcut: b < b_crit/2 → definitely captured.
     // b_crit = (3√3/2) r_s ≈ 2.598 r_s; half is (3√3/4) r_s ≈ 1.299 r_s.
@@ -163,18 +303,27 @@ fn trace(bx_in: f32, by_in: f32) -> vec4<f32> {
     var n_cross    = 0u;
     var turned     = false;
     var in_disk_eq = false;
-
-    let max_steps = i32(P.max_phi / P.dphi) + 1;
+    let b_crit     = 1.5 * sqrt(3.0) * r_s;
+    let rel        = abs(b / max(b_crit, 1e-6) - 1.0);
+    // Live-mode integrator budget: avoid runaway step counts near b_crit.
+    let step_scale =
+        select(1.0, 0.85, rel < 0.10) *
+        select(1.0, 0.75, rel < 0.05) *
+        select(1.0, 0.65, rel < 0.02);
+    let h = max(P.dphi * step_scale, P.dphi * 0.55);
+    let max_steps_nominal = i32(P.max_phi / h) + 1;
+    let max_steps_cap = select(select(2400, 3600, P.quality_tier >= 1.0), 5200, P.quality_tier >= 1.5);
+    let max_steps = min(max_steps_nominal, max_steps_cap);
 
     for (var i = 0; i < max_steps; i++) {
-        let s      = rk4(r, p, b, r_s, r_c, P.dphi);
+        let s      = rk4(r, p, b, r_s, r_c, h);
         let rn     = s.x;
         let pn_rk4 = s.y;
         // Enforce orbital constraint p² = orbit_vr_sq(r). Prevents centrifugal blowup;
         // preserves direction sign from RK4 → correctly triggers turned / capture.
         let vr2n   = max(orbit_vr_sq(rn, b, r_s, r_c), 0.0);
         let pn     = select(-sqrt(vr2n), sqrt(vr2n), pn_rk4 >= 0.0);
-        let phin = phi + P.dphi;
+        let phin = phi + h;
         let ren  = sqrt(rn * rn + r_c * r_c);
 
         // Capture: inside horizon, or coordinate r went below core / negative
@@ -197,7 +346,7 @@ fn trace(bx_in: f32, by_in: f32) -> vec4<f32> {
         } else {
             let phi_cross = f32(n_cross + 1u) * 3.14159265359;
             if phi < phi_cross && phin >= phi_cross {
-                let t    = (phi_cross - phi) / P.dphi;
+                let t    = (phi_cross - phi) / h;
                 let r_x  = r + t * (rn - r);
                 let re_x = sqrt(r_x * r_x + r_c * r_c);
                 n_cross += 1u;
@@ -216,41 +365,255 @@ fn trace(bx_in: f32, by_in: f32) -> vec4<f32> {
     return vec4(0.0, 0.0, 0.0, 0.0);
 }
 
-// ── Disk colour: Novikov-Thorne + Doppler + gravitational redshift ─────────────
+// Full 3D exterior tracer in spherical symmetry:
+// integrates geodesic in orbital plane, then lifts each step to world space and
+// checks equatorial plane crossings (z=0) for disk hits.
+fn trace_true3d(sx: f32, sy: f32) -> TraceHit3D {
+    let r_s = P.r_s;
+    let r_c = P.r_c;
+    let z_obs = 60.0 * r_s;
+    let sin_i = clamp(P.sin_inc, -1.0, 1.0);
+    let cos_i = sqrt(max(1.0 - sin_i * sin_i, 0.0));
+    let caz = cos(P.az);
+    let saz = sin(P.az);
+    let obs_base = vec3(z_obs * sin_i * caz, z_obs * sin_i * saz, z_obs * cos_i);
+    let obs = obs_base + vec3(P.cam_x, P.cam_y, P.cam_z);
+    let fwd = safe_normalize(-obs, vec3(0.0, 0.0, -1.0));
+    let world_up = select(vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 0.0), abs(sin_i) > 0.995);
+    let right = safe_normalize(cross(fwd, world_up), vec3(1.0, 0.0, 0.0));
+    let up = safe_normalize(cross(right, fwd), vec3(0.0, 1.0, 0.0));
+    let ray = safe_normalize(fwd * z_obs + right * sx + up * sy, fwd);
 
-fn disk_color(r_eff: f32, n_cross: u32, sx: f32) -> vec4<f32> {
+    let l = cross(obs, ray);
+    let b = length(l);
+    if b < 1e-4 {
+        return TraceHit3D(vec4(0.0, 0.0, 0.0, 0.0), ray);
+    }
+    let n_hat = safe_normalize(l, vec3(0.0, 0.0, 1.0));
+
+    let p_vec = obs - ray * dot(obs, ray);
+    let b_line = length(p_vec);
+    if b_line < 1e-4 {
+        return TraceHit3D(vec4(0.0, 0.0, 0.0, 0.0), ray);
+    }
+
+    let r_start = max(3.0 * b_line, 3.0 * b);
+    let s = -sqrt(max(r_start * r_start - b_line * b_line, 0.0));
+    let start_world = p_vec + ray * s;
+    let ex = safe_normalize(start_world, vec3(0.0, 0.0, 1.0));
+    let ey = safe_normalize(cross(n_hat, ex), vec3(0.0, 1.0, 0.0));
+
+    let vr0_sq = max(orbit_vr_sq(r_start, b, r_s, r_c), 0.0);
+    var p = select(-r_start * r_start / b, -sqrt(vr0_sq), vr0_sq > 0.0);
+    var r = r_start;
+    var phi = 0.0f;
+    var turned = false;
+    var n_cross = 0u;
+    let r_cap = r_s * 0.99;
+    let max_steps_nominal = i32(P.max_phi / P.dphi) + 1;
+    let max_steps_cap = select(select(2200, 3200, P.quality_tier >= 1.0), 4600, P.quality_tier >= 1.5);
+    let max_steps = min(max_steps_nominal, max_steps_cap);
+
+    var w_prev = ex * r;
+    for (var i = 0; i < max_steps; i++) {
+        let s_rk = rk4(r, p, b, r_s, r_c, P.dphi);
+        let rn = s_rk.x;
+        let pn_rk4 = s_rk.y;
+        let vr2n = max(orbit_vr_sq(rn, b, r_s, r_c), 0.0);
+        let pn = select(-sqrt(vr2n), sqrt(vr2n), pn_rk4 >= 0.0);
+        let phin = phi + P.dphi;
+        let ren = sqrt(rn * rn + r_c * r_c);
+
+        let ren_bad = (ren != ren) || (abs(ren) > 1e20);
+        if ren_bad || ren < r_cap || rn < r_c * 0.01 {
+            return TraceHit3D(vec4(0.0, 0.0, 0.0, 0.0), ray);
+        }
+        if !turned && p < 0.0 && pn >= 0.0 {
+            turned = true;
+        }
+        let w_new = ex * (rn * cos(phin)) + ey * (rn * sin(phin));
+        if turned && rn >= r_start * 0.99 {
+            let sky_dir = safe_normalize(w_new - w_prev, ray);
+            return TraceHit3D(vec4(0.0, phin, 0.0, 2.0), sky_dir);
+        }
+        if w_prev.z * w_new.z <= 0.0 {
+            let dz = w_new.z - w_prev.z;
+            let t = select(0.0, clamp(-w_prev.z / dz, 0.0, 1.0), abs(dz) > 1e-6);
+            let r_x = r + t * (rn - r);
+            let re_x = sqrt(r_x * r_x + r_c * r_c);
+            n_cross += 1u;
+            if re_x >= P.disk_in && re_x <= P.disk_out {
+                return TraceHit3D(vec4(re_x, phin, f32(n_cross), 1.0), ray);
+            }
+        }
+
+        r = rn;
+        p = pn;
+        phi = phin;
+        w_prev = w_new;
+    }
+
+    if r >= r_start * 0.5 {
+        let sky_dir = safe_normalize(w_prev, ray);
+        return TraceHit3D(vec4(0.0, phi, 0.0, 2.0), sky_dir);
+    }
+    return TraceHit3D(vec4(0.0, 0.0, 0.0, 0.0), ray);
+}
+
+// ── Interior tracer ───────────────────────────────────────────────────────────
+// Returns vec4(r_eff_hit, phi_total_or_hit, f32(n_cross), kind)
+//   kind 0 = captured (fell back to core floor)
+//   kind 1 = surface hit (disk or core shell, depending on mode)
+//   kind 2 = escaped to outside sky
+
+fn trace_interior(bx_in: f32, by_in: f32, core_look: bool) -> vec4<f32> {
+    let ca = cos(P.az); let sa = sin(P.az);
+    let bx = ca * bx_in - sa * by_in;
+    let by = sa * bx_in + ca * by_in;
+    let b = sqrt(bx * bx + by * by);
+    let r_s = P.r_s;
+    let r_c = P.r_c;
+    let r_h = sqrt(max(r_s * r_s - r_c * r_c, 1e-6));
+    let r_cam = clamp(P.r_cam_frac, 0.05, 0.99) * r_h;
+
+    if b < 1e-12 {
+        if core_look {
+            return vec4(r_c, 0.0, 1.0, 1.0);
+        }
+        return vec4(0.0, P.max_phi, 0.0, 2.0);
+    }
+
+    let sin_i = by / b;
+    let is_eq = abs(sin_i) < 1e-6;
+    let vr0_sq = max(orbit_vr_sq(r_cam, b, r_s, r_c), 0.0);
+    var p = select(sqrt(vr0_sq), -sqrt(vr0_sq), core_look); // outward vs inward branch
+    var r = r_cam;
+    var phi = 0.0f;
+    var n_cross = 0u;
+    var turned = false;
+
+    let re_cam = sqrt(r_cam * r_cam + r_c * r_c);
+    let re_cap = re_cam * 1.05;
+    let re_core_cap = max(1.02 * r_c, r_c + 1e-6);
+    let r_escape = max(max(3.0 * b, P.disk_out * 1.5), 20.0 * r_s);
+    let max_steps_nominal = i32(P.max_phi / P.dphi) + 1;
+    let max_steps_cap = select(select(1800, 2800, P.quality_tier >= 1.0), 4200, P.quality_tier >= 1.5);
+    let max_steps = min(max_steps_nominal, max_steps_cap);
+
+    for (var i = 0; i < max_steps; i++) {
+        let s      = rk4(r, p, b, r_s, r_c, P.dphi);
+        let rn     = s.x;
+        let pn_rk4 = s.y;
+        let vr2n   = max(orbit_vr_sq(rn, b, r_s, r_c), 0.0);
+        let pn     = select(-sqrt(vr2n), sqrt(vr2n), pn_rk4 >= 0.0);
+        let phin   = phi + P.dphi;
+        let ren    = sqrt(rn * rn + r_c * r_c);
+
+        if core_look {
+            if ren <= re_core_cap || rn <= r_c * 0.01 {
+                return vec4(ren, phin, 1.0, 1.0);
+            }
+            if p < 0.0 && pn >= 0.0 && rn > r_cam * 1.01 {
+                return vec4(0.0, phin, 0.0, 2.0);
+            }
+        } else {
+            if !turned && p > 0.0 && pn <= 0.0 { turned = true; }
+            if turned && ren < re_cap { return vec4(0.0, phin, 0.0, 0.0); }
+            if !turned && rn >= r_escape { return vec4(0.0, phin, 0.0, 2.0); }
+
+            if is_eq {
+                let re_cur = sqrt(r * r + r_c * r_c);
+                if !turned && re_cur >= P.disk_in && re_cur <= P.disk_out && p > 0.0 {
+                    return vec4(re_cur, phi, 1.0, 1.0);
+                }
+            } else {
+                let phi_target = (f32(n_cross) + 1.0) * 3.14159265359;
+                if phi < phi_target && phin >= phi_target {
+                    let t = (phi_target - phi) / P.dphi;
+                    let r_x = r + t * (rn - r);
+                    let re_x = sqrt(r_x * r_x + r_c * r_c);
+                    n_cross += 1u;
+                    if re_x >= P.disk_in && re_x <= P.disk_out {
+                        return vec4(re_x, phi_target, f32(n_cross), 1.0);
+                    }
+                }
+            }
+        }
+
+        r = rn;
+        p = pn;
+        phi = phin;
+    }
+
+    if core_look {
+        return vec4(re_core_cap, phi, 1.0, 1.0);
+    }
+    if r >= r_escape * 0.5 && !turned { return vec4(0.0, phi, 0.0, 2.0); }
+    return vec4(0.0, phi, 0.0, 0.0);
+}
+
+// ── Disk colour: covariant transfer (CPU/CUDA parity target) ─────────────────
+
+fn disk_transfer_factor(r_eff: f32, r_s: f32, bx_raw: f32, sin_inc: f32) -> f32 {
+    let r_safe = max(r_eff, 1e-6);
+    let g_gr = sqrt(max(1.0 - r_s / r_safe, 0.0));
+    let beta = min(sqrt(max(r_s / (2.0 * r_safe), 0.0)), 0.7);
+    let gamma = 1.0 / sqrt(max(1.0 - beta * beta, 1e-6));
+    let mu = clamp(bx_raw / r_safe, -1.0, 1.0);
+    let beta_obs = beta * sin_inc * mu;
+    let g_dop = 1.0 / (gamma * (1.0 - beta_obs));
+    let g = g_gr * g_dop;
+    return clamp(pow(g, 4.0), 1e-6, 300.0);
+}
+
+fn disk_color(r_eff: f32, n_cross: u32, bx_raw: f32, bg_stars: vec3<f32>) -> vec3<f32> {
     let r_isco = 3.0 * P.r_s;
+    let t_rel = pow(max(r_isco / max(r_eff, 1e-6), 1e-6), 0.75);
+    let excess = max(r_eff - P.disk_out, 0.0) / max(0.5 * P.disk_out, 1e-6);
+    let outer_taper = exp(-excess * excess);
+    let fade = pow(0.65, f32(max(i32(n_cross) - 1, 0)));
+    let transfer = disk_transfer_factor(r_eff, P.r_s, bx_raw, P.sin_inc);
+    let source_local = max(t_rel * fade * outer_taper, 0.0);
+    let g_cov = pow(max(transfer, 1e-9), 0.25);
+    let alpha_base = 0.35 * max(P.tau_scale, 0.0) * (1.0 + f32(max(i32(n_cross) - 1, 0)) * 0.4);
 
-    // Novikov-Thorne temperature profile: T ∝ (r_ISCO/r)^(3/4)
-    let t_nt  = pow(clamp(r_isco / r_eff, 0.01, 1.0), 0.75);
+    var luminance = 0.0;
+    if (P.use_transfer > 0.5) {
+        let steps = 8;
+        let path_scale = max(r_eff / max(P.r_s, 1e-6), 1e-6);
+        var intensity = 0.0;
+        for (var si = 0; si < steps; si++) {
+            let u = (f32(si) + 0.5) / f32(steps);
+            let local_mod = 1.0 + 0.20 * (1.0 - u);
+            let j_obs = max(source_local * local_mod, 0.0) * g_cov * g_cov * g_cov;
+            let alpha_obs = max(alpha_base * (0.7 + 0.6 * u), 0.0) * g_cov;
+            let tau_seg = max(alpha_obs * path_scale / f32(steps), 0.0);
+            let source_fn = select(j_obs, j_obs / alpha_obs, alpha_obs > 1e-12);
+            let e = exp(-tau_seg);
+            intensity = intensity * e + source_fn * (1.0 - e);
+        }
+        luminance = max(intensity, 0.0);
+    } else {
+        luminance = max(source_local * transfer, 0.0);
+    }
 
-    // Gravitational redshift: photons climbing out of the gravitational well
-    let grav  = sqrt(max(1.0 - P.r_s / r_eff, 0.01));
+    let b = luminance / (1.0 + luminance);
+    var disk = vec3(
+        clamp(pow(b, 0.35), 0.0, 1.0),
+        clamp((210.0 / 255.0) * pow(b, 0.60), 0.0, 1.0),
+        clamp((130.0 / 255.0) * pow(b, 1.60), 0.0, 1.0)
+    );
 
-    // Keplerian orbital velocity at r_eff (Schwarzschild, units c = 1)
-    let v_k   = sqrt(max(0.5 * P.r_s / r_eff, 0.0));
+    if (P.disk_model > 0.5) {
+        let tau = (0.45 * max(P.tau_scale, 0.0))
+            * pow(P.r_s / max(r_eff, 1e-6), 0.7)
+            * (1.0 + f32(max(i32(n_cross) - 1, 0)) * 0.25);
+        let trans = clamp(exp(-tau), 0.0, 1.0);
+        disk = min(disk * 2.5, vec3(1.0));
+        return mix(disk, bg_stars, trans);
+    }
 
-    // Line-of-sight component: sx ≈ r_eff × cos(azimuthal angle)
-    // Approaching side (sx < 0 for prograde): blueshifted → brighter
-    let cos_az = clamp(sx / r_eff, -1.0, 1.0);
-    let beta   = v_k * (-cos_az) * P.sin_inc;   // + = approaching (blueshift)
-
-    // Relativistic Doppler + beaming: I ∝ D³ where D = sqrt((1+β)/(1-β))
-    let D3     = pow(clamp((1.0 + beta) / max(1.0 - beta, 0.01), 0.1, 10.0), 3.0);
-
-    // Higher-order images (photon ring, secondary ring...) are progressively fainter
-    let fade   = pow(0.55, f32(n_cross) - 1.0);
-
-    // Combined specific intensity (not clamped — allow HDR to show bright crescent)
-    let bright = t_nt * grav * D3 * fade;
-
-    // Spectral mapping: dim = deep amber, bright = yellow, very bright = blue-white
-    let b1 = clamp(bright, 0.0, 1.0);
-    let bx = clamp(bright - 1.0, 0.0, 2.0);   // HDR overflow → white/blue glow
-    let r_ch  = clamp(pow(b1, 0.28) + bx * 0.55, 0.0, 1.0);
-    let g_ch  = clamp(pow(b1, 0.62) * 0.88 + bx * 0.50, 0.0, 1.0);
-    let bl_ch = clamp(pow(b1, 2.1)  * 0.42 + bx * 0.45, 0.0, 1.0);
-    return vec4(r_ch, g_ch, bl_ch, 1.0);
+    return disk;
 }
 
 // ── Vertex / Fragment ─────────────────────────────────────────────────────────
@@ -266,27 +629,54 @@ fn vs(@builtin(vertex_index) vi: u32) -> VOut {
     return VOut(vec4(xy[vi], 0.0, 1.0));
 }
 
-@fragment
-fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
-    let scale = 2.0 * P.fov * P.r_s / P.width;
-    let sx = (frag.x - P.width  * 0.5) * scale;
-    let sy = (P.height * 0.5 - frag.y) * scale;
-
-    let bx = sx;
-    let by = sy * P.sin_inc;
-
-    let hit  = trace(bx, by);
+fn shade_sample(sx: f32, sy: f32) -> vec3<f32> {
+    // Camera roll rotates the screen-space sampling basis.
+    let cr = cos(P.cam_roll);
+    let sr = sin(P.cam_roll);
+    let sxr = cr * sx - sr * sy;
+    let syr = sr * sx + cr * sy;
+    let interior = P.interior_mode > 0.5;
+    let core_look = P.core_look_mode > 0.5;
+    var hit: vec4<f32>;
+    var sky_dir = safe_normalize(vec3(sxr, syr, P.r_s), vec3(0.0, 0.0, 1.0));
+    if interior {
+        let bx = sxr;
+        let by = syr * P.sin_inc;
+        hit = trace_interior(bx, by, core_look);
+    } else {
+        let t3 = trace_true3d(sxr, syr);
+        hit = t3.hit;
+        sky_dir = t3.sky_dir;
+    }
     let kind = hit.w;
 
     // Shadow — pure black
-    if kind < 0.5 { return vec4(0.0, 0.0, 0.0, 1.0); }
+    if kind < 0.5 {
+        if interior && !core_look {
+            // Interior floor glow for returned (non-escaping) outward rays.
+            let bx = sxr;
+            let by = syr * P.sin_inc;
+            let b = sqrt(bx * bx + by * by);
+            let b_crit = 1.5 * sqrt(3.0) * P.r_s;
+            let x = clamp((b / max(b_crit, 1e-6) - 1.0) * 2.4 + 0.5, 0.0, 1.0);
+            return vec3(0.20 + 0.70 * x, 0.10 + 0.45 * x, 0.03 + 0.18 * x);
+        }
+        return vec3(0.0, 0.0, 0.0);
+    }
 
     // Disk hit — Novikov-Thorne + Doppler + gravitational redshift
     // For Doppler, use the x-component in the disk frame (rotated by azimuth),
     // so the bright crescent stays on the correct side when azimuth is changed.
     if kind < 1.5 {
-        let sx_disk = cos(P.az) * sx - sin(P.az) * sy;
-        return disk_color(hit.x, u32(hit.z), sx_disk);
+        if interior && core_look {
+            // Pure-physics-style core palette from traced invariants.
+            let rr = clamp(hit.x / max(P.r_c * 2.4, 1e-6), 0.0, 1.0);
+            let swirl = 0.5 + 0.5 * sin(8.0 * hit.y + 2.0 * sxr / max(P.r_s, 1e-6));
+            return vec3(0.22 + 0.63 * (1.0 - rr), 0.12 + 0.42 * (1.0 - rr), 0.04 + 0.16 * swirl * (1.0 - rr));
+        }
+        let sx_disk = cos(P.az) * sxr - sin(P.az) * syr;
+        let stars = starfield_from_dir(sky_dir);
+        return disk_color(hit.x, u32(hit.z), sx_disk, stars);
     }
 
     // Escaped photon — background with gravitationally lensed star field
@@ -296,24 +686,46 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     // is the deflection angle. We reverse-rotate the sky direction by delta so
     // stars appear at their true (source) positions, giving lensing arcs near
     // the photon sphere automatically.
-    let phi_total  = hit.y;
-    let deflection = phi_total - 3.14159265359;
-    let cd = cos(deflection);
-    let sd = sin(deflection);
-    let sky = vec2(cd * sx - sd * sy,
-                   sd * sx + cd * sy);
+    let stars = starfield_from_dir(sky_dir);
 
-    let stars = starfield(sky);
+    return stars;
+}
 
-    // Very faint blue-purple nebula haze, brighter near image edges
-    let r_dist = length(vec2(sx, sy)) / max(P.r_s * P.fov, 0.01);
-    let nebula = vec3(
-        0.002 + 0.003 * r_dist * r_dist,
-        0.001 + 0.001 * r_dist,
-        0.010 + 0.012 * r_dist,
-    );
+@fragment
+fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
+    let min_dim = max(min(P.width, P.height), 1.0);
+    let scale = 2.0 * P.fov * P.r_s / min_dim;
+    var frag_xy = frag.xy;
+    if (P.quality_tier < 0.5) {
+        // Quarter-rate shading on low tier (2x2 pixel blocks share one sample).
+        frag_xy = floor(frag.xy * 0.5) * 2.0 + vec2(1.0, 1.0);
+    }
 
-    return vec4(nebula + stars, 1.0);
+    var col = vec3(0.0, 0.0, 0.0);
+    if (P.quality_tier < 0.5) {
+        // Low-memory mode: one sample/pixel.
+        col = shade_sample(
+            (frag_xy.x - P.width * 0.5) * scale,
+            (P.height * 0.5 - frag_xy.y) * scale
+        );
+    } else if (P.quality_tier < 1.5) {
+        // Medium mode: single sample (keeps controls snappy at 1080p+).
+        col = shade_sample(
+            (frag.x - P.width * 0.5) * scale,
+            (P.height * 0.5 - frag.y) * scale
+        );
+    } else {
+        // High mode: 2-sample diagonal supersampling (not 2x2) for speed.
+        let o = 0.25;
+        let c00 = shade_sample((frag.x - o - P.width * 0.5) * scale, (P.height * 0.5 - (frag.y - o)) * scale);
+        let c11 = shade_sample((frag.x + o - P.width * 0.5) * scale, (P.height * 0.5 - (frag.y + o)) * scale);
+        col = (c00 + c11) * 0.5;
+    }
+
+    // Filmic-ish tone map + display gamma.
+    col = col / (vec3(1.0) + col);
+    col = pow(col, vec3(1.0 / 2.2));
+    return vec4(col, 1.0);
 }
 "#;
 
@@ -333,7 +745,18 @@ struct Params {
     max_phi:  f32,
     dphi:     f32,
     az:       f32,
-    _pad:     f32,
+    cam_x:    f32,
+    cam_y:    f32,
+    cam_z:    f32,
+    cam_roll: f32,
+    interior_mode:  f32,
+    core_look_mode: f32,
+    r_cam_frac:     f32,
+    quality_tier:   f32,
+    use_transfer:   f32,
+    tau_scale:      f32,
+    disk_model:     f32,
+    _pad1:    f32,
 }
 
 // ── Camera state ──────────────────────────────────────────────────────────────
@@ -344,10 +767,32 @@ struct Camera {
     fov_rs:      f32, // half-width of image in r_s
     disk_outer:  f32, // disk outer radius in r_s
     gutoe_core:  bool, // toggle GUTOE lattice correction
+    interior_mode: bool, // camera placed inside horizon
+    core_look_mode: bool, // interior camera points at lattice core
+    r_cam_frac: f32, // r_cam = r_cam_frac * r_horizon (coordinate)
+    cam_x:       f32, // freecam world-space x offset
+    cam_y:       f32, // freecam world-space y offset
+    cam_z:       f32, // freecam world-space z offset
+    cam_roll:    f32, // camera roll in radians
+    use_transfer: bool,
+    tau_scale: f32,
+    riaf_mode: bool,
 }
 
 impl Default for Camera {
     fn default() -> Self {
+        let use_transfer = std::env::var("BH_USE_TRANSFER")
+            .ok()
+            .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+        let tau_scale = std::env::var("BH_TAU_SCALE")
+            .ok()
+            .and_then(|s| s.parse::<f32>().ok())
+            .unwrap_or(1.0)
+            .max(0.0);
+        let riaf_mode = std::env::var("BH_DISK_MODEL")
+            .ok()
+            .map(|s| s.eq_ignore_ascii_case("riaf") || s.eq_ignore_ascii_case("volumetric"))
+            .unwrap_or(false);
         Self {
             // EHT M87 geometry: ~17° from face-on, bright crescent at bottom.
             // azimuth = -π/2 rotates the disk so the approaching (bright) side is
@@ -357,15 +802,64 @@ impl Default for Camera {
             fov_rs:      7.0,
             disk_outer:  20.0,
             gutoe_core:  true,
+            interior_mode: false,
+            core_look_mode: false,
+            r_cam_frac: 0.72,
+            cam_x:       0.0,
+            cam_y:       0.0,
+            cam_z:       0.0,
+            cam_roll:    0.0,
+            use_transfer,
+            tau_scale,
+            riaf_mode,
         }
     }
 }
 
 impl Camera {
-    fn params(&self, width: f32, height: f32) -> Params {
+    fn move_local(&mut self, forward: f32, right: f32, up: f32, speed: f32) {
+        let inc = self.inclination.to_radians();
+        let (sinc, cinc) = inc.sin_cos();
+        let (saz, caz) = self.azimuth.sin_cos();
+        let fwd = [-sinc * caz, -sinc * saz, -cinc];
+        let mut right_v = [fwd[1], -fwd[0], 0.0];
+        let rn = (right_v[0] * right_v[0] + right_v[1] * right_v[1] + right_v[2] * right_v[2]).sqrt().max(1e-6);
+        right_v[0] /= rn;
+        right_v[1] /= rn;
+        right_v[2] /= rn;
+        let mut up_v = [
+            right_v[1] * fwd[2] - right_v[2] * fwd[1],
+            right_v[2] * fwd[0] - right_v[0] * fwd[2],
+            right_v[0] * fwd[1] - right_v[1] * fwd[0],
+        ];
+        let (sr, cr) = self.cam_roll.sin_cos();
+        let rr = [
+            right_v[0] * cr + up_v[0] * sr,
+            right_v[1] * cr + up_v[1] * sr,
+            right_v[2] * cr + up_v[2] * sr,
+        ];
+        up_v = [
+            -right_v[0] * sr + up_v[0] * cr,
+            -right_v[1] * sr + up_v[1] * cr,
+            -right_v[2] * sr + up_v[2] * cr,
+        ];
+        self.cam_x += (fwd[0] * forward + rr[0] * right + up_v[0] * up) * speed;
+        self.cam_y += (fwd[1] * forward + rr[1] * right + up_v[1] * up) * speed;
+        self.cam_z += (fwd[2] * forward + rr[2] * right + up_v[2] * up) * speed;
+    }
+
+    fn params(&self, width: f32, height: f32, quality_tier: f32) -> Params {
         // r_s = 1 in internal units; r_core = sqrt(C_inf) * l_P
         const C_INF: f32 = 0.5466;
         let r_c = if self.gutoe_core { C_INF.sqrt() } else { 0.0 };
+        // Live-viewer budgets: prioritize responsiveness over offline-grade convergence.
+        let (max_phi, dphi) = if quality_tier < 0.5 {
+            (8.0 * std::f32::consts::PI, 0.030)
+        } else if quality_tier < 1.5 {
+            (12.0 * std::f32::consts::PI, 0.018)
+        } else {
+            (18.0 * std::f32::consts::PI, 0.012)
+        };
         Params {
             r_s:      1.0,
             r_c,
@@ -375,10 +869,21 @@ impl Camera {
             fov:      self.fov_rs,
             width,
             height,
-            max_phi:  20.0 * std::f32::consts::PI,
-            dphi:     0.02,
+            max_phi,
+            dphi,
             az:       self.azimuth,
-            _pad:     0.0,
+            cam_x:    self.cam_x,
+            cam_y:    self.cam_y,
+            cam_z:    self.cam_z,
+            cam_roll: self.cam_roll,
+            interior_mode: if self.interior_mode { 1.0 } else { 0.0 },
+            core_look_mode: if self.core_look_mode { 1.0 } else { 0.0 },
+            r_cam_frac: self.r_cam_frac,
+            quality_tier,
+            use_transfer: if self.use_transfer { 1.0 } else { 0.0 },
+            tau_scale: self.tau_scale,
+            disk_model: if self.riaf_mode { 1.0 } else { 0.0 },
+            _pad1:    0.0,
         }
     }
 }
@@ -386,6 +891,7 @@ impl Camera {
 // ── wgpu resources ────────────────────────────────────────────────────────────
 
 struct Gpu {
+    _instance:  wgpu::Instance,
     surface:    wgpu::Surface<'static>,
     device:     wgpu::Device,
     queue:      wgpu::Queue,
@@ -393,6 +899,32 @@ struct Gpu {
     pipeline:   wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     uni_buf:    wgpu::Buffer,
+    _star_tex:  wgpu::Texture,
+    _star_view: wgpu::TextureView,
+    _star_samp: wgpu::Sampler,
+    quality_tier: f32,
+}
+
+fn detect_quality_tier(adapter_info: &wgpu::AdapterInfo) -> f32 {
+    if let Ok(force) = std::env::var("BH_VIEWER_QUALITY") {
+        let v = force.to_ascii_lowercase();
+        return match v.as_str() {
+            "low" => 0.0,
+            "medium" | "med" => 1.0,
+            "high" => 2.0,
+            _ => 2.0,
+        };
+    }
+    if adapter_info.backend == wgpu::Backend::Metal
+        && adapter_info.device_type == wgpu::DeviceType::IntegratedGpu
+    {
+        let n = adapter_info.name.to_ascii_lowercase();
+        if n.contains("m1") {
+            return 0.0; // safest default for 8 GB M1 class machines
+        }
+        return 1.0;
+    }
+    2.0
 }
 
 impl Gpu {
@@ -402,25 +934,58 @@ impl Gpu {
 
     async fn new_async(window: Arc<Window>) -> Self {
         let size = window.inner_size();
+        let power_pref = if cfg!(target_os = "macos") {
+            wgpu::PowerPreference::LowPower
+        } else {
+            wgpu::PowerPreference::HighPerformance
+        };
+        let try_backend = |backends: wgpu::Backends, window: Arc<Window>| async move {
+            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+                backends,
+                ..Default::default()
+            });
+            let surface = instance.create_surface(window).ok()?;
+            let adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference:       power_pref,
+                    compatible_surface:     Some(&surface),
+                    force_fallback_adapter: false,
+                })
+                .await?;
+            Some((instance, surface, adapter))
+        };
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
-            ..Default::default()
-        });
-        let surface = instance.create_surface(window).unwrap();
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference:       wgpu::PowerPreference::HighPerformance,
-                compatible_surface:     Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .expect("no GPU adapter found — is a display connected?");
+        let backend_override = std::env::var("BH_BACKEND")
+            .ok()
+            .map(|v| v.to_ascii_lowercase());
+        let primary = match backend_override.as_deref() {
+            Some("gl") => wgpu::Backends::GL,
+            Some("vulkan") => wgpu::Backends::VULKAN,
+            Some("metal") => wgpu::Backends::METAL,
+            Some("dx12") => wgpu::Backends::DX12,
+            _ => wgpu::Backends::PRIMARY,
+        };
 
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default(), None)
-            .await
-            .unwrap();
+        let primary_init = try_backend(primary, Arc::clone(&window)).await;
+        let fallback_init = if primary_init.is_none() && cfg!(any(target_os = "linux", target_os = "windows")) {
+            log::warn!("Primary backend init failed; retrying with OpenGL backend");
+            try_backend(wgpu::Backends::GL, Arc::clone(&window)).await
+        } else {
+            None
+        };
+        let (instance, surface, adapter) = primary_init
+            .or(fallback_init)
+            .expect("no GPU adapter found — backend init failed");
+
+        let adapter_info = adapter.get_info();
+        let quality_tier = detect_quality_tier(&adapter_info);
+        log::info!(
+            "Adapter={} backend={:?} type={:?} quality_tier={}",
+            adapter_info.name,
+            adapter_info.backend,
+            adapter_info.device_type,
+            quality_tier
+        );
 
         let caps   = surface.get_capabilities(&adapter);
         let format = caps.formats.iter()
@@ -428,17 +993,59 @@ impl Gpu {
             .find(|f| f.is_srgb())
             .unwrap_or(caps.formats[0]);
 
-        let config = wgpu::SurfaceConfiguration {
+        // Stability first: some NVIDIA/Linux stacks lose device on AutoNoVsync.
+        // Default to FIFO unless explicitly overridden.
+        let present_mode = match std::env::var("BH_PRESENT_MODE")
+            .ok()
+            .map(|s| s.to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("immediate") if caps.present_modes.contains(&wgpu::PresentMode::Immediate) => {
+                wgpu::PresentMode::Immediate
+            }
+            Some("mailbox") if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) => {
+                wgpu::PresentMode::Mailbox
+            }
+            Some("auto") if caps.present_modes.contains(&wgpu::PresentMode::AutoNoVsync) => {
+                wgpu::PresentMode::AutoNoVsync
+            }
+            _ => wgpu::PresentMode::Fifo,
+        };
+        let base_config = wgpu::SurfaceConfiguration {
             usage:        wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
             width:        size.width.max(1),
             height:       size.height.max(1),
-            present_mode: wgpu::PresentMode::AutoNoVsync, // no latency cap — render as fast as GPU allows
+            present_mode,
             alpha_mode:   caps.alpha_modes[0],
             view_formats: vec![],
-            desired_maximum_frame_latency: 1, // minimal latency: submit → present immediately
+            desired_maximum_frame_latency: if quality_tier < 1.0 { 2 } else { 2 },
         };
-        surface.configure(&device, &config);
+
+        // Some drivers report a stale lost device right at startup under load.
+        // Retry device creation + surface configure before giving up.
+        let mut configured = None;
+        for attempt in 1..=4 {
+            let (device, queue) = adapter
+                .request_device(&wgpu::DeviceDescriptor::default(), None)
+                .await
+                .expect("failed to create wgpu device");
+            let config = base_config.clone();
+            let ok = panic::catch_unwind(AssertUnwindSafe(|| {
+                surface.configure(&device, &config);
+            }))
+            .is_ok();
+            if ok {
+                configured = Some((device, queue, config));
+                break;
+            }
+            log::warn!(
+                "surface.configure failed on startup attempt {attempt}/4 (device lost); retrying"
+            );
+            std::thread::sleep(Duration::from_millis(120));
+        }
+        let (device, queue, config) =
+            configured.expect("wgpu surface/device init failed after retries");
 
         // Uniform buffer
         let uni_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -448,27 +1055,139 @@ impl Gpu {
             mapped_at_creation: false,
         });
 
+        // Optional real-sky starmap texture.
+        let (star_tex, star_view) = if let Ok(path) = std::env::var("BH_STARMAP_PATH") {
+            if let Ok(img) = image::open(&path).map(|i| i.to_rgba8()) {
+                let (tw, th) = img.dimensions();
+                let tex = device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("starmap"),
+                    size: wgpu::Extent3d { width: tw, height: th, depth_or_array_layers: 1 },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                });
+                queue.write_texture(
+                    wgpu::ImageCopyTexture {
+                        texture: &tex,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &img,
+                    wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(4 * tw),
+                        rows_per_image: Some(th),
+                    },
+                    wgpu::Extent3d { width: tw, height: th, depth_or_array_layers: 1 },
+                );
+                log::info!("viewer starmap loaded: {} ({}x{})", path, tw, th);
+                let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                (tex, view)
+            } else {
+                log::warn!("viewer starmap failed to load: {}", path);
+                let tex = device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("starmap_fallback"),
+                    size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                });
+                queue.write_texture(
+                    wgpu::ImageCopyTexture { texture: &tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                    &[0_u8, 0_u8, 0_u8, 0_u8],
+                    wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
+                    wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                );
+                let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                (tex, view)
+            }
+        } else {
+            let tex = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("starmap_fallback"),
+                size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            queue.write_texture(
+                wgpu::ImageCopyTexture { texture: &tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                &[0_u8, 0_u8, 0_u8, 0_u8],
+                wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
+                wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+            );
+            let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+            (tex, view)
+        };
+        let star_samp = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("starmap_sampler"),
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
         // Bind group layout
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label:   Some("bgl"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding:    0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty:         wgpu::BindingType::Buffer {
-                    ty:                 wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size:   None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding:    0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty:         wgpu::BindingType::Buffer {
+                        ty:                 wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size:   None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label:  Some("bg"),
             layout: &bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding:  0,
-                resource: uni_buf.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding:  0,
+                    resource: uni_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&star_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&star_samp),
+                },
+            ],
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -506,7 +1225,20 @@ impl Gpu {
             cache:        None,
         });
 
-        Self { surface, device, queue, config, pipeline, bind_group, uni_buf }
+        Self {
+            _instance: instance,
+            surface,
+            device,
+            queue,
+            config,
+            pipeline,
+            bind_group,
+            uni_buf,
+            _star_tex: star_tex,
+            _star_view: star_view,
+            _star_samp: star_samp,
+            quality_tier,
+        }
     }
 
     fn resize(&mut self, w: u32, h: u32) {
@@ -555,44 +1287,324 @@ struct App {
     gpu:          Option<Gpu>,
     camera:       Camera,
     mouse_down:   bool,
+    mouse_right_down: bool,
     last_mouse:   PhysicalPosition<f64>,
     win_size:     (f32, f32), // (width, height) in physical pixels
+    gilrs:        Option<Gilrs>,
+    pad_prev:     PadPrev,
+    held:         HeldKeys,
+    auto_spin:    bool,
+    quality_tier: f32,
+    last_frame_at: Instant,
+    min_frame_dt: Duration,
+    dynamic_quality: bool,
+    perf_window_start: Instant,
+    perf_accum: Duration,
+    perf_frames: u32,
+    avg_frame_ms: f32,
+    over_budget_windows: u32,
+    under_budget_windows: u32,
 }
 
 impl App {
+    fn recreate_gpu(&mut self) {
+        let Some(win) = self.window.as_ref() else { return };
+        log::warn!("Recreating GPU device/surface after loss");
+        let gpu = Gpu::new(Arc::clone(win));
+        self.apply_quality_tier(gpu.quality_tier);
+        self.gpu = Some(gpu);
+    }
+
+    fn safe_resize(&mut self, w: u32, h: u32) {
+        let Some(gpu) = self.gpu.as_mut() else { return };
+        let resized = panic::catch_unwind(AssertUnwindSafe(|| gpu.resize(w, h)));
+        if resized.is_err() {
+            log::warn!("Surface resize panicked (likely device lost); recovering");
+            self.recreate_gpu();
+        }
+    }
+
     fn new() -> Self {
         Self {
             window:     None,
             gpu:        None,
             camera:     Camera::default(),
             mouse_down: false,
+            mouse_right_down: false,
             last_mouse: PhysicalPosition::new(0.0, 0.0),
             win_size:   (800.0, 800.0),
+            gilrs:      Gilrs::new().ok(),
+            pad_prev:   PadPrev::default(),
+            held:       HeldKeys::default(),
+            auto_spin:  false,
+            quality_tier: 2.0,
+            last_frame_at: Instant::now() - Duration::from_millis(16),
+            min_frame_dt: Duration::from_millis(16),
+            dynamic_quality: std::env::var("BH_DYNAMIC_QUALITY")
+                .ok()
+                .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "on" | "ON")),
+            perf_window_start: Instant::now(),
+            perf_accum: Duration::ZERO,
+            perf_frames: 0,
+            avg_frame_ms: 0.0,
+            over_budget_windows: 0,
+            under_budget_windows: 0,
+        }
+    }
+
+    fn apply_quality_tier(&mut self, tier: f32) {
+        self.quality_tier = tier.clamp(0.0, 2.0).round();
+        self.min_frame_dt = if self.quality_tier < 0.5 {
+            Duration::from_millis(33) // ~30 FPS low tier
+        } else if self.quality_tier < 1.5 {
+            Duration::from_millis(22) // ~45 FPS medium tier
+        } else {
+            Duration::from_millis(16) // ~60 FPS high tier
+        };
+    }
+
+    fn button_pressed(now: bool, prev: &mut bool) -> bool {
+        let fired = now && !*prev;
+        *prev = now;
+        fired
+    }
+
+    fn apply_gamepad(&mut self, el: &ActiveEventLoop) {
+        let Some(gilrs) = self.gilrs.as_mut() else { return };
+        while gilrs.next_event().is_some() {}
+        let Some((_, gp)) = gilrs
+            .gamepads()
+            .find(|(_, g)| g.is_connected())
+        else {
+            return;
+        };
+
+        let dead = 0.12_f32;
+        let mut fine = 1.0_f32;
+        if gp.is_pressed(Button::LeftThumb) {
+            fine *= 0.35;
+        }
+        if gp.is_pressed(Button::RightThumb) {
+            fine *= 2.2;
+        }
+
+        let lx = {
+            let v = gp.value(Axis::LeftStickX);
+            if v.abs() > dead { v } else { 0.0 }
+        };
+        let ly = {
+            let v = gp.value(Axis::LeftStickY);
+            if v.abs() > dead { v } else { 0.0 }
+        };
+        let rx = {
+            let v = gp.value(Axis::RightStickX);
+            if v.abs() > dead { v } else { 0.0 }
+        };
+        let ry = {
+            let v = gp.value(Axis::RightStickY);
+            if v.abs() > dead { v } else { 0.0 }
+        };
+        let lt = gp.value(Axis::LeftZ).max(0.0);
+        let rt = gp.value(Axis::RightZ).max(0.0);
+
+        let mut dirty = false;
+        if rx != 0.0 || ry != 0.0 {
+            self.camera.azimuth += rx * 0.06 * fine;
+            self.camera.inclination = (self.camera.inclination + ry * 1.8 * fine).clamp(1.0, 90.0);
+            dirty = true;
+        }
+        if lx != 0.0 || ly != 0.0 {
+            self.camera.move_local(-ly, lx, 0.0, 0.28 * fine);
+            dirty = true;
+        }
+        if lt > 0.02 || rt > 0.02 {
+            self.camera.move_local(0.0, 0.0, rt - lt, 0.30 * fine);
+            dirty = true;
+        }
+
+        if gp.is_pressed(Button::LeftTrigger) {
+            self.camera.disk_outer = (self.camera.disk_outer - 0.10 * fine).clamp(3.5, 30.0);
+            dirty = true;
+        }
+        if gp.is_pressed(Button::RightTrigger) {
+            self.camera.disk_outer = (self.camera.disk_outer + 0.10 * fine).clamp(3.5, 30.0);
+            dirty = true;
+        }
+        if gp.is_pressed(Button::DPadLeft) {
+            self.camera.azimuth -= std::f32::consts::PI / 240.0 * fine;
+            dirty = true;
+        }
+        if gp.is_pressed(Button::DPadRight) {
+            self.camera.azimuth += std::f32::consts::PI / 240.0 * fine;
+            dirty = true;
+        }
+        if gp.is_pressed(Button::DPadUp) {
+            self.camera.inclination = (self.camera.inclination + 0.20 * fine).min(90.0);
+            dirty = true;
+        }
+        if gp.is_pressed(Button::DPadDown) {
+            self.camera.inclination = (self.camera.inclination - 0.20 * fine).max(1.0);
+            dirty = true;
+        }
+
+        if Self::button_pressed(gp.is_pressed(Button::South), &mut self.pad_prev.south) {
+            self.camera.gutoe_core = !self.camera.gutoe_core;
+            dirty = true;
+        }
+        if Self::button_pressed(gp.is_pressed(Button::East), &mut self.pad_prev.east) {
+            self.camera = Camera::default();
+            self.auto_spin = false;
+            dirty = true;
+        }
+        if Self::button_pressed(gp.is_pressed(Button::West), &mut self.pad_prev.west) {
+            self.camera.disk_outer = if self.camera.disk_outer < 12.0 { 20.0 } else { 10.0 };
+            dirty = true;
+        }
+        if Self::button_pressed(gp.is_pressed(Button::North), &mut self.pad_prev.north) {
+            self.camera.fov_rs = if self.camera.fov_rs < 8.0 { 14.0 } else { 7.0 };
+            dirty = true;
+        }
+        if Self::button_pressed(gp.is_pressed(Button::Start), &mut self.pad_prev.start) {
+            self.auto_spin = !self.auto_spin;
+        }
+        if Self::button_pressed(gp.is_pressed(Button::Select), &mut self.pad_prev.select) {
+            self.camera.azimuth = -std::f32::consts::FRAC_PI_2;
+            dirty = true;
+        }
+
+        // Combos: safe and memorable.
+        let lb = gp.is_pressed(Button::LeftTrigger);
+        let rb = gp.is_pressed(Button::RightTrigger);
+        if lb && rb && Self::button_pressed(gp.is_pressed(Button::Mode), &mut self.pad_prev.mode) {
+            el.exit();
+            return;
+        }
+        let lz_pressed = lt > 0.7;
+        let rz_pressed = rt > 0.7;
+        if lz_pressed
+            && rz_pressed
+            && Self::button_pressed(gp.is_pressed(Button::West), &mut self.pad_prev.left_thumb)
+        {
+            self.camera = Camera::default();
+            self.camera.gutoe_core = true;
+            self.auto_spin = false;
+            dirty = true;
+        }
+        if self.auto_spin {
+            self.camera.azimuth += 0.008 * fine;
+            dirty = true;
+        }
+
+        if dirty {
+            self.update_title();
+            self.push_frame();
         }
     }
 
     fn update_title(&self) {
         let Some(win) = self.window.as_ref() else { return };
         let core = if self.camera.gutoe_core { "GUTOE r_c" } else { "GR" };
+        let cam_mode = if self.camera.interior_mode {
+            if self.camera.core_look_mode { "inside→core" } else { "inside→out" }
+        } else {
+            "outside"
+        };
+        let spin = if self.auto_spin { " spin" } else { "" };
         let az_deg = self.camera.azimuth.to_degrees().rem_euclid(360.0);
+        let roll_deg = self.camera.cam_roll.to_degrees();
         win.set_title(&format!(
-            "GUTOE BH  |  inc {:.0}°  az {:.0}°  fov {:.1} r_s  disk {:.0} r_s  [{}]",
-            self.camera.inclination, az_deg, self.camera.fov_rs, self.camera.disk_outer, core,
+            "GUTOE BH  |  q{} {:.1}ms  {} r={:.2}r_h  inc {:.0}° az {:.0}° roll {:+.0}°  fov {:.1} r_s  disk {:.0} r_s  cam({:+.2},{:+.2},{:+.2})  [3D {}{}]",
+            self.quality_tier as i32,
+            self.avg_frame_ms,
+            cam_mode,
+            self.camera.r_cam_frac,
+            self.camera.inclination,
+            az_deg,
+            roll_deg,
+            self.camera.fov_rs,
+            self.camera.disk_outer,
+            self.camera.cam_x,
+            self.camera.cam_y,
+            self.camera.cam_z,
+            core,
+            spin,
         ));
     }
 
     fn push_frame(&mut self) {
-        let Some(gpu) = self.gpu.as_mut() else { return };
+        // Frame pacing: prevents redraw storms from input/event bursts on Metal.
+        let now = Instant::now();
+        if now.duration_since(self.last_frame_at) < self.min_frame_dt {
+            return;
+        }
+        self.last_frame_at = now;
+
         let Some(win) = self.window.as_ref() else { return };
+        let frame_start = Instant::now();
         let sz = win.inner_size();
-        let params = self.camera.params(sz.width as f32, sz.height as f32);
-        gpu.upload_params(&params);
-        match gpu.render() {
+        let params = self.camera.params(sz.width as f32, sz.height as f32, self.quality_tier);
+        let render_result = {
+            let Some(gpu) = self.gpu.as_mut() else { return };
+            gpu.upload_params(&params);
+            gpu.render()
+        };
+        match render_result {
             Ok(_) => {}
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                gpu.resize(sz.width, sz.height);
+                self.safe_resize(sz.width, sz.height);
+            }
+            Err(wgpu::SurfaceError::OutOfMemory) => {
+                log::error!("Surface out of memory; recreating GPU at lower quality");
+                if self.quality_tier > 0.5 {
+                    self.apply_quality_tier(self.quality_tier - 1.0);
+                }
+                self.recreate_gpu();
             }
             Err(e) => log::error!("render error: {e}"),
+        }
+
+        // Rolling perf window + adaptive quality downshift/upshift.
+        let frame_dt = frame_start.elapsed();
+        self.perf_accum += frame_dt;
+        self.perf_frames += 1;
+        let window_elapsed = self.perf_window_start.elapsed();
+        if self.perf_frames >= 45 || window_elapsed >= Duration::from_secs(2) {
+            self.avg_frame_ms =
+                (self.perf_accum.as_secs_f64() * 1000.0 / (self.perf_frames.max(1) as f64)) as f32;
+            if self.dynamic_quality {
+                let budget_ms = self.min_frame_dt.as_secs_f32() * 1000.0;
+                if self.avg_frame_ms > budget_ms * 1.35 {
+                    self.over_budget_windows += 1;
+                    self.under_budget_windows = 0;
+                } else if self.avg_frame_ms < budget_ms * 0.70 {
+                    self.under_budget_windows += 1;
+                    self.over_budget_windows = 0;
+                } else {
+                    self.over_budget_windows = 0;
+                    self.under_budget_windows = 0;
+                }
+                if self.over_budget_windows >= 2 && self.quality_tier > 0.5 {
+                    self.apply_quality_tier(self.quality_tier - 1.0);
+                    self.over_budget_windows = 0;
+                    log::warn!(
+                        "Adaptive quality downshift -> q{} (avg {:.1} ms)",
+                        self.quality_tier as i32,
+                        self.avg_frame_ms
+                    );
+                } else if self.under_budget_windows >= 6 && self.quality_tier < 1.5 {
+                    self.apply_quality_tier(self.quality_tier + 1.0);
+                    self.under_budget_windows = 0;
+                    log::info!(
+                        "Adaptive quality upshift -> q{} (avg {:.1} ms)",
+                        self.quality_tier as i32,
+                        self.avg_frame_ms
+                    );
+                }
+            }
+            self.perf_window_start = Instant::now();
+            self.perf_accum = Duration::ZERO;
+            self.perf_frames = 0;
+            self.update_title();
         }
     }
 }
@@ -610,9 +1622,11 @@ impl ApplicationHandler for App {
         let sz = win.inner_size();
         self.win_size = (sz.width.max(1) as f32, sz.height.max(1) as f32);
         let gpu = Gpu::new(Arc::clone(&win));
+        self.apply_quality_tier(gpu.quality_tier);
         self.window = Some(win);
         self.gpu    = Some(gpu);
         self.update_title();
+        self.push_frame();
     }
 
     fn window_event(&mut self, el: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -620,43 +1634,72 @@ impl ApplicationHandler for App {
             // ── Quit ──────────────────────────────────────────────────────────
             WindowEvent::CloseRequested => el.exit(),
 
-            WindowEvent::KeyboardInput { event: KeyEvent { logical_key, state: ElementState::Pressed, .. }, .. } => {
+            WindowEvent::KeyboardInput { event: KeyEvent { logical_key, state, .. }, .. } => {
+                let pressed = state == ElementState::Pressed;
                 match logical_key {
-                    Key::Named(NamedKey::Escape) => el.exit(),
-                    Key::Named(NamedKey::ArrowUp) => {
-                        // Arrow up = tilt toward edge-on
+                    Key::Named(NamedKey::Escape) if pressed => el.exit(),
+                    Key::Named(NamedKey::ArrowUp) if pressed => {
                         self.camera.inclination = (self.camera.inclination + 5.0).min(90.0);
                         self.update_title(); self.push_frame();
                     }
-                    Key::Named(NamedKey::ArrowDown) => {
-                        // Arrow down = tilt toward face-on
+                    Key::Named(NamedKey::ArrowDown) if pressed => {
                         self.camera.inclination = (self.camera.inclination - 5.0).max(1.0);
                         self.update_title(); self.push_frame();
                     }
-                    Key::Named(NamedKey::ArrowLeft) => {
-                        self.camera.azimuth -= std::f32::consts::PI / 12.0; // 15° per press
+                    Key::Named(NamedKey::ArrowLeft) if pressed => {
+                        self.camera.azimuth -= std::f32::consts::PI / 12.0;
                         self.update_title(); self.push_frame();
                     }
-                    Key::Named(NamedKey::ArrowRight) => {
+                    Key::Named(NamedKey::ArrowRight) if pressed => {
                         self.camera.azimuth += std::f32::consts::PI / 12.0;
                         self.update_title(); self.push_frame();
                     }
                     Key::Character(ref s) => match s.as_str() {
-                        "q" | "Q" => el.exit(),
-                        "r" | "R" => {
+                        "q" | "Q" if pressed => el.exit(),
+                        "r" | "R" if pressed => {
                             self.camera = Camera::default();
                             self.update_title(); self.push_frame();
                         }
-                        "g" | "G" => {
+                        "w" | "W" => self.held.fwd = pressed,
+                        "s" | "S" => self.held.back = pressed,
+                        "a" | "A" => self.held.left = pressed,
+                        "d" | "D" => self.held.right = pressed,
+                        "z" | "Z" => self.held.zoom_in = pressed,
+                        "x" | "X" => self.held.zoom_out = pressed,
+                        "e" | "E" => self.held.roll_pos = pressed,
+                        "c" | "C" => self.held.roll_neg = pressed,
+                        "i" | "I" if pressed => {
+                            self.camera.interior_mode = !self.camera.interior_mode;
+                            if !self.camera.interior_mode {
+                                self.camera.core_look_mode = false;
+                            }
+                            self.update_title(); self.push_frame();
+                        }
+                        "o" | "O" if pressed => {
+                            self.camera.core_look_mode = !self.camera.core_look_mode;
+                            if self.camera.core_look_mode {
+                                self.camera.interior_mode = true;
+                            }
+                            self.update_title(); self.push_frame();
+                        }
+                        "[" if pressed => {
+                            self.camera.r_cam_frac = (self.camera.r_cam_frac - 0.02).clamp(0.05, 0.99);
+                            self.update_title(); self.push_frame();
+                        }
+                        "]" if pressed => {
+                            self.camera.r_cam_frac = (self.camera.r_cam_frac + 0.02).clamp(0.05, 0.99);
+                            self.update_title(); self.push_frame();
+                        }
+                        "g" | "G" if pressed => {
                             self.camera.gutoe_core = !self.camera.gutoe_core;
                             log::info!("GUTOE lattice core: {}", self.camera.gutoe_core);
                             self.update_title(); self.push_frame();
                         }
-                        "=" | "+" => {
+                        "=" | "+" if pressed => {
                             self.camera.disk_outer = (self.camera.disk_outer + 1.0).min(30.0);
                             self.update_title(); self.push_frame();
                         }
-                        "-" => {
+                        "-" if pressed => {
                             self.camera.disk_outer = (self.camera.disk_outer - 1.0).max(3.5);
                             self.update_title(); self.push_frame();
                         }
@@ -669,30 +1712,37 @@ impl ApplicationHandler for App {
             // ── Resize ────────────────────────────────────────────────────────
             WindowEvent::Resized(size) => {
                 self.win_size = (size.width.max(1) as f32, size.height.max(1) as f32);
-                if let Some(gpu) = self.gpu.as_mut() {
-                    gpu.resize(size.width, size.height);
-                    self.push_frame();
-                }
+                self.safe_resize(size.width, size.height);
+                self.push_frame();
             }
 
             // ── Mouse ─────────────────────────────────────────────────────────
-            WindowEvent::MouseInput { button: MouseButton::Left, state, .. } => {
-                self.mouse_down = state == ElementState::Pressed;
+            WindowEvent::MouseInput { button, state, .. } => {
+                match button {
+                    MouseButton::Left => self.mouse_down = state == ElementState::Pressed,
+                    MouseButton::Right => self.mouse_right_down = state == ElementState::Pressed,
+                    _ => {}
+                }
             }
 
             WindowEvent::CursorMoved { position, .. } => {
-                if self.mouse_down {
+                if self.mouse_down || self.mouse_right_down {
                     let dx = (position.x - self.last_mouse.x) as f32;
                     let dy = (position.y - self.last_mouse.y) as f32;
                     let (w, h) = self.win_size;
 
-                    // Vertical drag → inclination: full-height drag = 90° swing
-                    // (screen-relative so it feels the same on any resolution/DPI)
-                    self.camera.inclination =
-                        (self.camera.inclination - dy * 90.0 / h).clamp(1.0, 90.0);
-
-                    // Horizontal drag → azimuth: full-width drag = one full rotation
-                    self.camera.azimuth -= dx * std::f32::consts::TAU / w;
+                    if self.mouse_down {
+                        // Left drag = look.
+                        self.camera.inclination =
+                            (self.camera.inclination - dy * 90.0 / h).clamp(1.0, 90.0);
+                        self.camera.azimuth -= dx * std::f32::consts::TAU / w;
+                    }
+                    if self.mouse_right_down {
+                        // Right drag = translate in camera plane (HL-style noclip feel).
+                        let strafe = -dx / w * self.camera.fov_rs * 1.8;
+                        let lift = dy / h * self.camera.fov_rs * 1.8;
+                        self.camera.move_local(0.0, strafe, lift, 1.0);
+                    }
 
                     self.update_title();
                     self.push_frame();
@@ -721,7 +1771,38 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _el: &ActiveEventLoop) {
+        self.apply_gamepad(_el);
+        // Continuous keyboard motion (WASD-style noclip).
+        let mut moved = false;
+        let speed = 0.12;
+        if self.held.fwd || self.held.back || self.held.left || self.held.right || self.held.up || self.held.down {
+            let forward = (self.held.fwd as i32 - self.held.back as i32) as f32;
+            let right = (self.held.right as i32 - self.held.left as i32) as f32;
+            let up = (self.held.up as i32 - self.held.down as i32) as f32;
+            self.camera.move_local(forward, right, up, speed);
+            moved = true;
+        }
+        if self.held.roll_pos {
+            self.camera.cam_roll += std::f32::consts::PI / 180.0 * 1.8;
+            moved = true;
+        }
+        if self.held.roll_neg {
+            self.camera.cam_roll -= std::f32::consts::PI / 180.0 * 1.8;
+            moved = true;
+        }
+        if self.held.zoom_in {
+            self.camera.move_local(1.0, 0.0, 0.0, speed);
+            moved = true;
+        }
+        if self.held.zoom_out {
+            self.camera.move_local(-1.0, 0.0, 0.0, speed);
+            moved = true;
+        }
+        if moved {
+            self.update_title();
+        }
         if let Some(win) = self.window.as_ref() {
+            // Always redraw for responsive controls; frame pacing still limits GPU load.
             win.request_redraw();
         }
     }
@@ -739,16 +1820,36 @@ fn main() {
     println!("           Lensed star field · Hawking temperature · singularity-free core");
     println!("  Default: M87-like — 17° inclination, bright crescent at bottom");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    println!("  Drag (vertical)    — inclination: 0°=face-on  90°=edge-on [↑↓ 5°/step]");
-    println!("  Drag (horizontal)  — disk azimuth / rotate bright crescent  [←→ 15°/step]");
+    println!("  Left-drag          — look (yaw/pitch), HL2-style freecam");
+    println!("  Right-drag         — translate camera in view plane");
     println!("  Scroll             — zoom (field of view in units of r_s)");
+    println!("  WASD               — freecam noclip strafe/forward in camera-local frame");
+    println!("  Z / X              — freecam dolly in/out");
+    println!("  E / C              — roll camera clockwise/counterclockwise");
+    println!("  I                  — toggle outside/inside horizon camera");
+    println!("  O                  — toggle inside-core look mode");
+    println!("  [ / ]              — interior camera radius (r_cam/r_h)");
     println!("  + / -              — disk outer radius (grow / shrink accretion disk)");
     println!("  G                  — toggle GUTOE lattice core r_c  (GR ↔ GUTOE)");
     println!("  R                  — reset to M87-like defaults");
     println!("  Q / Escape         — quit");
+    println!("  Gamepad (Xbox / DualSense):");
+    println!("    LS move (strafe/forward) · RS look (yaw/pitch) · LT/RT up/down");
+    println!("    L1/R1 (or LB/RB) disk size");
+    println!("    D-pad nudge camera · A toggle GUTOE/GR · B reset · X disk preset · Y fov preset");
+    println!("    Start auto-spin · Back recenter azimuth · LB+RB+Guide quit");
+    println!("    LT+RT+X hard reset (default M87 + GUTOE core)");
     println!("  Title bar shows live: inclination, azimuth, fov, disk size, mode");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-    let ev = EventLoop::new().unwrap();
-    ev.run_app(&mut App::new()).unwrap();
+    let ev = match EventLoop::new() {
+        Ok(ev) => ev,
+        Err(e) => {
+            eprintln!("failed to create event loop: {e}");
+            return;
+        }
+    };
+    if let Err(e) = ev.run_app(&mut App::new()) {
+        eprintln!("viewer runtime error: {e}");
+    }
 }
