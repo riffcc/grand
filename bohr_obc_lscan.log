@@ -1,0 +1,23 @@
+warning: gutoe-gpu@0.1.0: Compiling HIP kernels for ROCm...
+   Compiling gutoe-gpu v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-gpu)
+    Finished `release` profile [optimized] target(s) in 4.12s
+     Running unittests src/lib.rs (/tmp/gutoe-gpu-target/release/deps/gutoe_gpu-314fe8f8051bf594)
+
+running 1 test
+
+  GUTOE OBC L-scan (α=0.1, open BC, n_iter=34K, dtau=0.05) — Rocm
+       L      L/a₀     E_total       −α²/2         C
+       ─         ─           ─           ─         ─
+  L=161 (4173281 sites, n_jacobi=25000)…
+test tests::bohr_obc_lscan has been running for over 60 seconds
+     161      16.1   -0.002166   -0.005000    0.4332
+  L=241 (13997521 sites, n_jacobi=54000)…
+     241      24.1   -0.002352   -0.005000    0.4704
+  L=321 (33076161 sites, n_jacobi=96000)…
+     321      32.1   -0.002447   -0.005000    0.4894
+  L=481 (111284641 sites, n_jacobi=216000)…
+     481      48.1   -0.002542   -0.005000    0.5084
+test tests::bohr_obc_lscan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 7408.33s
+

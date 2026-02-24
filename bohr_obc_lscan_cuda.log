@@ -1,0 +1,30 @@
+   Compiling libc v0.2.182
+   Compiling zerocopy v0.8.39
+   Compiling cfg-if v1.0.4
+   Compiling autocfg v1.5.0
+   Compiling gutoe-gpu v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-gpu)
+   Compiling num-traits v0.2.19
+   Compiling num-complex v0.4.6
+   Compiling getrandom v0.2.17
+   Compiling rand_core v0.6.4
+warning: gutoe-gpu@0.1.0: Compiling CUDA kernels for sm_89...
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_chacha v0.3.1
+   Compiling rand v0.8.5
+   Compiling gutoe-em v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-em)
+    Finished `release` profile [optimized] target(s) in 6.67s
+     Running unittests src/lib.rs (/tmp/gutoe-gpu-target-cuda/release/deps/gutoe_gpu-76f81a78f0e179ad)
+
+running 1 test
+
+  GUTOE OBC L-scan (α=0.1, open BC, n_iter=34K, dtau=0.05) — Cuda
+       L      L/a₀     E_total       −α²/2         C
+       ─         ─           ─           ─         ─
+  L=161 (4173281 sites, n_jacobi=25000)…
+     161      16.1   -0.002166   -0.005000    0.4332
+  L=241 (13997521 sites, n_jacobi=54000)…
+test tests::bohr_obc_lscan has been running for over 60 seconds
+     241      24.1   -0.002352   -0.005000    0.4704
+  L=321 (33076161 sites, n_jacobi=96000)…
+     321      32.1   -0.002447   -0.005000    0.4894
+  L=481 (111284641 sites, n_jacobi=216000)…

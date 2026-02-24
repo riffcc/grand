@@ -1,0 +1,18 @@
+warning: gutoe-gpu@0.1.0: Compiling HIP kernels for ROCm...
+    Finished `release` profile [optimized] target(s) in 0.39s
+     Running unittests src/lib.rs (/tmp/gutoe-gpu-target-rocm-sor/release/deps/gutoe_gpu-314fe8f8051bf594)
+
+running 1 test
+
+  GUTOE OBC L=961 (α=0.1, n_sor=2000, n_iter=10000, dtau=0.05) — Rocm
+  L=961 (887503681 sites, 35.5 GB φ+ψ)
+  GPU memory: 15.31 GiB free / 15.49 GiB total
+  Need: 39.67 GiB (rho+phi+psi+psi2)
+  Allocating d_rho  (6.61 GiB)...
+  Allocating d_phi  (6.61 GiB)...
+  Allocating d_psi  (13.22 GiB)...
+CUDA error out of memory at kernels/cuda_main.cu:493
+error: test failed, to rerun pass `-p gutoe-gpu --lib`
+
+Caused by:
+  process didn't exit successfully: `/tmp/gutoe-gpu-target-rocm-sor/release/deps/gutoe_gpu-314fe8f8051bf594 bohr_obc_l960 --nocapture` (exit status: 1)

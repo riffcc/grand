@@ -1,0 +1,22 @@
+   Compiling libc v0.2.182
+   Compiling zerocopy v0.8.39
+   Compiling autocfg v1.5.0
+   Compiling cfg-if v1.0.4
+   Compiling gutoe-gpu v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-gpu)
+   Compiling num-traits v0.2.19
+warning: gutoe-gpu@0.1.0: Compiling HIP kernels for ROCm...
+error: failed to run custom build command for `gutoe-gpu v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-gpu)`
+
+Caused by:
+  process didn't exit successfully: `/tmp/gutoe-gpu-target-rocm-xnack/release/build/gutoe-gpu-ca7f3c74cdf5e517/build-script-build` (exit status: 101)
+  --- stdout
+  cargo:warning=Compiling HIP kernels for ROCm...
+
+  --- stderr
+  clang++: error: invalid target ID 'gfx1151:xnack+'; format is a processor name followed by an optional colon-delimited list of features followed by an enable/disable sign (e.g., 'gfx908:sramecc+:xnack-')
+  failed to execute:/opt/rocm/lib/llvm/bin/clang++  --offload-arch=gfx1151:xnack+  -O3 -fPIC -D__HIP_PLATFORM_AMD__ -c -x hip kernels/cuda_main.cu -o "/tmp/gutoe-gpu-target-rocm-xnack/release/build/gutoe-gpu-f2bc2afee211bc97/out/hip_main.o"
+
+  thread 'main' (4461) panicked at crates/gutoe-gpu/build.rs:90:13:
+  hipcc compilation failed
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+warning: build failed, waiting for other jobs to finish...

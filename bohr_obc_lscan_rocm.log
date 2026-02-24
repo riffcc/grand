@@ -1,0 +1,16 @@
+    Blocking waiting for file lock on package cache
+warning: gutoe-gpu@0.1.0: Compiling HIP kernels for ROCm...
+    Finished `release` profile [optimized] target(s) in 0.48s
+     Running unittests src/lib.rs (/tmp/gutoe-gpu-target/release/deps/gutoe_gpu-314fe8f8051bf594)
+
+running 1 test
+
+  GUTOE OBC L-scan (α=0.1, open BC, n_iter=34K, dtau=0.05) — Rocm
+       L      L/a₀     E_total       −α²/2         C
+       ─         ─           ─           ─         ─
+  L=161 (4173281 sites, n_jacobi=500)…
+test tests::bohr_obc_lscan has been running for over 60 seconds
+     161      16.1   -0.002170   -0.005000    0.4340
+  L=241 (13997521 sites, n_jacobi=700)…
+     241      24.1   -0.002356   -0.005000    0.4711
+  L=321 (33076161 sites, n_jacobi=1000)…

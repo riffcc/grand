@@ -1,0 +1,35 @@
+   Compiling libc v0.2.182
+   Compiling zerocopy v0.8.39
+   Compiling cfg-if v1.0.4
+   Compiling autocfg v1.5.0
+   Compiling gutoe-gpu v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-gpu)
+   Compiling num-traits v0.2.19
+   Compiling num-complex v0.4.6
+   Compiling getrandom v0.2.17
+   Compiling rand_core v0.6.4
+warning: gutoe-gpu@0.1.0: Compiling HIP kernels for ROCm...
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_chacha v0.3.1
+   Compiling rand v0.8.5
+   Compiling gutoe-em v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-em)
+    Finished `release` profile [optimized] target(s) in 7.20s
+     Running unittests src/lib.rs (/tmp/gutoe-gpu-target-rocm-sor/release/deps/gutoe_gpu-314fe8f8051bf594)
+
+running 1 test
+
+  GUTOE OBC L=961 (α=0.1, n_sor=2000, n_iter=10000, dtau=0.05) — Rocm
+  L=961 (887503681 sites, 35.5 GB φ+ψ)
+  GPU memory: 95.82 GiB free / 96.00 GiB total
+  Need: 39.67 GiB (rho+phi+psi+psi2)
+  Allocating d_rho  (6.61 GiB)...
+  Allocating d_phi  (6.61 GiB)...
+  Allocating d_psi  (13.22 GiB)...
+  Allocating d_psi2 (13.22 GiB)...
+  Allocating reduction buffers...
+  All allocations succeeded!
+  Post-alloc GPU memory: 56.05 GiB free / 96.00 GiB total
+  Zeroing d_phi (6.61 GiB)...
+error: test failed, to rerun pass `-p gutoe-gpu --lib`
+
+Caused by:
+  process didn't exit successfully: `/tmp/gutoe-gpu-target-rocm-sor/release/deps/gutoe_gpu-314fe8f8051bf594 bohr_obc_l960 --nocapture` (signal: 11, SIGSEGV: invalid memory reference)

@@ -1,0 +1,28 @@
+    Blocking waiting for file lock on artifact directory
+warning: gutoe-gpu@0.1.0: Compiling HIP kernels for ROCm...
+    Finished `release` profile [optimized] target(s) in 3.11s
+     Running unittests src/lib.rs (/tmp/gutoe-gpu-target-rocm72/release/deps/gutoe_gpu-314fe8f8051bf594)
+
+running 1 test
+
+  GUTOE OBC L=961 (α=0.1, n_sor=200, n_iter=10000, dtau=0.05) — Rocm
+  L=961 (887503681 sites, 35.5 GB φ+ψ)
+  GPU memory: 82.59 GiB free / 96.00 GiB total
+  Need: 39.67 GiB (rho+phi+psi+psi2)
+  Allocating d_rho  (6.61 GiB)...
+  Allocating d_phi  (6.61 GiB)...
+  Allocating d_psi  (13.22 GiB)...
+  Allocating d_psi2 (13.22 GiB)..    Allocating reduction buffers...  Allocating reduction buffers  Phase 1: SOR Poisson (200 sweep  Phase 1: SOR Poisson (200 sweeps, ω=1.9935, 148379361 thre    SOR sweep 1/200
+test tests::bohr_obc_l960 has been running for over 60 seconds
+    SOR sweep 100/200
+error: test failed, to rerun pass    SOR sweep 200/200
+  Phase 1 done.
+  Freed d_rho (6.61 GiB reclaimed).
+  Phase 2: Gaussian init (σ=10.0)...
+  Phase 2 done.
+  Phase 3: Imaginary time (10000 steps, dtau=0.050, τ=500.0)...
+CUDA error unspecified launch failure at kernels/cuda_main.cu:644
+error: test failed, to rerun pass `-p gutoe-gpu --lib`
+
+Caused by:
+  process didn't exit successfully: `/tmp/gutoe-gpu-target-rocm72/release/deps/gutoe_gpu-314fe8f8051bf594 bohr_obc_l960 --nocapture` (exit status: 1)

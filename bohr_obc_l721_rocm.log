@@ -1,0 +1,14 @@
+   Compiling gutoe-gpu v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-gpu)
+warning: gutoe-gpu@0.1.0: Compiling HIP kernels for ROCm...
+    Finished `release` profile [optimized] target(s) in 6.45s
+     Running unittests src/lib.rs (/tmp/gutoe-gpu-target-rocm-sor/release/deps/gutoe_gpu-314fe8f8051bf594)
+
+running 1 test
+
+  GUTOE OBC L=961 (α=0.1, n_sor=1800, n_iter=12000, dtau=0.05) — Rocm
+  L=721 (374805361 sites, 15.0 GB φ+ψ)
+CUDA error out of memory at kernels/cuda_main.cu:467
+error: test failed, to rerun pass `-p gutoe-gpu --lib`
+
+Caused by:
+  process didn't exit successfully: `/tmp/gutoe-gpu-target-rocm-sor/release/deps/gutoe_gpu-314fe8f8051bf594 bohr_obc_l960 --nocapture` (exit status: 1)

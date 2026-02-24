@@ -1,0 +1,29 @@
+   Compiling gutoe-gpu v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-gpu)
+warning: gutoe-gpu@0.1.0: Compiling CUDA kernels for sm_89...
+    Finished `release` profile [optimized] target(s) in 4.53s
+     Running unittests src/lib.rs (/tmp/gutoe-gpu-target-sor/release/deps/gutoe_gpu-76f81a78f0e179ad)
+
+running 1 test
+
+  GUTOE OBC L-scan (α=0.1, open BC, n_iter=34K, dtau=0.05) — Cuda
+       L      L/a₀     E_total       −α²/2         C
+       ─         ─           ─           ─         ─
+  L=161 (4173281 sites, n_jacobi=500)…
+     161      16.1   -0.002170   -0.005000    0.4340
+  L=241 (13997521 sites, n_jacobi=700)…
+test tests::bohr_obc_lscan has been running for over 60 seconds
+     241      24.1   -0.002356   -0.005000    0.4711
+  L=321 (33076161 sites, n_jacobi=1000)…
+     321      32.1   -0.002449   -0.005000    0.4899
+  L=481 (111284641 sites, n_jacobi=1500)…
+     481      48.1   -0.002544   -0.005000    0.5088
+test tests::bohr_obc_lscan ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 599.66s
+
+   Doc-tests gutoe_gpu
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

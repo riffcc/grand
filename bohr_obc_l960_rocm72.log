@@ -1,0 +1,115 @@
+   Compiling gutoe-gpu v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-gpu)
+warning: gutoe-gpu@0.1.0: Compiling HIP kernels for ROCm...
+error: failed to run custom build command for `gutoe-gpu v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-gpu)`
+
+Caused by:
+  process didn't exit successfully: `/tmp/gutoe-gpu-target-rocm72/release/build/gutoe-gpu-ca7f3c74cdf5e517/build-script-build` (exit status: 101)
+  --- stdout
+  cargo:warning=Compiling HIP kernels for ROCm...
+
+  --- stderr
+  kernels/cuda_main.cu:124:5: error: use of undeclared identifier 'hex_cart'
+    124 |     hex_cart(r, c, &px, &py);
+        |     ^~~~~~~~
+  kernels/cuda_main.cu:554:9: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    554 |         cudaMemGetInfo(&mem_free, &mem_total);
+        |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:27:34: note: expanded from macro 'cudaMemGetInfo'
+     27 | #  define cudaMemGetInfo         hipMemGetInfo
+        |                                  ^
+  kernels/cuda_main.cu:618:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    618 |     cudaFree(d_rho); d_rho = NULL;
+        |     ^~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:671:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    671 |     cudaFree(d_phi);
+        |     ^~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:672:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    672 |     cudaFree(d_psi); cudaFree(d_psi2);
+        |     ^~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:672:22: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    672 |     cudaFree(d_psi); cudaFree(d_psi2);
+        |                      ^~~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:673:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    673 |     cudaFree(d_pe); cudaFree(d_pk); cudaFree(d_pp);
+        |     ^~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:673:21: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    673 |     cudaFree(d_pe); cudaFree(d_pk); cudaFree(d_pp);
+        |                     ^~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:673:37: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    673 |     cudaFree(d_pe); cudaFree(d_pk); cudaFree(d_pp);
+        |                                     ^~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:782:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    782 |     cudaFree(d_rho); cudaFree(d_phi); cudaFree(d_phi_new);
+        |     ^~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:782:22: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    782 |     cudaFree(d_rho); cudaFree(d_phi); cudaFree(d_phi_new);
+        |                      ^~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:782:39: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    782 |     cudaFree(d_rho); cudaFree(d_phi); cudaFree(d_phi_new);
+        |                                       ^~~~~~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:783:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    783 |     cudaFree(d_psi); cudaFree(d_psi2);
+        |     ^~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:783:22: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    783 |     cudaFree(d_psi); cudaFree(d_psi2);
+        |                      ^~~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:784:5: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    784 |     cudaFree(d_partial_e); cudaFree(d_partial_k); cudaFree(d_partial_p);
+        |     ^~~~~~~~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:784:28: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    784 |     cudaFree(d_partial_e); cudaFree(d_partial_k); cudaFree(d_partial_p);
+        |                            ^~~~~~~~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  kernels/cuda_main.cu:784:51: warning: ignoring return value of type 'hipError_t' declared with 'nodiscard' attribute [-Wunused-value]
+    784 |     cudaFree(d_partial_e); cudaFree(d_partial_k); cudaFree(d_partial_p);
+        |                                                   ^~~~~~~~~~~~~~~~~~~~~
+  kernels/cuda_main.cu:22:34: note: expanded from macro 'cudaFree'
+     22 | #  define cudaFree               hipFree
+        |                                  ^
+  16 warnings and 1 error generated when compiling for gfx1151.
+  failed to execute:/opt/rocm-7.2.0/lib/llvm/bin/clang++  --offload-arch=gfx1151  -O3 -fPIC -D__HIP_PLATFORM_AMD__ -c -x hip kernels/cuda_main.cu -o "/tmp/gutoe-gpu-target-rocm72/release/build/gutoe-gpu-f2bc2afee211bc97/out/hip_main.o"
+
+  thread 'main' (11838) panicked at crates/gutoe-gpu/build.rs:90:13:
+  hipcc compilation failed
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

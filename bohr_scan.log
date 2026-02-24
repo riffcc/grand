@@ -1,0 +1,23 @@
+warning: gutoe-gpu@0.1.0: Compiling HIP kernels for ROCm...
+   Compiling gutoe-gpu v0.1.0 (/mnt/riffcastle/castle/garage/grand-2026/crates/gutoe-gpu)
+    Finished `release` profile [optimized] target(s) in 4.59s
+     Running unittests src/lib.rs (/tmp/gutoe-gpu-target/release/deps/gutoe_gpu-314fe8f8051bf594)
+
+running 1 test
+
+  GUTOE Bohr convergence scan — backend: Rocm
+       L      L/a₀     E_total       −α²/2         C     sites
+       ─         ─           ─           ─         ─         ─
+  L=336 (37933056 sites)…
+test tests::bohr_convergence_scan has been running for over 60 seconds
+     336     33.60   -0.001609   -0.005000    0.3218  37933056
+  L=432 (80621568 sites)…
+     432     43.20   -0.001077   -0.005000    0.2154  80621568
+  L=576 (191102976 sites)…
+     576     57.60   -0.001078   -0.005000    0.2157  191102976
+  L=720 (373248000 sites)…
+CUDA error out of memory at kernels/cuda_main.cu:274
+error: test failed, to rerun pass `-p gutoe-gpu --lib`
+
+Caused by:
+  process didn't exit successfully: `/tmp/gutoe-gpu-target/release/deps/gutoe_gpu-314fe8f8051bf594 bohr_convergence_scan --nocapture` (exit status: 1)
