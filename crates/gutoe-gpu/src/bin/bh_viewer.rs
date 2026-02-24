@@ -114,6 +114,8 @@ struct Params {
     disk_model    : f32, // 0=thin, 1=riaf composite
     local_stars   : f32, // 1 => nearby 3D star volume shells
     riaf_volume   : f32, // 1 => escaped-ray volumetric RIAF blend
+    kerr_enable   : f32, // 1 => use Kerr tracer for exterior camera
+    kerr_astar    : f32, // dimensionless spin a*
     _pad1         : f32,
     _pad2         : f32,
     _pad3         : f32,
@@ -535,6 +537,124 @@ fn trace_true3d(sx: f32, sy: f32) -> TraceHit3D {
     return TraceHit3D(vec4(0.0, 0.0, 0.0, 0.0), ray);
 }
 
+fn kerr_mass(r_s: f32) -> f32 { 0.5 * r_s }
+fn kerr_a(r_s: f32, a_star: f32) -> f32 { a_star * kerr_mass(r_s) }
+fn kerr_sigma(r: f32, th: f32, a: f32) -> f32 {
+    let c = cos(th);
+    r * r + a * a * c * c
+}
+fn kerr_delta(r: f32, r_s: f32, a: f32) -> f32 {
+    r * r - r_s * r + a * a
+}
+
+fn trace_kerr3d(sx: f32, sy: f32) -> TraceHit3D {
+    let r_s = P.r_s;
+    let a = kerr_a(r_s, clamp(P.kerr_astar, -0.999, 0.999));
+    let m = kerr_mass(r_s);
+    let r_plus = m + sqrt(max(m * m - a * a, 0.0));
+    let sin_inc = clamp(P.sin_inc, -1.0, 1.0);
+    let theta_obs = clamp(asin(sin_inc), 1e-4, 3.14159265359 - 1e-4);
+
+    let z_obs = 60.0 * r_s;
+    let cos_i = sqrt(max(1.0 - sin_inc * sin_inc, 0.0));
+    let caz = cos(P.az);
+    let saz = sin(P.az);
+    let obs_base = vec3(z_obs * sin_inc * caz, z_obs * sin_inc * saz, z_obs * cos_i);
+    let obs = obs_base + vec3(P.cam_x, P.cam_y, P.cam_z);
+    let fwd = safe_normalize(-obs, vec3(0.0, 0.0, -1.0));
+    let world_up = select(vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 0.0), abs(sin_inc) > 0.995);
+    let right = safe_normalize(cross(fwd, world_up), vec3(1.0, 0.0, 0.0));
+    let up = safe_normalize(cross(right, fwd), vec3(0.0, 1.0, 0.0));
+    let ray = safe_normalize(fwd * z_obs + right * sx + up * sy, fwd);
+
+    // Use Kerr image constants from camera-plane alpha/beta.
+    let bx = sx;
+    let by = sy;
+    let xi = -bx * sin_inc;
+    let c2 = max(1.0 - sin_inc * sin_inc, 0.0);
+    let eta = by * by + (bx * bx - a * a) * c2;
+
+    let b = sqrt(bx * bx + by * by);
+    let r_start = max(max(40.0 * r_s, 12.0 * b), 20.0);
+
+    var r = r_start;
+    var th = theta_obs;
+    var ph = 0.0;
+    var sgn_r = -1.0;
+    var sgn_th = select(-1.0, 1.0, by >= 0.0);
+    var n_cross = 0u;
+    let max_steps_nominal = i32(P.max_phi / max(P.dphi, 1e-4)) + 1;
+    let max_steps_cap = select(select(2200, 3200, P.quality_tier >= 1.0), 4600, P.quality_tier >= 1.5);
+    let max_steps = min(max_steps_nominal, max_steps_cap);
+
+    var w_prev = vec3(r * sin(th) * cos(ph), r * sin(th) * sin(ph), r * cos(th));
+    for (var i = 0; i < max_steps; i++) {
+        let sig = max(kerr_sigma(r, th, a), 1e-12);
+        let del = kerr_delta(r, r_s, a);
+        let s = sin(th);
+        let c = cos(th);
+        let s2 = max(s * s, 1e-9);
+        let p = (r * r + a * a) - a * xi;
+        let rpot = p * p - del * ((xi - a) * (xi - a) + eta);
+        let cot2 = (c * c) / s2;
+        let tpot = eta + a * a * c * c - xi * xi * cot2;
+
+        if rpot <= 1e-12 { sgn_r = -sgn_r; }
+        if tpot <= 1e-12 { sgn_th = -sgn_th; }
+
+        let rr = sqrt(max(rpot, 0.0));
+        let thh = sqrt(max(tpot, 0.0));
+        let dr = sgn_r * rr / sig;
+        let dth = sgn_th * thh / sig;
+        let dph = select(
+            ((xi / s2) - a) / sig,
+            ((xi / s2) - a + a * p / del) / sig,
+            abs(del) >= 1e-9
+        );
+
+        let r_new = r + P.dphi * dr;
+        let th_new = clamp(th + P.dphi * dth, 1e-4, 3.14159265359 - 1e-4);
+        let ph_new = ph + P.dphi * dph;
+        let bad = (r_new != r_new) || (th_new != th_new) || (ph_new != ph_new)
+            || (abs(r_new) > 1e20) || (abs(ph_new) > 1e20);
+        if bad || r_new <= 1.001 * r_plus {
+            return TraceHit3D(vec4(0.0, 0.0, 0.0, 0.0), ray);
+        }
+
+        let w_new = vec3(
+            r_new * sin(th_new) * cos(ph_new),
+            r_new * sin(th_new) * sin(ph_new),
+            r_new * cos(th_new)
+        );
+
+        if sgn_r > 0.0 && r_new >= 0.995 * r_start {
+            let sky_dir = safe_normalize(w_new - w_prev, ray);
+            return TraceHit3D(vec4(0.0, abs(ph_new), 0.0, 2.0), sky_dir);
+        }
+
+        let pi2 = 0.5 * 3.14159265359;
+        if (th - pi2) * (th_new - pi2) <= 0.0 {
+            n_cross += 1u;
+            let t = clamp((pi2 - th) / (th_new - th + 1e-12), 0.0, 1.0);
+            let r_cross = r + t * (r_new - r);
+            if r_cross >= P.disk_in && r_cross <= P.disk_out {
+                return TraceHit3D(vec4(r_cross, abs(ph_new), f32(n_cross), 1.0), ray);
+            }
+        }
+
+        r = r_new;
+        th = th_new;
+        ph = ph_new;
+        w_prev = w_new;
+    }
+
+    if (sgn_r > 0.0 && r > 0.5 * r_start) || r > max(3.0 * r_s, 1.2 * r_plus) {
+        let sky_dir = safe_normalize(w_prev, ray);
+        return TraceHit3D(vec4(0.0, abs(ph), 0.0, 2.0), sky_dir);
+    }
+    return TraceHit3D(vec4(0.0, 0.0, 0.0, 0.0), ray);
+}
+
 // ── Interior tracer ───────────────────────────────────────────────────────────
 // Returns vec4(r_eff_hit, phi_total_or_hit, f32(n_cross), kind)
 //   kind 0 = captured (fell back to core floor)
@@ -752,7 +872,11 @@ fn shade_sample(sx: f32, sy: f32) -> vec3<f32> {
         let by = syr * P.sin_inc;
         hit = trace_interior(bx, by, core_look);
     } else {
-        let t3 = trace_true3d(sxr, syr);
+        let t3 = if P.kerr_enable > 0.5 {
+            trace_kerr3d(sxr, syr)
+        } else {
+            trace_true3d(sxr, syr)
+        };
         hit = t3.hit;
         sky_dir = t3.sky_dir;
     }
@@ -868,6 +992,8 @@ struct Params {
     disk_model:     f32,
     local_stars:    f32,
     riaf_volume:    f32,
+    kerr_enable:    f32,
+    kerr_astar:     f32,
     _pad1:    f32,
     _pad2:    f32,
     _pad3:    f32,
@@ -893,6 +1019,8 @@ struct Camera {
     riaf_mode: bool,
     local_stars: bool,
     riaf_volume: bool,
+    kerr_enable: bool,
+    kerr_astar: f32,
 }
 
 impl Default for Camera {
@@ -917,6 +1045,12 @@ impl Default for Camera {
             .ok()
             .map(|s| !matches!(s.as_str(), "0" | "false" | "FALSE" | "off" | "OFF"))
             .unwrap_or(true);
+        let kerr_astar = std::env::var("BH_KERR_ASTAR")
+            .ok()
+            .and_then(|s| s.parse::<f32>().ok())
+            .unwrap_or(0.0)
+            .clamp(-0.999, 0.999);
+        let kerr_enable = kerr_astar.abs() > 1e-6;
         Self {
             // EHT M87 geometry: ~17° from face-on, bright crescent at bottom.
             // azimuth = -π/2 rotates the disk so the approaching (bright) side is
@@ -938,6 +1072,8 @@ impl Default for Camera {
             riaf_mode,
             local_stars,
             riaf_volume,
+            kerr_enable,
+            kerr_astar,
         }
     }
 }
@@ -1011,6 +1147,8 @@ impl Camera {
             disk_model: if self.riaf_mode { 1.0 } else { 0.0 },
             local_stars: if self.local_stars { 1.0 } else { 0.0 },
             riaf_volume: if self.riaf_volume { 1.0 } else { 0.0 },
+            kerr_enable: if self.kerr_enable { 1.0 } else { 0.0 },
+            kerr_astar: self.kerr_astar,
             _pad1:    0.0,
             _pad2:    0.0,
             _pad3:    0.0,
@@ -1698,6 +1836,11 @@ impl App {
         let disk_model = if self.camera.riaf_mode { "RIAF" } else { "Thin" };
         let stars_mode = if self.camera.local_stars { "stars3d:on" } else { "stars3d:off" };
         let riaf_vol = if self.camera.riaf_volume { "riafV:on" } else { "riafV:off" };
+        let kerr = if self.camera.kerr_enable {
+            format!("kerr:{:+.2}", self.camera.kerr_astar)
+        } else {
+            "kerr:off".to_string()
+        };
         let cam_mode = if self.camera.interior_mode {
             if self.camera.core_look_mode { "inside→core" } else { "inside→out" }
         } else {
@@ -1712,7 +1855,7 @@ impl App {
             (None, _) => "None",
         };
         win.set_title(&format!(
-            "GUTOE BH  |  q{} {:.1}ms  {} r={:.2}r_h  inc {:.0}° az {:.0}° roll {:+.0}°  fov {:.1} r_s  disk {:.0} r_s ({})  {} {}  cam({:+.2},{:+.2},{:+.2})  pad:{}  [3D {}{}]",
+            "GUTOE BH  |  q{} {:.1}ms  {} r={:.2}r_h  inc {:.0}° az {:.0}° roll {:+.0}°  fov {:.1} r_s  disk {:.0} r_s ({})  {} {} {}  cam({:+.2},{:+.2},{:+.2})  pad:{}  [3D {}{}]",
             self.quality_tier as i32,
             self.avg_frame_ms,
             cam_mode,
@@ -1725,6 +1868,7 @@ impl App {
             disk_model,
             stars_mode,
             riaf_vol,
+            kerr,
             self.camera.cam_x,
             self.camera.cam_y,
             self.camera.cam_z,
@@ -1922,6 +2066,25 @@ impl ApplicationHandler for App {
                             log::info!("Volumetric RIAF blend: {}", self.camera.riaf_volume);
                             self.update_title(); self.push_frame();
                         }
+                        "k" | "K" if pressed => {
+                            self.camera.kerr_enable = !self.camera.kerr_enable;
+                            log::info!(
+                                "Kerr mode: {} (a*={:+.3})",
+                                self.camera.kerr_enable,
+                                self.camera.kerr_astar
+                            );
+                            self.update_title(); self.push_frame();
+                        }
+                        "," if pressed => {
+                            self.camera.kerr_astar = (self.camera.kerr_astar - 0.05).clamp(-0.999, 0.999);
+                            self.camera.kerr_enable = self.camera.kerr_astar.abs() > 1e-6;
+                            self.update_title(); self.push_frame();
+                        }
+                        "." if pressed => {
+                            self.camera.kerr_astar = (self.camera.kerr_astar + 0.05).clamp(-0.999, 0.999);
+                            self.camera.kerr_enable = self.camera.kerr_astar.abs() > 1e-6;
+                            self.update_title(); self.push_frame();
+                        }
                         "=" | "+" if pressed => {
                             self.camera.disk_outer = (self.camera.disk_outer + 1.0).min(30.0);
                             self.update_title(); self.push_frame();
@@ -2060,6 +2223,8 @@ fn main() {
     println!("  T                  — toggle disk model (RIAF ↔ thin)");
     println!("  V                  — toggle local 3D star parallax shells");
     println!("  M                  — toggle escaped-ray volumetric RIAF blend");
+    println!("  K                  — toggle Kerr mode");
+    println!("  , / .              — Kerr spin a* down / up");
     println!("  G                  — toggle GUTOE lattice core r_c  (GR ↔ GUTOE)");
     println!("  R                  — reset to M87-like defaults");
     println!("  Q / Escape         — quit");
