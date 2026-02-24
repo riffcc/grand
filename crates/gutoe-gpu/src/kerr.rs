@@ -230,6 +230,27 @@ mod tests {
     }
 
     #[test]
+    fn image_plane_xi_is_beta_invariant() {
+        // Parity with Lean: Gutoe.Geodesic3DProjection.kerrXi_beta_invariant
+        let k = KerrMetric::new(2.0, 0.7).expect("valid");
+        let alpha = 1.25;
+        let theta_obs = PI / 5.0;
+        let (xi1, _) = k.image_to_constants(alpha, -0.8, theta_obs);
+        let (xi2, _) = k.image_to_constants(alpha, 2.2, theta_obs);
+        assert!((xi1 - xi2).abs() < 1e-12, "xi1={xi1}, xi2={xi2}");
+    }
+
+    #[test]
+    fn image_plane_eta_equatorial_is_beta_squared() {
+        // Parity with Lean: Gutoe.Geodesic3DProjection.kerrEta_equatorial_from_ray
+        let k = KerrMetric::new(2.0, 0.9).expect("valid");
+        let alpha = -1.7;
+        let beta = 0.6;
+        let (_, eta) = k.image_to_constants(alpha, beta, FRAC_PI_2);
+        assert!((eta - beta * beta).abs() < 1e-12, "eta={eta}, beta^2={}", beta * beta);
+    }
+
+    #[test]
     fn radial_potential_matches_schwarzschild_form_when_a_zero() {
         let k = KerrMetric::new(2.0, 0.0).expect("valid");
         let r = 8.0;
