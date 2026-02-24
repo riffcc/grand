@@ -54,6 +54,29 @@ struct HeldKeys {
     zoom_out: bool,
 }
 
+#[derive(Clone, Copy)]
+struct PadTuning {
+    deadzone: f32,
+    look_sens: f32,
+    move_sens: f32,
+    trigger_sens: f32,
+    invert_look_x: bool,
+    invert_look_y: bool,
+}
+
+impl Default for PadTuning {
+    fn default() -> Self {
+        Self {
+            deadzone: 0.12,
+            look_sens: 1.0,
+            move_sens: 1.0,
+            trigger_sens: 1.0,
+            invert_look_x: false,
+            invert_look_y: false,
+        }
+    }
+}
+
 // ── WGSL shader ───────────────────────────────────────────────────────────────
 
 const SHADER: &str = r#"
@@ -1304,6 +1327,9 @@ struct App {
     avg_frame_ms: f32,
     over_budget_windows: u32,
     under_budget_windows: u32,
+    pad_tuning: PadTuning,
+    pad_name: Option<String>,
+    pad_dualsense: bool,
 }
 
 impl App {
@@ -1349,6 +1375,45 @@ impl App {
             avg_frame_ms: 0.0,
             over_budget_windows: 0,
             under_budget_windows: 0,
+            pad_tuning: Self::read_pad_tuning(),
+            pad_name: None,
+            pad_dualsense: false,
+        }
+    }
+
+    fn read_pad_tuning() -> PadTuning {
+        let parse_bool = |k: &str| {
+            std::env::var(k)
+                .ok()
+                .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "on" | "ON" | "yes" | "YES"))
+        };
+        let parse_f32 = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<f32>().ok());
+        let mut t = PadTuning::default();
+        if let Some(v) = parse_f32("BH_PAD_DEADZONE") {
+            t.deadzone = v.clamp(0.0, 0.5);
+        }
+        if let Some(v) = parse_f32("BH_PAD_LOOK_SENS") {
+            t.look_sens = v.clamp(0.05, 8.0);
+        }
+        if let Some(v) = parse_f32("BH_PAD_MOVE_SENS") {
+            t.move_sens = v.clamp(0.05, 8.0);
+        }
+        if let Some(v) = parse_f32("BH_PAD_TRIGGER_SENS") {
+            t.trigger_sens = v.clamp(0.05, 8.0);
+        }
+        t.invert_look_x = parse_bool("BH_PAD_INVERT_X");
+        t.invert_look_y = parse_bool("BH_PAD_INVERT_Y");
+        t
+    }
+
+    #[inline]
+    fn smooth_deadzone(v: f32, dead: f32) -> f32 {
+        let a = v.abs();
+        if a <= dead {
+            0.0
+        } else {
+            let n = ((a - dead) / (1.0 - dead)).clamp(0.0, 1.0);
+            v.signum() * n * n
         }
     }
 
@@ -1376,10 +1441,21 @@ impl App {
             .gamepads()
             .find(|(_, g)| g.is_connected())
         else {
+            self.pad_name = None;
+            self.pad_dualsense = false;
             return;
         };
 
-        let dead = 0.12_f32;
+        let name = gp.name().to_string();
+        let is_ds = name.to_ascii_lowercase().contains("dualsense");
+        let mut title_needs_update = false;
+        if self.pad_name.as_deref() != Some(name.as_str()) {
+            self.pad_name = Some(name);
+            self.pad_dualsense = is_ds;
+            title_needs_update = true;
+        }
+
+        let dead = self.pad_tuning.deadzone;
         let mut fine = 1.0_f32;
         if gp.is_pressed(Button::LeftThumb) {
             fine *= 0.35;
@@ -1388,37 +1464,32 @@ impl App {
             fine *= 2.2;
         }
 
-        let lx = {
-            let v = gp.value(Axis::LeftStickX);
-            if v.abs() > dead { v } else { 0.0 }
-        };
-        let ly = {
-            let v = gp.value(Axis::LeftStickY);
-            if v.abs() > dead { v } else { 0.0 }
-        };
-        let rx = {
-            let v = gp.value(Axis::RightStickX);
-            if v.abs() > dead { v } else { 0.0 }
-        };
-        let ry = {
-            let v = gp.value(Axis::RightStickY);
-            if v.abs() > dead { v } else { 0.0 }
-        };
+        let lx = Self::smooth_deadzone(gp.value(Axis::LeftStickX), dead);
+        let ly = Self::smooth_deadzone(gp.value(Axis::LeftStickY), dead);
+        let mut rx = Self::smooth_deadzone(gp.value(Axis::RightStickX), dead);
+        let mut ry = Self::smooth_deadzone(gp.value(Axis::RightStickY), dead);
+        if self.pad_tuning.invert_look_x {
+            rx = -rx;
+        }
+        if self.pad_tuning.invert_look_y {
+            ry = -ry;
+        }
         let lt = gp.value(Axis::LeftZ).max(0.0);
         let rt = gp.value(Axis::RightZ).max(0.0);
 
         let mut dirty = false;
         if rx != 0.0 || ry != 0.0 {
-            self.camera.azimuth += rx * 0.06 * fine;
-            self.camera.inclination = (self.camera.inclination + ry * 1.8 * fine).clamp(1.0, 90.0);
+            self.camera.azimuth += rx * 0.06 * fine * self.pad_tuning.look_sens;
+            self.camera.inclination = (self.camera.inclination
+                + ry * 1.8 * fine * self.pad_tuning.look_sens).clamp(1.0, 90.0);
             dirty = true;
         }
         if lx != 0.0 || ly != 0.0 {
-            self.camera.move_local(-ly, lx, 0.0, 0.28 * fine);
+            self.camera.move_local(-ly, lx, 0.0, 0.28 * fine * self.pad_tuning.move_sens);
             dirty = true;
         }
         if lt > 0.02 || rt > 0.02 {
-            self.camera.move_local(0.0, 0.0, rt - lt, 0.30 * fine);
+            self.camera.move_local(0.0, 0.0, rt - lt, 0.30 * fine * self.pad_tuning.trigger_sens);
             dirty = true;
         }
 
@@ -1498,6 +1569,8 @@ impl App {
         if dirty {
             self.update_title();
             self.push_frame();
+        } else if title_needs_update {
+            self.update_title();
         }
     }
 
