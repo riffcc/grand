@@ -816,6 +816,8 @@ void bh_riaf_composite_color(double r_eff, double r_isco, double r_outer, double
 __global__
 void bh_render_kernel(
     int width, int height,
+    int frame_width, int frame_height,
+    int x_off, int y_off,
     double fov_rs, double sin_inc,
     double r_s, double r_c,
     double disk_inner, double disk_outer,
@@ -840,14 +842,16 @@ void bh_render_kernel(
 
     int iy = idx / width;
     int ix = idx % width;
+    int gy = y_off + iy;
+    int gx = x_off + ix;
 
     /* Camera coordinates — orthographic, y-axis upward */
-    int min_dim   = (width < height) ? width : height;
+    int min_dim   = (frame_width < frame_height) ? frame_width : frame_height;
     double scale  = 2.0 * fov_rs * r_s / (double)min_dim;
     double dx     = jitter_x - 0.5;
     double dy     = 0.5 - jitter_y;
-    double sx     = ((double)ix - 0.5 * ((double)width  - 1.0) + dx) * scale;
-    double sy     = (0.5 * ((double)height - 1.0) - (double)iy + dy) * scale;
+    double sx     = ((double)gx - 0.5 * ((double)frame_width  - 1.0) + dx) * scale;
+    double sy     = (0.5 * ((double)frame_height - 1.0) - (double)gy + dy) * scale;
     double bx_raw = sx;
     /* Kerr uses raw beta + explicit inclination in image-constant mapping. */
     double by_raw = kerr_enable ? sy : sy * sin_inc;
@@ -947,6 +951,8 @@ void bh_render_kernel(
 extern "C"
 void gutoe_render_bh(
     int width, int height,
+    int frame_width, int frame_height,
+    int x_off, int y_off,
     double fov_rs, double inclination_deg,
     double r_s, double r_c,
     double disk_inner_rs, double disk_outer_rs,
@@ -980,7 +986,7 @@ void gutoe_render_bh(
 
     int n_blk = (n + TRACER_BLOCK - 1) / TRACER_BLOCK;
     bh_render_kernel<<<n_blk, TRACER_BLOCK>>>(
-        width, height, fov_rs, sin_inc,
+        width, height, frame_width, frame_height, x_off, y_off, fov_rs, sin_inc,
         r_s, r_c, disk_inner, disk_outer,
         max_phi, dphi, az_cos, az_sin,
         doppler, ring_mode, interior_mode, core_look_mode, spectral_band, disk_model, plasma_model,

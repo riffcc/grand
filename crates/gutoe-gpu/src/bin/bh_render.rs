@@ -168,6 +168,10 @@ extern "C" {
     fn gutoe_render_bh(
         width: i32,
         height: i32,
+        frame_width: i32,
+        frame_height: i32,
+        x_off: i32,
+        y_off: i32,
         fov_rs: f64,
         inclination_deg: f64,
         r_s: f64,
@@ -220,12 +224,69 @@ fn render_with_options_gpu(
     jitter_x: f64,
     jitter_y: f64,
 ) -> Vec<[u8; 3]> {
+    render_with_options_gpu_window(
+        metric,
+        disk_inner_rs,
+        disk_outer_rs,
+        cfg.width,
+        cfg.height,
+        0,
+        0,
+        cfg,
+        az_deg,
+        doppler,
+        ring_mode,
+        interior_mode,
+        core_look_mode,
+        spectral_band,
+        disk_model,
+        plasma_model,
+        use_transfer,
+        tau_scale,
+        adaptive_dphi,
+        kerr,
+        r_cam_rs,
+        jitter_x,
+        jitter_y,
+    )
+}
+
+#[cfg(any(feature = "cuda", feature = "rocm"))]
+fn render_with_options_gpu_window(
+    metric: &GutoeMetric,
+    disk_inner_rs: f64,
+    disk_outer_rs: f64,
+    frame_width: usize,
+    frame_height: usize,
+    x_off: usize,
+    y_off: usize,
+    cfg: &RenderConfig,
+    az_deg: f64,
+    doppler: bool,
+    ring_mode: bool,
+    interior_mode: bool,
+    core_look_mode: bool,
+    spectral_band: SpectralBand,
+    disk_model: DiskModel,
+    plasma_model: PlasmaModel,
+    use_transfer: bool,
+    tau_scale: f64,
+    adaptive_dphi: bool,
+    kerr: Option<&KerrMetric>,
+    r_cam_rs: f64,
+    jitter_x: f64,
+    jitter_y: f64,
+) -> Vec<[u8; 3]> {
     let n = cfg.width * cfg.height;
     let mut flat = vec![0u8; n * 3];
     unsafe {
         gutoe_render_bh(
             cfg.width as i32,
             cfg.height as i32,
+            frame_width as i32,
+            frame_height as i32,
+            x_off as i32,
+            y_off as i32,
             cfg.fov_rs,
             cfg.inclination_deg,
             metric.r_s,
@@ -1645,6 +1706,7 @@ fn render_view_tiled(
     blur_sigma: f64,
 ) -> PathBuf {
     use std::f64::consts::PI;
+    use std::io::{Seek, SeekFrom, Write};
     let parse_env_f64 = |k: &str| std::env::var(k).ok().and_then(|s| s.parse::<f64>().ok());
     let parse_env_bool = |k: &str| {
         std::env::var(k).ok().is_some_and(|s| {
@@ -1687,12 +1749,47 @@ fn render_view_tiled(
         dphi: view.dphi,
     };
     let mut full = vec![[0_u8; 3]; width * height];
+    let output_slug = format!("{}__tiled", view.slug);
+    let progress_ppm_path = out_dir.join(format!("{}.progress.ppm", output_slug));
+    let mut progress_ppm = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .read(true)
+        .write(true)
+        .open(&progress_ppm_path)
+        .expect("create tiled progress ppm");
+    let ppm_header = format!("P6\n{} {}\n255\n", width, height);
+    progress_ppm
+        .write_all(ppm_header.as_bytes())
+        .expect("write tiled progress ppm header");
+    let ppm_header_len = ppm_header.len() as u64;
+    let zero_row = vec![0u8; width * 3];
+    for _ in 0..height {
+        progress_ppm
+            .write_all(&zero_row)
+            .expect("initialize tiled progress ppm body");
+    }
+    progress_ppm.flush().ok();
+
     let tile = tile_px.clamp(128, 4096);
     let tx_count = width.div_ceil(tile);
     let ty_count = height.div_ceil(tile);
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
+    let tiled_gpu = std::env::var("BH_TILED_GPU")
+        .ok()
+        .map(|s| !matches!(s.as_str(), "0" | "false" | "FALSE" | "off" | "OFF"))
+        .unwrap_or(true);
+    #[cfg(not(any(feature = "cuda", feature = "rocm")))]
+    let tiled_gpu = false;
     eprintln!(
-        "  tiled render {}: {}x{} in {}x{} tiles (tile={}px)",
-        view.slug, width, height, tx_count, ty_count, tile
+        "  tiled render {}: {}x{} in {}x{} tiles (tile={}px, backend={})",
+        view.slug,
+        width,
+        height,
+        tx_count,
+        ty_count,
+        tile,
+        if tiled_gpu { "gpu" } else { "cpu" }
     );
     for ty in 0..ty_count {
         for tx in 0..tx_count {
@@ -1701,38 +1798,97 @@ fn render_view_tiled(
             let tw = (width - x0).min(tile);
             let th = (height - y0).min(tile);
             eprintln!("    tile ({},{})  x={} y={}  {}x{}", tx + 1, ty + 1, x0, y0, tw, th);
-            let tile_pixels = render_with_options_cpu_window(
-                &metric,
-                kerr_metric.as_ref(),
-                view.disk_inner,
-                view.disk_outer,
-                width,
-                height,
-                x0,
-                y0,
-                tw,
-                th,
-                &cfg,
-                view.az,
-                view.doppler,
-                view.ring_mode,
-                view.interior_mode,
-                view.core_look_mode,
-                spectral_band,
-                disk_model,
-                plasma_model,
-                use_transfer,
-                tau_scale,
-                true,
-                r_cam_rs,
-                0.5,
-                0.5,
-            );
+            #[cfg(any(feature = "cuda", feature = "rocm"))]
+            let tile_cfg = RenderConfig {
+                width: tw,
+                height: th,
+                fov_rs: cfg.fov_rs,
+                inclination_deg: cfg.inclination_deg,
+                max_phi: cfg.max_phi,
+                dphi: cfg.dphi,
+            };
+            let tile_pixels = if tiled_gpu {
+                #[cfg(any(feature = "cuda", feature = "rocm"))]
+                {
+                    render_with_options_gpu_window(
+                        &metric,
+                        view.disk_inner,
+                        view.disk_outer,
+                        width,
+                        height,
+                        x0,
+                        y0,
+                        &tile_cfg,
+                        view.az,
+                        view.doppler,
+                        view.ring_mode,
+                        view.interior_mode,
+                        view.core_look_mode,
+                        spectral_band,
+                        disk_model,
+                        plasma_model,
+                        use_transfer,
+                        tau_scale,
+                        true,
+                        kerr_metric.as_ref(),
+                        r_cam_rs,
+                        0.5,
+                        0.5,
+                    )
+                }
+                #[cfg(not(any(feature = "cuda", feature = "rocm")))]
+                {
+                    unreachable!()
+                }
+            } else {
+                render_with_options_cpu_window(
+                    &metric,
+                    kerr_metric.as_ref(),
+                    view.disk_inner,
+                    view.disk_outer,
+                    width,
+                    height,
+                    x0,
+                    y0,
+                    tw,
+                    th,
+                    &cfg,
+                    view.az,
+                    view.doppler,
+                    view.ring_mode,
+                    view.interior_mode,
+                    view.core_look_mode,
+                    spectral_band,
+                    disk_model,
+                    plasma_model,
+                    use_transfer,
+                    tau_scale,
+                    true,
+                    r_cam_rs,
+                    0.5,
+                    0.5,
+                )
+            };
             for row in 0..th {
                 let dst_off = (y0 + row) * width + x0;
                 let src_off = row * tw;
                 full[dst_off..dst_off + tw].copy_from_slice(&tile_pixels[src_off..src_off + tw]);
+                let mut row_bytes = vec![0u8; tw * 3];
+                for (i, px) in tile_pixels[src_off..src_off + tw].iter().enumerate() {
+                    let o = i * 3;
+                    row_bytes[o] = px[0];
+                    row_bytes[o + 1] = px[1];
+                    row_bytes[o + 2] = px[2];
+                }
+                let file_off = ppm_header_len + (((y0 + row) * width + x0) * 3) as u64;
+                progress_ppm
+                    .seek(SeekFrom::Start(file_off))
+                    .expect("seek tiled progress ppm row");
+                progress_ppm
+                    .write_all(&row_bytes)
+                    .expect("write tiled progress ppm row");
             }
+            progress_ppm.flush().ok();
         }
     }
     let pixels = if blur_sigma >= 0.5 {
@@ -1740,7 +1896,6 @@ fn render_view_tiled(
     } else {
         full
     };
-    let output_slug = format!("{}__tiled", view.slug);
     let ppm_path = out_dir.join(format!("{}.ppm", output_slug));
     let png_path = out_dir.join(format!("{}.png", output_slug));
     fs::write(&ppm_path, write_ppm(&pixels, width, height)).expect("write tiled ppm");
