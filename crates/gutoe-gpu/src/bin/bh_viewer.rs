@@ -112,7 +112,11 @@ struct Params {
     use_transfer  : f32, // 1 => run multi-step covariant transfer integration
     tau_scale     : f32, // optical-depth scale for transfer mode
     disk_model    : f32, // 0=thin, 1=riaf composite
+    local_stars   : f32, // 1 => nearby 3D star volume shells
+    riaf_volume   : f32, // 1 => escaped-ray volumetric RIAF blend
     _pad1         : f32,
+    _pad2         : f32,
+    _pad3         : f32,
 }
 @group(0) @binding(0) var<uniform> P : Params;
 @group(0) @binding(1) var star_tex : texture_2d<f32>;
@@ -272,10 +276,10 @@ fn starfield_from_dir(dir_in: vec3<f32>) -> vec3<f32> {
     // for nearby stars while keeping far-field catalog/procedural sky intact.
     let cam = vec3(P.cam_x, P.cam_y, P.cam_z);
     col += local_star_volume(cam, dir, 18.0 * max(P.r_s, 1.0), 0.22);
-    if (P.quality_tier >= 1.0) {
+    if (P.local_stars > 0.5 && P.quality_tier >= 1.0) {
         col += local_star_volume(cam, dir, 36.0 * max(P.r_s, 1.0), 0.14);
     }
-    if (P.quality_tier >= 1.5) {
+    if (P.local_stars > 0.5 && P.quality_tier >= 1.5) {
         col += local_star_volume(cam, dir, 72.0 * max(P.r_s, 1.0), 0.09);
     }
     return col;
@@ -791,7 +795,7 @@ fn shade_sample(sx: f32, sy: f32) -> vec3<f32> {
     // stars appear at their true (source) positions, giving lensing arcs near
     // the photon sphere automatically.
     let stars = starfield_from_dir(sky_dir);
-    if P.disk_model > 0.5 {
+    if P.disk_model > 0.5 && P.riaf_volume > 0.5 {
         return riaf_volume_color(sxr, syr, stars);
     }
     return stars;
@@ -862,7 +866,11 @@ struct Params {
     use_transfer:   f32,
     tau_scale:      f32,
     disk_model:     f32,
+    local_stars:    f32,
+    riaf_volume:    f32,
     _pad1:    f32,
+    _pad2:    f32,
+    _pad3:    f32,
 }
 
 // ── Camera state ──────────────────────────────────────────────────────────────
@@ -883,6 +891,8 @@ struct Camera {
     use_transfer: bool,
     tau_scale: f32,
     riaf_mode: bool,
+    local_stars: bool,
+    riaf_volume: bool,
 }
 
 impl Default for Camera {
@@ -899,6 +909,14 @@ impl Default for Camera {
             .ok()
             .map(|s| s.eq_ignore_ascii_case("riaf") || s.eq_ignore_ascii_case("volumetric"))
             .unwrap_or(false);
+        let local_stars = std::env::var("BH_LOCAL_STARS")
+            .ok()
+            .map(|s| !matches!(s.as_str(), "0" | "false" | "FALSE" | "off" | "OFF"))
+            .unwrap_or(true);
+        let riaf_volume = std::env::var("BH_RIAF_VOLUME")
+            .ok()
+            .map(|s| !matches!(s.as_str(), "0" | "false" | "FALSE" | "off" | "OFF"))
+            .unwrap_or(true);
         Self {
             // EHT M87 geometry: ~17° from face-on, bright crescent at bottom.
             // azimuth = -π/2 rotates the disk so the approaching (bright) side is
@@ -918,6 +936,8 @@ impl Default for Camera {
             use_transfer,
             tau_scale,
             riaf_mode,
+            local_stars,
+            riaf_volume,
         }
     }
 }
@@ -989,7 +1009,11 @@ impl Camera {
             use_transfer: if self.use_transfer { 1.0 } else { 0.0 },
             tau_scale: self.tau_scale,
             disk_model: if self.riaf_mode { 1.0 } else { 0.0 },
+            local_stars: if self.local_stars { 1.0 } else { 0.0 },
+            riaf_volume: if self.riaf_volume { 1.0 } else { 0.0 },
             _pad1:    0.0,
+            _pad2:    0.0,
+            _pad3:    0.0,
         }
     }
 }
@@ -1672,6 +1696,8 @@ impl App {
         let Some(win) = self.window.as_ref() else { return };
         let core = if self.camera.gutoe_core { "GUTOE r_c" } else { "GR" };
         let disk_model = if self.camera.riaf_mode { "RIAF" } else { "Thin" };
+        let stars_mode = if self.camera.local_stars { "stars3d:on" } else { "stars3d:off" };
+        let riaf_vol = if self.camera.riaf_volume { "riafV:on" } else { "riafV:off" };
         let cam_mode = if self.camera.interior_mode {
             if self.camera.core_look_mode { "inside→core" } else { "inside→out" }
         } else {
@@ -1686,7 +1712,7 @@ impl App {
             (None, _) => "None",
         };
         win.set_title(&format!(
-            "GUTOE BH  |  q{} {:.1}ms  {} r={:.2}r_h  inc {:.0}° az {:.0}° roll {:+.0}°  fov {:.1} r_s  disk {:.0} r_s ({})  cam({:+.2},{:+.2},{:+.2})  pad:{}  [3D {}{}]",
+            "GUTOE BH  |  q{} {:.1}ms  {} r={:.2}r_h  inc {:.0}° az {:.0}° roll {:+.0}°  fov {:.1} r_s  disk {:.0} r_s ({})  {} {}  cam({:+.2},{:+.2},{:+.2})  pad:{}  [3D {}{}]",
             self.quality_tier as i32,
             self.avg_frame_ms,
             cam_mode,
@@ -1697,6 +1723,8 @@ impl App {
             self.camera.fov_rs,
             self.camera.disk_outer,
             disk_model,
+            stars_mode,
+            riaf_vol,
             self.camera.cam_x,
             self.camera.cam_y,
             self.camera.cam_z,
@@ -1875,6 +1903,16 @@ impl ApplicationHandler for App {
                             log::info!("Disk model: {}", if self.camera.riaf_mode { "RIAF composite" } else { "Thin disk" });
                             self.update_title(); self.push_frame();
                         }
+                        "v" | "V" if pressed => {
+                            self.camera.local_stars = !self.camera.local_stars;
+                            log::info!("Local 3D stars: {}", self.camera.local_stars);
+                            self.update_title(); self.push_frame();
+                        }
+                        "m" | "M" if pressed => {
+                            self.camera.riaf_volume = !self.camera.riaf_volume;
+                            log::info!("Volumetric RIAF blend: {}", self.camera.riaf_volume);
+                            self.update_title(); self.push_frame();
+                        }
                         "=" | "+" if pressed => {
                             self.camera.disk_outer = (self.camera.disk_outer + 1.0).min(30.0);
                             self.update_title(); self.push_frame();
@@ -2011,6 +2049,8 @@ fn main() {
     println!("  [ / ]              — interior camera radius (r_cam/r_h)");
     println!("  + / -              — disk outer radius (grow / shrink accretion disk)");
     println!("  T                  — toggle disk model (RIAF ↔ thin)");
+    println!("  V                  — toggle local 3D star parallax shells");
+    println!("  M                  — toggle escaped-ray volumetric RIAF blend");
     println!("  G                  — toggle GUTOE lattice core r_c  (GR ↔ GUTOE)");
     println!("  R                  — reset to M87-like defaults");
     println!("  Q / Escape         — quit");
