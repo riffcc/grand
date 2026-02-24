@@ -27,6 +27,26 @@
 
 pub mod equations;
 pub mod constants;
+pub mod dynamics_map;
+pub mod runtime_emulator;
+pub mod stellar_reactions;
+pub mod reaction_rates;
+pub mod stiff_integrator;
+pub mod energy_accounting;
+pub mod single_zone;
+pub mod multi_zone;
+pub mod spectral_synthesis;
+pub mod star_catalog;
 
 pub use equations::*;
 pub use constants::*;
+pub use dynamics_map::*;
+pub use runtime_emulator::*;
+pub use stellar_reactions::*;
+pub use reaction_rates::*;
+pub use stiff_integrator::*;
+pub use energy_accounting::*;
+pub use single_zone::*;
+pub use multi_zone::*;
+pub use spectral_synthesis::*;
+pub use star_catalog::*;

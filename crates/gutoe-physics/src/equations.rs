@@ -100,8 +100,8 @@ pub struct BlackHoleEntropy {
 impl BlackHoleEntropy {
     pub fn new() -> Self {
         Self {
-            // α proportional to λ_QG from GUTOE.md
-            alpha: 0.084372,
+            // α tracks the shared λ_QG constant from the dispersion relation.
+            alpha: LAMBDA_QG,
         }
     }
 
@@ -285,6 +285,17 @@ mod tests {
         let area = solar_mass_area();
         let s = bh.entropy(area);
         assert!(s > 0.0, "Black-hole entropy = {s} ≤ 0 — unphysical");
+    }
+
+    #[test]
+    fn black_hole_entropy_uses_shared_lambda_qg_constant() {
+        let bh = BlackHoleEntropy::new();
+        assert!(
+            (bh.alpha - LAMBDA_QG).abs() < EPSILON,
+            "BlackHoleEntropy alpha={} diverged from LAMBDA_QG={}",
+            bh.alpha,
+            LAMBDA_QG
+        );
     }
 
     #[test]

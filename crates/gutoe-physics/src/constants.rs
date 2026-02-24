@@ -62,8 +62,16 @@ pub const KB: f64 = 1.380649e-23;
 /// were both within 1.2% of 1/12 — that residual error was in the fits, not the physics.
 pub const LAMBDA_QG: f64 = 1.0 / 12.0;
 
-/// Fine structure constant
+/// Fine-structure constant used in runtime physics.
+///
+/// Lean proves the leading-order structural value `α⁻¹ = 137`
+/// (`lean/Gutoe/FineStructure.lean`), i.e. `α_LO = 1/137`.
+/// Runtime uses the measured low-energy value (`α⁻¹ ≈ 137.036`).
+/// The relative offset (~0.026%) is attributed to higher-order QED effects.
 pub const ALPHA: f64 = 7.2973525693e-3;
+
+/// Leading-order structural value from the Lean proof chain: α = 1/137.
+pub const ALPHA_LEADING_ORDER: f64 = 1.0 / 137.0;
 
 /// Cosmological constant (approximately)
 pub const LAMBDA_COSMOLOGICAL: f64 = 1.1056e-52; // 1/m²
@@ -129,5 +137,18 @@ mod tests {
     fn test_fine_structure_constant() {
         // Verify approximate value
         assert!((ALPHA - 1.0/137.036).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_alpha_runtime_vs_leading_order_offset_is_small() {
+        // Lean's structural theorem: α⁻¹ = 137 (leading order).
+        assert!((ALPHA_LEADING_ORDER - 1.0 / 137.0).abs() < 1e-15);
+
+        // Runtime α uses measured α⁻¹ ≈ 137.036 and should differ only slightly.
+        let rel = (ALPHA - ALPHA_LEADING_ORDER).abs() / ALPHA_LEADING_ORDER;
+        assert!(
+            rel < 3.0e-4,
+            "runtime α drifted too far from leading-order α: rel diff={rel:.6e}"
+        );
     }
 }
