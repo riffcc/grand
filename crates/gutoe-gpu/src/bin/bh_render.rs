@@ -3704,6 +3704,22 @@ mod tests {
         assert_eq!(SpectralBand::parse("all"), Some(SpectralBand::Bolometric));
         assert_eq!(SpectralBand::parse("unknown"), None);
     }
+
+    #[test]
+    fn cpu_cuda_core_palette_coefficients_stay_in_lockstep() {
+        // Guard GRAND-215 parity: CUDA tracer palette constants must match CPU path.
+        let cuda = include_str!("../../kernels/tracer.cu");
+
+        // gutoe_core_color / bh_gutoe_core_color
+        assert!(cuda.contains("255.0 * pow(bv, 0.35)"));
+        assert!(cuda.contains("160.0 * pow(bv, 0.65)"));
+        assert!(cuda.contains("30.0 * pow(bv, 2.0)"));
+
+        // gutoe_core_physics_color / bh_gutoe_core_physics_color
+        assert!(cuda.contains("255.0 * pow(tone, 0.36)"));
+        assert!(cuda.contains("170.0 * pow(tone, 0.62)"));
+        assert!(cuda.contains("45.0 * pow(tone, 1.50)"));
+    }
 }
 
 fn main() {
