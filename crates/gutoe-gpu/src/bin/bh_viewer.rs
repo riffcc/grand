@@ -1577,6 +1577,7 @@ impl App {
     fn update_title(&self) {
         let Some(win) = self.window.as_ref() else { return };
         let core = if self.camera.gutoe_core { "GUTOE r_c" } else { "GR" };
+        let disk_model = if self.camera.riaf_mode { "RIAF" } else { "Thin" };
         let cam_mode = if self.camera.interior_mode {
             if self.camera.core_look_mode { "inside→core" } else { "inside→out" }
         } else {
@@ -1591,7 +1592,7 @@ impl App {
             (None, _) => "None",
         };
         win.set_title(&format!(
-            "GUTOE BH  |  q{} {:.1}ms  {} r={:.2}r_h  inc {:.0}° az {:.0}° roll {:+.0}°  fov {:.1} r_s  disk {:.0} r_s  cam({:+.2},{:+.2},{:+.2})  pad:{}  [3D {}{}]",
+            "GUTOE BH  |  q{} {:.1}ms  {} r={:.2}r_h  inc {:.0}° az {:.0}° roll {:+.0}°  fov {:.1} r_s  disk {:.0} r_s ({})  cam({:+.2},{:+.2},{:+.2})  pad:{}  [3D {}{}]",
             self.quality_tier as i32,
             self.avg_frame_ms,
             cam_mode,
@@ -1601,6 +1602,7 @@ impl App {
             roll_deg,
             self.camera.fov_rs,
             self.camera.disk_outer,
+            disk_model,
             self.camera.cam_x,
             self.camera.cam_y,
             self.camera.cam_z,
@@ -1774,6 +1776,11 @@ impl ApplicationHandler for App {
                             log::info!("GUTOE lattice core: {}", self.camera.gutoe_core);
                             self.update_title(); self.push_frame();
                         }
+                        "t" | "T" if pressed => {
+                            self.camera.riaf_mode = !self.camera.riaf_mode;
+                            log::info!("Disk model: {}", if self.camera.riaf_mode { "RIAF composite" } else { "Thin disk" });
+                            self.update_title(); self.push_frame();
+                        }
                         "=" | "+" if pressed => {
                             self.camera.disk_outer = (self.camera.disk_outer + 1.0).min(30.0);
                             self.update_title(); self.push_frame();
@@ -1909,6 +1916,7 @@ fn main() {
     println!("  O                  — toggle inside-core look mode");
     println!("  [ / ]              — interior camera radius (r_cam/r_h)");
     println!("  + / -              — disk outer radius (grow / shrink accretion disk)");
+    println!("  T                  — toggle disk model (RIAF ↔ thin)");
     println!("  G                  — toggle GUTOE lattice core r_c  (GR ↔ GUTOE)");
     println!("  R                  — reset to M87-like defaults");
     println!("  Q / Escape         — quit");
