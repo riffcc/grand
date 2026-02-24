@@ -639,6 +639,39 @@ fn disk_color(r_eff: f32, n_cross: u32, bx_raw: f32, bg_stars: vec3<f32>) -> vec
     return disk;
 }
 
+// Optically thin volumetric RIAF glow for escaped rays.
+// This avoids the "flat half-plane" look by letting diffuse plasma emission
+// contribute on both sides of the hole while still preserving background stars.
+fn riaf_volume_color(sx_raw: f32, sy_raw: f32, bg_stars: vec3<f32>) -> vec3<f32> {
+    let sx = cos(P.az) * sx_raw - sin(P.az) * sy_raw;
+    let sy = sin(P.az) * sx_raw + cos(P.az) * sy_raw;
+    let b = sqrt(sx * sx + (sy * P.sin_inc) * (sy * P.sin_inc));
+    let r_eff = sqrt(b * b + P.r_c * P.r_c);
+    let r_s = max(P.r_s, 1e-6);
+
+    // Broad torus-like envelope around a few Schwarzschild radii.
+    let r_peak = 6.0 * r_s;
+    let r_width = 7.0 * r_s;
+    let radial_env = exp(-pow((r_eff - r_peak) / max(r_width, 1e-6), 2.0));
+
+    // Give the flow finite scale height (thick RIAF, not a razor-thin plane).
+    let h = 0.45 + 0.35 * (1.0 - P.sin_inc);
+    let vertical_env = exp(-pow(sy / max(h * r_s, 1e-6), 2.0));
+
+    let transfer = pow(max(disk_transfer_factor(max(r_eff, 3.0 * r_s), r_s, sx, P.sin_inc), 1e-9), 0.6);
+    let source = max(0.28 * radial_env * vertical_env * transfer, 0.0);
+    let tau = max(P.tau_scale, 0.0) * 0.24 * radial_env * (0.5 + 0.5 * vertical_env);
+    let trans = clamp(exp(-tau), 0.0, 1.0);
+
+    let bmap = source / (1.0 + source);
+    let glow = vec3(
+        clamp(pow(bmap, 0.38), 0.0, 1.0),
+        clamp((220.0 / 255.0) * pow(bmap, 0.62), 0.0, 1.0),
+        clamp((120.0 / 255.0) * pow(bmap, 1.55), 0.0, 1.0)
+    );
+    return mix(glow, bg_stars, trans);
+}
+
 // ── Vertex / Fragment ─────────────────────────────────────────────────────────
 
 struct VOut { @builtin(position) pos: vec4<f32> }
@@ -710,7 +743,9 @@ fn shade_sample(sx: f32, sy: f32) -> vec3<f32> {
     // stars appear at their true (source) positions, giving lensing arcs near
     // the photon sphere automatically.
     let stars = starfield_from_dir(sky_dir);
-
+    if P.disk_model > 0.5 {
+        return riaf_volume_color(sxr, syr, stars);
+    }
     return stars;
 }
 
