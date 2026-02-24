@@ -90,27 +90,21 @@ set_option maxHeartbeats 800000 in
 /-- [σ₁, σ₂] = 2i σ₃: σ₁*σ₂ − σ₂*σ₁ = 2i·σ₃. -/
 theorem su2_comm_12 : σ₁ * σ₂ - σ₂ * σ₁ = (2 * Complex.I) • σ₃ := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [σ₁, σ₂, σ₃, Matrix.mul_apply, Fin.sum_univ_succ, smul_eq_mul,
-        Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
-        Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
+  simp [σ₁, σ₂, σ₃, smul_eq_mul] <;>
   ring
 
 set_option maxHeartbeats 800000 in
 /-- [σ₂, σ₃] = 2i σ₁: σ₂*σ₃ − σ₃*σ₂ = 2i·σ₁. -/
 theorem su2_comm_23 : σ₂ * σ₃ - σ₃ * σ₂ = (2 * Complex.I) • σ₁ := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [σ₁, σ₂, σ₃, Matrix.mul_apply, Fin.sum_univ_succ, smul_eq_mul,
-        Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
-        Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
+  simp [σ₁, σ₂, σ₃, smul_eq_mul] <;>
   ring
 
 set_option maxHeartbeats 800000 in
 /-- [σ₃, σ₁] = 2i σ₂: σ₃*σ₁ − σ₁*σ₃ = 2i·σ₂. -/
 theorem su2_comm_31 : σ₃ * σ₁ - σ₁ * σ₃ = (2 * Complex.I) • σ₂ := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [σ₁, σ₂, σ₃, Matrix.mul_apply, Fin.sum_univ_succ, smul_eq_mul,
-        Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
-        Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
+  simp [σ₁, σ₂, σ₃, smul_eq_mul] <;>
   ring
 
 -- ══════════════════════════════════════════════════════════════════════════════

@@ -97,6 +97,32 @@ theorem quantum_vs_relativistic (v k : ℝ) (hv : v ≠ 0) (hk : k ≠ 0) :
     DISPERSION_COEFF * k ^ 4 / (v ^ 2 * k ^ 2) = DISPERSION_COEFF * k ^ 2 / v ^ 2 := by
   field_simp
 
+/-- Right-hand low-`k` limit is relativistic: `ω²/k² → v²` as `k → 0⁺`. -/
+theorem omegaSq_over_kSq_tendsto_vSq_right (v : ℝ) :
+    Filter.Tendsto
+      (fun k : ℝ => omegaSq v k / k ^ 2)
+      (nhdsWithin 0 (Set.Ioi (0 : ℝ)))
+      (nhds (v ^ 2)) := by
+  have hEq :
+      (fun k : ℝ => omegaSq v k / k ^ 2) =ᶠ[nhdsWithin 0 (Set.Ioi (0 : ℝ))]
+      (fun k : ℝ => v ^ 2 - DISPERSION_COEFF * k ^ 2) := by
+    filter_upwards [self_mem_nhdsWithin] with k hk
+    exact by
+      have hk0 : k ≠ 0 := ne_of_gt hk
+      have hk2 : k ^ 2 ≠ 0 := pow_ne_zero 2 hk0
+      unfold omegaSq
+      field_simp [hk2]
+  have hPoly :
+      Filter.Tendsto
+        (fun k : ℝ => v ^ 2 - DISPERSION_COEFF * k ^ 2)
+        (nhdsWithin 0 (Set.Ioi (0 : ℝ)))
+        (nhds (v ^ 2 - DISPERSION_COEFF * 0 ^ 2)) := by
+    have hCont : Continuous (fun k : ℝ => v ^ 2 - DISPERSION_COEFF * k ^ 2) := by
+      continuity
+    exact (hCont.continuousAt.tendsto).mono_left nhdsWithin_le_nhds
+  refine Filter.Tendsto.congr' hEq.symm ?_
+  simpa using hPoly
+
 -- ── Critical wavenumber ────────────────────────────────────────────────────
 
 /-- Critical wavenumber squared: k_c² = v² / (λ_QG·ℓ_P²) -/

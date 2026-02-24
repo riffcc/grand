@@ -124,7 +124,7 @@ theorem particle_identification_from_grade_excitations :
     grade2_4d = emTriplet ∪ magneticTriplet := by
   constructor
   · exact (grade1_lepton_quark_partition).1.symm
-  · exact (grade2_su2_em_partition).1.symm
+  · simpa [Finset.union_comm] using (grade2_su2_em_partition).1.symm
 
 /-- GRAND-114 (minimax-safe):
     Finite quantum-number table from Clifford sectors:
@@ -146,7 +146,8 @@ theorem gauge_boson_spin1_grade2_sector :
     emTriplet.card = 3 ∧
     magneticTriplet.card = 3 ∧
     emTriplet ∩ magneticTriplet = ∅ := by
-  refine ⟨by decide, by decide, by decide, (grade2_su2_em_partition).2⟩
+  refine ⟨by decide, by decide, by decide, ?_⟩
+  simpa [Finset.inter_comm] using (grade2_su2_em_partition).2
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Part 3: Generator counting — 1 + 3 + 8 = 12

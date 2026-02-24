@@ -182,7 +182,6 @@ theorem confinement_slope_from_area_law
     _ = (σ * r ^ 2) / r := by ring
     _ = σ * r := by
       field_simp [hr.ne']
-      ring
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Fermi constant identity

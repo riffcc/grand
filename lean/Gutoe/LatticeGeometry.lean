@@ -230,7 +230,7 @@ theorem scLaplacian_z3_symmetric (ψ : SCSite → ℝ) (r : SCSite) :
     scLaplacian (ψ ∘ z3SCAction) r = scLaplacian ψ (z3SCAction r) := by
   obtain ⟨x, y, z⟩ := r
   simp only [scLaplacian, z3SCAction, Function.comp]
-  ring
+  ring_nf
 
 /-- The SC Laplacian annihilates constant fields: Δ(c) = 0.
     Equivalently: the coordination number equals the coefficient of the center term.
@@ -247,7 +247,7 @@ theorem scLaplacian_translation_invariant (ψ : SCSite → ℝ) (r v : SCSite) :
   obtain ⟨x, y, z⟩ := r
   obtain ⟨vx, vy, vz⟩ := v
   simp only [scLaplacian]
-  ring
+  ring_nf
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Part 7: Watson SC Green's Function

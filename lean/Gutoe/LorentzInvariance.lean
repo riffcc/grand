@@ -130,7 +130,7 @@ set_option maxHeartbeats 400000 in
 theorem boost_comm_12 :
     boostGen1 * boostGen2 - boostGen2 * boostGen1 = (-2 * Complex.I) • σ₃ := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [boostGen1, boostGen2, σ₁, σ₂, σ₃, Matrix.mul_apply, Fin.sum_univ_succ,
+  simp [boostGen1, boostGen2, σ₁, σ₂, σ₃,
         smul_eq_mul, Matrix.smul_apply,
         Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
         Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
@@ -141,10 +141,10 @@ set_option maxHeartbeats 400000 in
 theorem boost_comm_23 :
     boostGen2 * boostGen3 - boostGen3 * boostGen2 = (-2 * Complex.I) • σ₁ := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [boostGen2, boostGen3, σ₁, σ₂, σ₃, Matrix.mul_apply, Fin.sum_univ_succ,
+  simp [boostGen2, boostGen3, σ₁, σ₂, σ₃,
         smul_eq_mul, Matrix.smul_apply,
         Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
-        Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
+        Complex.sub_re, Complex.sub_im] <;>
   ring
 
 set_option maxHeartbeats 400000 in
@@ -152,7 +152,7 @@ set_option maxHeartbeats 400000 in
 theorem boost_comm_31 :
     boostGen3 * boostGen1 - boostGen1 * boostGen3 = (-2 * Complex.I) • σ₂ := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [boostGen3, boostGen1, σ₁, σ₂, σ₃, Matrix.mul_apply, Fin.sum_univ_succ,
+  simp [boostGen3, boostGen1, σ₁, σ₂, σ₃,
         smul_eq_mul, Matrix.smul_apply,
         Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
         Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
@@ -183,7 +183,7 @@ set_option maxHeartbeats 400000 in
 theorem rot_boost_comm_12 :
     σ₁ * boostGen2 - boostGen2 * σ₁ = (2 * Complex.I) • boostGen3 := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [boostGen2, boostGen3, σ₁, σ₂, σ₃, Matrix.mul_apply, Fin.sum_univ_succ,
+  simp [boostGen2, boostGen3, σ₁, σ₂, σ₃,
         smul_eq_mul, Matrix.smul_apply,
         Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
         Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
@@ -194,10 +194,10 @@ set_option maxHeartbeats 400000 in
 theorem rot_boost_comm_23 :
     σ₂ * boostGen3 - boostGen3 * σ₂ = (2 * Complex.I) • boostGen1 := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [boostGen1, boostGen3, σ₁, σ₂, σ₃, Matrix.mul_apply, Fin.sum_univ_succ,
+  simp [boostGen1, boostGen3, σ₁, σ₂, σ₃,
         smul_eq_mul, Matrix.smul_apply,
         Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
-        Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
+        Complex.sub_re, Complex.sub_im] <;>
   ring
 
 set_option maxHeartbeats 400000 in
@@ -205,7 +205,7 @@ set_option maxHeartbeats 400000 in
 theorem rot_boost_comm_31 :
     σ₃ * boostGen1 - boostGen1 * σ₃ = (2 * Complex.I) • boostGen2 := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [boostGen2, boostGen1, σ₁, σ₂, σ₃, Matrix.mul_apply, Fin.sum_univ_succ,
+  simp [boostGen2, boostGen1, σ₁, σ₂, σ₃,
         smul_eq_mul, Matrix.smul_apply,
         Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
         Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
@@ -237,10 +237,7 @@ theorem weyl_left_handed_only :
     (σ₁ + Complex.I • boostGen1) = 0 ∧  -- J_R^1 = 0 in (1/2,0)
     (σ₂ + Complex.I • boostGen2) = 0 ∧
     (σ₃ + Complex.I • boostGen3) = 0 := by
-  simp [boostGen1, boostGen2, boostGen3, smul_smul, Complex.I_sq]
-  all_goals (ext i j; fin_cases i <;> fin_cases j <;>
-             simp [σ₁, σ₂, σ₃, Matrix.smul_apply, smul_eq_mul,
-                   Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im])
+  simp [boostGen1, boostGen2, boostGen3, smul_smul]
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Part 7: Master theorem

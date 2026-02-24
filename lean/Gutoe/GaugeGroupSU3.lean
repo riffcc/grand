@@ -56,8 +56,10 @@ theorem quarkOrbit_z3_transitive : ∀ s ∈ quarkOrbit, ∃ k : Fin 3, z3_4d^[k
     color representation carrier. -/
 theorem quarkOrbit_equiv_fin3 : Nonempty ({s // s ∈ quarkOrbit} ≃ Fin 3) := by
   classical
+  have hcard_coe : Fintype.card {s // s ∈ quarkOrbit} = quarkOrbit.card := by
+    decide
   have hcard : Fintype.card {s // s ∈ quarkOrbit} = 3 := by
-    simpa [Fintype.card_subtype_iff, quarkOrbit_card]
+    simpa [quarkOrbit_card] using hcard_coe
   exact ⟨Fintype.equivFinOfCardEq hcard⟩
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -113,7 +115,7 @@ set_option maxHeartbeats 800000 in
 /-- [gm₁, gm₂] = 2i·gm₃: gm₁*gm₂ − gm₂*gm₁ = 2i·gm₃. -/
 theorem su3_comm_12 : gm₁ * gm₂ - gm₂ * gm₁ = (2 * Complex.I) • gm₃ := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [gm₁, gm₂, gm₃, Matrix.mul_apply, Fin.sum_univ_succ, smul_eq_mul,
+  simp [gm₁, gm₂, gm₃, smul_eq_mul,
         Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
         Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
   ring
@@ -122,7 +124,7 @@ set_option maxHeartbeats 800000 in
 /-- [gm₁, gm₃] = −2i·gm₂: gm₁*gm₃ − gm₃*gm₁ = −2i·gm₂. -/
 theorem su3_comm_13 : gm₁ * gm₃ - gm₃ * gm₁ = (-2 * Complex.I) • gm₂ := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [gm₁, gm₂, gm₃, Matrix.mul_apply, Fin.sum_univ_succ, smul_eq_mul,
+  simp [gm₁, gm₂, gm₃, smul_eq_mul,
         Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
         Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
   ring
@@ -132,14 +134,11 @@ set_option maxHeartbeats 800000 in
     From SU(3) structure constants: f_{462} = 1/2, so [λ₄,λ₆] = 2i·(1/2)·λ₂ = i·λ₂. -/
 theorem su3_comm_46 : gm₄ * gm₆ - gm₆ * gm₄ = Complex.I • gm₂ := by
   ext i j; fin_cases i <;> fin_cases j <;> apply Complex.ext <;>
-  simp [gm₂, gm₄, gm₆, Matrix.mul_apply, Fin.sum_univ_succ, smul_eq_mul,
-        Complex.I_re, Complex.I_im, Complex.mul_re, Complex.mul_im,
-        Complex.add_re, Complex.add_im, Complex.sub_re, Complex.sub_im] <;>
-  ring
+  simp [gm₂, gm₄, gm₆, smul_eq_mul]
 
 /-- Commutators of traceless matrices are traceless (su(3) is closed). -/
 theorem su3_commutator_traceless (A B : Matrix (Fin 3) (Fin 3) ℂ)
-    (hA : Matrix.trace A = 0) (hB : Matrix.trace B = 0) :
+    (_hA : Matrix.trace A = 0) (_hB : Matrix.trace B = 0) :
     Matrix.trace (A * B - B * A) = 0 := by
   rw [Matrix.trace_sub, Matrix.trace_mul_comm, sub_self]
 
