@@ -177,14 +177,15 @@ impl GutoeMetric {
 
     /// Hawking temperature in natural units (ℏ = c = G = k_B = 1).
     ///
-    /// T_H = (1 / (4π r_s)) × (1 + λ_QG × (l_P/r_s)²)
+    /// T_H = (1 / (4π r_s)) × (1 - λ_QG × (l_P/r_s)²)
     ///
-    /// The correction is positive: GUTOE black holes are slightly hotter than GR.
+    /// The subluminal-dispersion correction is negative: GUTOE black holes are
+    /// slightly cooler than GR in this branch.
     /// For astrophysical black holes (r_s >> l_P), the correction is ∼10⁻⁶¹ (unobservable).
     /// For Planck-mass black holes (r_s ≈ 2 l_P), the correction is ∼1/48 ≈ 2%.
     pub fn hawking_temperature(&self) -> f64 {
         let t_gr = self.gr_hawking_temperature();
-        let correction = 1.0 + LAMBDA_QG * (self.l_planck / self.r_s).powi(2);
+        let correction = 1.0 - LAMBDA_QG * (self.l_planck / self.r_s).powi(2);
         t_gr * correction
     }
 
@@ -193,9 +194,9 @@ impl GutoeMetric {
         1.0 / (4.0 * PI * self.r_s)
     }
 
-    /// Fractional Hawking temperature correction: δT/T = λ_QG × (l_P/r_s)².
+    /// Fractional Hawking temperature correction: δT/T = -λ_QG × (l_P/r_s)².
     pub fn hawking_correction_fraction(&self) -> f64 {
-        LAMBDA_QG * (self.l_planck / self.r_s).powi(2)
+        -LAMBDA_QG * (self.l_planck / self.r_s).powi(2)
     }
 }
 
@@ -280,18 +281,18 @@ mod tests {
     }
 
     #[test]
-    fn hawking_temperature_exceeds_gr() {
+    fn hawking_temperature_is_below_gr() {
         let m = GutoeMetric::planck_units(R_S);
         let t_gutoe = m.hawking_temperature();
         let t_gr = m.gr_hawking_temperature();
-        // GUTOE correction is strictly positive
+        // Subluminal branch correction is strictly negative
         assert!(
-            t_gutoe > t_gr,
-            "GUTOE T_H={t_gutoe:.8e} must exceed GR T_H={t_gr:.8e}"
+            t_gutoe < t_gr,
+            "GUTOE T_H={t_gutoe:.8e} must be below GR T_H={t_gr:.8e}"
         );
-        // Fractional correction = λ_QG / r_s² (in Planck units with l_P=1)
+        // Fractional correction = -λ_QG / r_s² (in Planck units with l_P=1)
         let frac_measured = (t_gutoe - t_gr) / t_gr;
-        let frac_predicted = LAMBDA_QG / (R_S * R_S);
+        let frac_predicted = -LAMBDA_QG / (R_S * R_S);
         assert!(
             (frac_measured - frac_predicted).abs() < 1e-14,
             "hawking correction fraction {frac_measured:.2e} ≠ predicted {frac_predicted:.2e}"

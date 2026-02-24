@@ -23,8 +23,8 @@
  * Theorem D (g_tt_at_origin):
  *   g_tt(0, r_s, l_P) = −(1 − r_s/r_core(l_P))   (finite, not −∞)
  *
- * Theorem E (hawking_temp_gt_gr):
- *   T_GUTOE > T_GR for all r_s > 0, l_P > 0   (GUTOE BHs run hotter)
+ * Theorem E (hawking_temp_lt_gr):
+ *   T_GUTOE < T_GR for all r_s > 0, l_P > 0   (subluminal-dispersion branch)
  *
  * Master theorem: gutoe_gravity_structure  (A)+(B)+(C)+(D)+(E).
  *
@@ -57,9 +57,10 @@ noncomputable def r_eff (r l_P : ℝ) : ℝ := Real.sqrt (r ^ 2 + (r_core l_P) ^
 /-- g_tt metric component: g_tt(r, r_s, l_P) = −(1 − r_s / r_eff(r, l_P)). -/
 noncomputable def g_tt (r r_s l_P : ℝ) : ℝ := -(1 - r_s / r_eff r l_P)
 
-/-- GUTOE Hawking temperature (natural units): T_H = 1/(4π r_s) × (1 + λ_QG × (l_P/r_s)²). -/
+/-- GUTOE Hawking temperature (natural units): T_H = 1/(4π r_s) × (1 - λ_QG × (l_P/r_s)²).
+    This follows the subluminal-dispersion sign convention used in `HawkingCorrection`. -/
 noncomputable def hawking_temp (r_s l_P : ℝ) : ℝ :=
-  (1 / (4 * Real.pi * r_s)) * (1 + lambda_qg * (l_P / r_s) ^ 2)
+  (1 / (4 * Real.pi * r_s)) * (1 - lambda_qg * (l_P / r_s) ^ 2)
 
 /-- GR Hawking temperature: T_GR = 1/(4π r_s). -/
 noncomputable def gr_hawking_temp (r_s : ℝ) : ℝ :=
@@ -134,28 +135,29 @@ theorem g_tt_at_origin {r_s l_P : ℝ} (hlP : 0 < l_P) :
   simp only [g_tt, r_eff_at_origin (le_of_lt hlP)]
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- Theorem E: GUTOE Hawking temperature exceeds the GR value
+-- Theorem E: GUTOE Hawking temperature is below the GR value
 -- ══════════════════════════════════════════════════════════════════════════════
 
 /-- **Theorem E**: For all r_s > 0, l_P > 0, the GUTOE Hawking temperature
-    exceeds the GR value:  T_GUTOE > T_GR.
+    is below the GR value in the subluminal-dispersion branch:  T_GUTOE < T_GR.
 
-    Physical meaning: the SC lattice dispersion (λ_QG = 1/12) increases the
-    surface gravity at the horizon, making GUTOE black holes slightly hotter.
-    The correction δT/T = λ_QG × (l_P/r_s)² is positive and measurable in
+    Physical meaning: subluminal UV dispersion (λ_QG = 1/12) reduces the
+    effective surface gravity at the horizon, making GUTOE black holes slightly cooler.
+    The correction δT/T = −λ_QG × (l_P/r_s)² is negative and measurable in
     principle for near-Planckian black holes. -/
-theorem hawking_temp_gt_gr {r_s l_P : ℝ} (hrs : 0 < r_s) (hlP : 0 < l_P) :
-    gr_hawking_temp r_s < hawking_temp r_s l_P := by
+theorem hawking_temp_lt_gr {r_s l_P : ℝ} (hrs : 0 < r_s) (hlP : 0 < l_P) :
+    hawking_temp r_s l_P < gr_hawking_temp r_s := by
   unfold hawking_temp gr_hawking_temp
-  have hpi : (0 : ℝ) < Real.pi := Real.pi_pos
   have hbase : 0 < 1 / (4 * Real.pi * r_s) := by positivity
   have hcorr : 0 < lambda_qg * (l_P / r_s) ^ 2 :=
     mul_pos lambda_qg_pos (by positivity)
-  have expand : (1 / (4 * Real.pi * r_s)) * (1 + lambda_qg * (l_P / r_s) ^ 2) =
+  have expand : (1 / (4 * Real.pi * r_s)) * (1 - lambda_qg * (l_P / r_s) ^ 2) =
       1 / (4 * Real.pi * r_s) +
-      1 / (4 * Real.pi * r_s) * (lambda_qg * (l_P / r_s) ^ 2) := by ring
+      (-(1 / (4 * Real.pi * r_s) * (lambda_qg * (l_P / r_s) ^ 2))) := by ring
   rw [expand]
-  linarith [mul_pos hbase hcorr]
+  have hneg_term : -(1 / (4 * Real.pi * r_s) * (lambda_qg * (l_P / r_s) ^ 2)) < 0 := by
+    nlinarith [mul_pos hbase hcorr]
+  linarith
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Theorem F: GR Schwarzschild limit (r_core → 0)
@@ -180,17 +182,17 @@ theorem r_eff_classical_limit (r : ℝ) : Real.sqrt (r ^ 2 + (r_core 0) ^ 2) = |
     (B) r_eff(0, l_P) = r_core(l_P)   — singularity replaced by finite core
     (C) r_eff(0, l_P) > 0             — areal radius is always positive
     (D) g_tt(0, r_s, l_P) = −(1 − r_s/r_core)  — g_tt finite at origin
-    (E) T_GUTOE > T_GR                — lattice dispersion heats the horizon -/
+    (E) T_GUTOE < T_GR                — subluminal branch cools the horizon -/
 theorem gutoe_gravity_structure {l_P : ℝ} (hlP : 0 < l_P) {r_s : ℝ} (hrs : 0 < r_s) :
     (1 : ℚ) / 72 = (1 / 6) * (1 / 12) ∧
     r_eff 0 l_P = r_core l_P ∧
     0 < r_eff 0 l_P ∧
     g_tt 0 r_s l_P = -(1 - r_s / r_core l_P) ∧
-    gr_hawking_temp r_s < hawking_temp r_s l_P :=
+    hawking_temp r_s l_P < gr_hawking_temp r_s :=
   ⟨sc_dispersion_lambda_qg,
    r_eff_at_origin (le_of_lt hlP),
    r_eff_pos hlP,
    g_tt_at_origin hlP,
-   hawking_temp_gt_gr hrs hlP⟩
+   hawking_temp_lt_gr hrs hlP⟩
 
 end Gutoe.GravityMetric
