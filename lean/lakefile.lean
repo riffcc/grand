@@ -22,4 +22,9 @@ lean_lib Gutoe where
              `Gutoe.LorentzInvariance, `Gutoe.GrandMasterTheorem,
              `Gutoe.GravityMetric,
              `Gutoe.KerrGeometry,
+             `Gutoe.KerrCameraStability,
+             `Gutoe.Geodesic3DProjection,
+             `Gutoe.SynchrotronGRMHD,
+             `Gutoe.SynchrotronTransfer,
+             `Gutoe.FalsifiabilityCatalog,
              `Gutoe.LambdaQG]
