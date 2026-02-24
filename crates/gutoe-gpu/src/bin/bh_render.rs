@@ -2969,8 +2969,20 @@ fn run_transfer_parity_report(view: &View, width: usize, height: usize, out_dir:
             0.0
         };
 
-        let csv_path = out_dir.join(format!("transfer_parity_{}.csv", view.slug));
-        let tmp_path = out_dir.join(format!("transfer_parity_{}.csv.tmp", view.slug));
+        let backend_tag = std::env::var("BH_BACKEND_TAG").ok().unwrap_or_else(|| {
+            if cfg!(all(feature = "cuda", not(feature = "rocm"))) {
+                "cuda".to_string()
+            } else if cfg!(all(feature = "rocm", not(feature = "cuda"))) {
+                "rocm".to_string()
+            } else if cfg!(all(feature = "cuda", feature = "rocm")) {
+                "multi".to_string()
+            } else {
+                "gpu".to_string()
+            }
+        });
+        let csv_path = out_dir.join(format!("transfer_parity_{}_{}.csv", view.slug, backend_tag));
+        let tmp_path =
+            out_dir.join(format!("transfer_parity_{}_{}.csv.tmp", view.slug, backend_tag));
         let mut f = std::fs::File::create(&tmp_path).expect("create transfer parity tmp csv");
         writeln!(
             f,
