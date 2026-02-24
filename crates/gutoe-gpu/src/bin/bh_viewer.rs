@@ -753,9 +753,17 @@ fn disk_transfer_factor(r_eff: f32, r_s: f32, bx_raw: f32, sin_inc: f32) -> f32 
     let r_safe = max(r_eff, 1e-6);
     let g_gr = sqrt(max(1.0 - r_s / r_safe, 0.0));
     let beta = min(sqrt(max(r_s / (2.0 * r_safe), 0.0)), 0.7);
-    let gamma = 1.0 / sqrt(max(1.0 - beta * beta, 1e-6));
+    // Kerr frame dragging boosts azimuthal velocity near the horizon.
+    let kerr_boost = if (P.kerr_enable > 0.5) {
+        let x = pow(clamp(r_s / r_safe, 0.0, 1.0), 1.5);
+        0.42 * P.kerr_astar * x
+    } else {
+        0.0
+    };
+    let beta_eff = clamp(beta + kerr_boost, -0.88, 0.88);
+    let gamma = 1.0 / sqrt(max(1.0 - beta_eff * beta_eff, 1e-6));
     let mu = clamp(bx_raw / r_safe, -1.0, 1.0);
-    let beta_obs = beta * sin_inc * mu;
+    let beta_obs = beta_eff * sin_inc * mu;
     let g_dop = 1.0 / (gamma * (1.0 - beta_obs));
     let g = g_gr * g_dop;
     return clamp(pow(g, 4.0), 1e-6, 300.0);
@@ -768,7 +776,12 @@ fn disk_color(r_eff: f32, n_cross: u32, bx_raw: f32, bg_stars: vec3<f32>) -> vec
     let outer_taper = exp(-excess * excess);
     let fade = pow(0.65, f32(max(i32(n_cross) - 1, 0)));
     let transfer = disk_transfer_factor(r_eff, P.r_s, bx_raw, P.sin_inc);
-    let source_local = max(t_rel * fade * outer_taper, 0.0);
+    let kerr_emiss_boost = if (P.kerr_enable > 0.5) {
+        1.0 + 0.30 * abs(P.kerr_astar) * pow(clamp(P.r_s / max(r_eff, 1e-6), 0.0, 1.0), 1.3)
+    } else {
+        1.0
+    };
+    let source_local = max(t_rel * fade * outer_taper * kerr_emiss_boost, 0.0);
     let g_cov = pow(max(transfer, 1e-9), 0.25);
     let alpha_base = 0.35 * max(P.tau_scale, 0.0) * (1.0 + f32(max(i32(n_cross) - 1, 0)) * 0.4);
 
