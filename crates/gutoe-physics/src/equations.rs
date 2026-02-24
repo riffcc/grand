@@ -386,10 +386,10 @@ mod tests {
 
     #[test]
     fn quark_mass_scales_as_lambda_qg_squared() {
-        // Rust port uses λ_QG = 0.084372 (initial guess).
+        // Runtime baseline uses shared λ_QG = 1/12.
         // Python precision_qg_tuner converged on λ_QG = 0.120000.
-        // Mass ratio = (0.120 / 0.084372)² > 2.0 — port predicts <half the mass.
-        let lambda_rust   = 0.084372_f64;
+        // Mass ratio = (0.120 / (1/12))² > 2.0 — strong quadratic sensitivity.
+        let lambda_rust   = LAMBDA_QG;
         let lambda_python = 0.120000_f64;
         let mass_ratio = lambda_python.powi(2) / lambda_rust.powi(2);
         assert!(mass_ratio > 2.0,

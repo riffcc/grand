@@ -214,6 +214,7 @@ pub fn simulate_propagation(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gutoe_core::constants::LAMBDA_QG;
 
     #[test]
     fn test_rail_creation() {
@@ -240,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_dispersion_relation() {
-        let sim = WaveSimulator::new(0.084372, 1.0);
+        let sim = WaveSimulator::new(LAMBDA_QG, 1.0);
 
         // Without quantum gravity correction (λ_QG → 0), ω = vk
         let omega_classical = 1.0 * 1.0; // v * k
@@ -253,7 +254,7 @@ mod tests {
 
     #[test]
     fn test_critical_wave_number() {
-        let sim = WaveSimulator::new(0.084372, 1.0);
+        let sim = WaveSimulator::new(LAMBDA_QG, 1.0);
         let k_crit = sim.critical_k(0.1);
 
         // Critical k should be finite
@@ -263,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_stability_check() {
-        let sim = WaveSimulator::new(0.084372, 1.0);
+        let sim = WaveSimulator::new(LAMBDA_QG, 1.0);
 
         // Low k should be stable
         assert!(sim.is_stable(0.1, 0.1));

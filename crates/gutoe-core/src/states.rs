@@ -30,9 +30,8 @@ use std::fmt;
 
 /// Fundamental GUTOE constants derived from vector rail simulations
 pub mod constants {
-    /// Quantum gravity coupling constant - derived from simulation
-    /// This is a KEY value to verify - the framework claims λ_QG ≈ 0.084372
-    pub const LAMBDA_QG: f64 = 0.084372;
+    /// Quantum gravity coupling constant (Lean/Rust parity baseline): λ_QG = 1/12.
+    pub const LAMBDA_QG: f64 = 1.0 / 12.0;
 
     /// Maximum virtualized qubits supported
     pub const MAX_QUBITS: usize = 3_000_000;
@@ -321,10 +320,9 @@ mod tests {
 
     #[test]
     fn lambda_qg_matches_claimed_value() {
-        // GUTOE claims λ_QG ≈ 0.084372.  This test pins that number down.
-        // If the constant changes, it must be a deliberate decision.
-        assert!((constants::LAMBDA_QG - 0.084372).abs() < 1e-6,
-            "λ_QG = {} ≠ 0.084372 — the claimed value has shifted",
+        // Lean/Rust parity guardrail for the shared structural value λ_QG = 1/12.
+        assert!((constants::LAMBDA_QG - (1.0 / 12.0)).abs() < 1e-15,
+            "λ_QG = {} ≠ 1/12 — parity drift detected",
             constants::LAMBDA_QG);
     }
 

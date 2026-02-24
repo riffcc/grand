@@ -6,6 +6,7 @@
  */
 
 use gutoe_physics::constants::{ALPHA, ALPHA_LEADING_ORDER, LAMBDA_QG};
+use gutoe_core::constants as core_constants;
 use std::fs::{self, File};
 use std::io::Write;
 
@@ -33,6 +34,12 @@ fn main() {
             term: "lambda_qg",
             expected: 1.0 / 12.0,
             runtime: LAMBDA_QG,
+            tol: 1e-15,
+        },
+        ParityRow {
+            term: "lambda_qg_core",
+            expected: 1.0 / 12.0,
+            runtime: core_constants::LAMBDA_QG,
             tol: 1e-15,
         },
         ParityRow {
