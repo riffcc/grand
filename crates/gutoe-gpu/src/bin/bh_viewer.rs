@@ -126,6 +126,42 @@ fn hash21(p: vec2<f32>) -> f32 {
     return fract(q.x * q.y);
 }
 
+fn hash31(p: vec3<f32>) -> f32 {
+    var q = fract(p * vec3(127.1, 311.7, 269.5));
+    q += dot(q, q.yzx + 19.19);
+    return fract((q.x + q.y) * q.z);
+}
+
+fn local_star_volume(cam: vec3<f32>, dir: vec3<f32>, depth: f32, scale: f32) -> vec3<f32> {
+    let p = (cam + dir * depth) * scale;
+    let cell = floor(p);
+    let local = fract(p) - vec3(0.5);
+    let gate = hash31(cell + vec3(depth * 0.13, depth * 0.07, depth * 0.19));
+    if gate > 0.050 {
+        return vec3(0.0);
+    }
+    let center = vec3(
+        hash31(cell + vec3(1.3, 2.1, 3.7)),
+        hash31(cell + vec3(4.1, 5.9, 6.8)),
+        hash31(cell + vec3(7.2, 8.6, 9.4))
+    ) - vec3(0.5);
+    let d = local - center;
+    let r2 = dot(d, d);
+    let psf = exp(-r2 * 34.0);
+    let temp = hash31(cell + vec3(0.9, 1.1, 1.7));
+    let star_col = select(
+        select(
+            select(vec3(1.00, 0.62, 0.35), vec3(1.00, 0.92, 0.78), temp > 0.20),
+            vec3(1.00, 1.00, 1.00),
+            temp > 0.45
+        ),
+        vec3(0.78, 0.86, 1.00),
+        temp > 0.75
+    );
+    let bright = 0.08 + 0.30 * pow(hash31(cell + vec3(3.9, 2.7, 1.5)), 2.0);
+    return star_col * bright * psf;
+}
+
 // ── Star field ────────────────────────────────────────────────────────────────
 // Procedural star field matched to bh_render's hash/band model for parity.
 
@@ -230,7 +266,19 @@ fn starfield_from_dir(dir_in: vec3<f32>) -> vec3<f32> {
     let map_sample = textureSampleLevel(star_tex, star_samp, uv, 0.0);
     let map_col = map_sample.rgb;
     let map_mix = 0.88 * clamp(map_sample.a, 0.0, 1.0);
-    return mix(col, map_col, map_mix);
+    col = mix(col, map_col, map_mix);
+
+    // Local 3D stellar volume shells: introduces real camera-position parallax
+    // for nearby stars while keeping far-field catalog/procedural sky intact.
+    let cam = vec3(P.cam_x, P.cam_y, P.cam_z);
+    col += local_star_volume(cam, dir, 18.0 * max(P.r_s, 1.0), 0.22);
+    if (P.quality_tier >= 1.0) {
+        col += local_star_volume(cam, dir, 36.0 * max(P.r_s, 1.0), 0.14);
+    }
+    if (P.quality_tier >= 1.5) {
+        col += local_star_volume(cam, dir, 72.0 * max(P.r_s, 1.0), 0.09);
+    }
+    return col;
 }
 
 // ── Orbit integrator ──────────────────────────────────────────────────────────
