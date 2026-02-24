@@ -42,25 +42,37 @@ fn main() {
         let Ok(text) = fs::read_to_string(&p) else {
             continue;
         };
-        for (i, line) in text.lines().enumerate() {
-            if i == 0 || line.trim().is_empty() {
+        let mut lines = text.lines();
+        let Some(header) = lines.next() else {
+            continue;
+        };
+        let header_cols: Vec<&str> = header.split(',').collect();
+        let idx_mad = header_cols.iter().position(|c| *c == "mad");
+        let idx_transfer = header_cols
+            .iter()
+            .position(|c| *c == "transfer_delta_parity_abs");
+        let idx_gpu_ms = header_cols.iter().position(|c| *c == "gpu_ms");
+
+        for line in lines {
+            if line.trim().is_empty() {
                 continue;
             }
             let cols: Vec<&str> = line.split(',').collect();
-            if cols.len() < 14 {
-                continue;
+            if let Some(i) = idx_mad {
+                if let Some(v) = cols.get(i).and_then(|s| s.parse::<f64>().ok()) {
+                    stats.mad_sum += v;
+                    stats.mad_max = stats.mad_max.max(v);
+                }
             }
-            if let Ok(mad) = cols[3].parse::<f64>() {
-                stats.mad_sum += mad;
-                stats.mad_max = stats.mad_max.max(mad);
+            if let Some(i) = idx_transfer {
+                if let Some(v) = cols.get(i).and_then(|s| s.parse::<f64>().ok()) {
+                    stats.transfer_abs_sum += v;
+                    stats.transfer_abs_max = stats.transfer_abs_max.max(v);
+                }
             }
-            if let Ok(tabs) = cols[13].parse::<f64>() {
-                stats.transfer_abs_sum += tabs;
-                stats.transfer_abs_max = stats.transfer_abs_max.max(tabs);
-            }
-            if cols.len() > 14 {
-                if let Ok(ms) = cols[14].parse::<f64>() {
-                    stats.gpu_ms_sum += ms;
+            if let Some(i) = idx_gpu_ms {
+                if let Some(v) = cols.get(i).and_then(|s| s.parse::<f64>().ok()) {
+                    stats.gpu_ms_sum += v;
                     stats.gpu_ms_rows += 1;
                 }
             }
