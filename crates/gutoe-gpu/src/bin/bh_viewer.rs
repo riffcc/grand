@@ -1745,7 +1745,16 @@ impl App {
         let Some(win) = self.window.as_ref() else { return };
         let frame_start = Instant::now();
         let sz = win.inner_size();
-        let params = self.camera.params(sz.width as f32, sz.height as f32, self.quality_tier);
+        let pixels = (sz.width as u64).saturating_mul(sz.height as u64);
+        // Fullscreen often jumps to HiDPI backbuffers (effectively ~4x pixels).
+        // Cap effective quality by resolution to avoid nonlinear frametime spikes.
+        let mut effective_quality = self.quality_tier;
+        if pixels >= 6_000_000 {
+            effective_quality = (effective_quality - 2.0).max(0.0);
+        } else if pixels >= 2_600_000 {
+            effective_quality = (effective_quality - 1.0).max(0.0);
+        }
+        let params = self.camera.params(sz.width as f32, sz.height as f32, effective_quality);
         let render_result = {
             let Some(gpu) = self.gpu.as_mut() else { return };
             gpu.upload_params(&params);
