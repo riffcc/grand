@@ -16,6 +16,7 @@ fn main() {
     let dir = std::env::var("BH_RENDER_DIR").unwrap_or_else(|_| "/tmp/bh_renders".to_string());
     let root = Path::new(&dir);
     let mut per_case: Vec<(String, String, Stats)> = Vec::new();
+    let mut header_only: Vec<String> = Vec::new();
 
     let entries = match fs::read_dir(root) {
         Ok(e) => e,
@@ -67,6 +68,8 @@ fn main() {
         }
         if stats.rows > 0 {
             per_case.push((view, backend, stats));
+        } else {
+            header_only.push(name.to_string());
         }
     }
 
@@ -99,8 +102,19 @@ fn main() {
             }
         ));
     }
+    if !header_only.is_empty() {
+        md.push_str("\n## Header-Only Parity CSVs\n\n");
+        md.push_str("These files contain only headers (no data rows). They usually indicate an aborted run or missing GPU backend at runtime.\n\n");
+        for name in &header_only {
+            md.push_str(&format!("- `{name}`\n"));
+        }
+    }
     fs::write(&out, md).expect("write dashboard");
     println!("wrote {}", out.display());
+    if per_case.is_empty() {
+        eprintln!("no parity data rows found; dashboard includes header-only files for diagnosis");
+        std::process::exit(2);
+    }
 }
 
 fn parse_case(stem: &str) -> (String, String) {
