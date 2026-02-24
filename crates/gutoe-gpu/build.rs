@@ -112,16 +112,26 @@ fn main() {
             ("kernels/tracer.cu",    out_dir.join("hip_tracer.o")),
         ];
         let mut selected_wavefront: Option<String> = None;
-        let wavefront_candidates: Vec<Option<String>> = if let Ok(v) = env::var("HIP_WAVEFRONT_SIZE") {
-            vec![Some(v)]
+        let mut wavefront_candidates: Vec<Option<String>> = Vec::new();
+        if let Ok(v) = env::var("HIP_WAVEFRONT_SIZE") {
+            // User override is tried first, but we still fallback to sane defaults
+            // so a stale export cannot brick ROCm builds.
+            wavefront_candidates.push(Some(v.clone()));
+            wavefront_candidates.push(None);
+            if v != "32" {
+                wavefront_candidates.push(Some("32".to_string()));
+            }
+            if v != "64" {
+                wavefront_candidates.push(Some("64".to_string()));
+            }
         } else if gfx_arch
             .as_deref()
             .is_some_and(|g| g.starts_with("gfx11"))
         {
-            vec![Some("32".to_string()), None, Some("64".to_string())]
+            wavefront_candidates.extend([Some("32".to_string()), None, Some("64".to_string())]);
         } else {
-            vec![None, Some("64".to_string()), Some("32".to_string())]
-        };
+            wavefront_candidates.extend([None, Some("64".to_string()), Some("32".to_string())]);
+        }
 
         let mut obj_paths: Vec<String> = Vec::new();
         let mut compiled = false;
