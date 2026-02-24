@@ -749,39 +749,38 @@ fn trace_interior(bx_in: f32, by_in: f32, core_look: bool) -> vec4<f32> {
 
 // ── Disk colour: covariant transfer (CPU/CUDA parity target) ─────────────────
 
-fn disk_transfer_factor(r_eff: f32, r_s: f32, bx_raw: f32, sin_inc: f32) -> f32 {
+fn disk_transfer_factor(r_eff: f32, r_s: f32, bx_raw: f32, phi_orb: f32, sin_inc: f32) -> f32 {
     let r_safe = max(r_eff, 1e-6);
     let g_gr = sqrt(max(1.0 - r_s / r_safe, 0.0));
-    let beta = min(sqrt(max(r_s / (2.0 * r_safe), 0.0)), 0.7);
-    // Kerr frame dragging boosts azimuthal velocity near the horizon.
-    let kerr_boost = if (P.kerr_enable > 0.5) {
-        let x = pow(clamp(r_s / r_safe, 0.0, 1.0), 1.5);
-        0.42 * P.kerr_astar * x
-    } else {
-        0.0
-    };
-    let beta_eff = clamp(beta + kerr_boost, -0.88, 0.88);
+    let mut beta = min(sqrt(max(r_s / (2.0 * r_safe), 0.0)), 0.7);
+    let mut omega_boost = 0.0;
+    if (P.kerr_enable > 0.5) {
+        // Frame-drag proxy for Kerr emissive flow (strong near horizon, fades outward).
+        omega_boost = 0.35 * abs(P.kerr_astar) * pow(clamp(r_s / r_safe, 0.0, 1.0), 1.5);
+        beta = min(beta * (1.0 + omega_boost), 0.85);
+    }
+    let beta_eff = clamp(beta, -0.88, 0.88);
     let gamma = 1.0 / sqrt(max(1.0 - beta_eff * beta_eff, 1e-6));
-    let mu = clamp(bx_raw / r_safe, -1.0, 1.0);
+    // Match bh_render’s LOS projection model: dominant orbital phase + small
+    // screen-space blend for continuity.
+    let mu_phi = clamp(sin(phi_orb), -1.0, 1.0);
+    let mu_screen = clamp(bx_raw / r_safe, -1.0, 1.0);
+    let mu = clamp(0.8 * mu_phi + 0.2 * mu_screen, -1.0, 1.0);
     let beta_obs = beta_eff * sin_inc * mu;
     let g_dop = 1.0 / (gamma * (1.0 - beta_obs));
     let g = g_gr * g_dop;
-    return clamp(pow(g, 4.0), 1e-6, 300.0);
+    let g4 = clamp(pow(g, 4.0), 1e-6, 300.0);
+    return g4 * (1.0 + 0.15 * omega_boost);
 }
 
-fn disk_color(r_eff: f32, n_cross: u32, bx_raw: f32, bg_stars: vec3<f32>) -> vec3<f32> {
+fn disk_color(r_eff: f32, phi_orb: f32, n_cross: u32, bx_raw: f32, bg_stars: vec3<f32>) -> vec3<f32> {
     let r_isco = 3.0 * P.r_s;
     let t_rel = pow(max(r_isco / max(r_eff, 1e-6), 1e-6), 0.75);
     let excess = max(r_eff - P.disk_out, 0.0) / max(0.5 * P.disk_out, 1e-6);
     let outer_taper = exp(-excess * excess);
     let fade = pow(0.65, f32(max(i32(n_cross) - 1, 0)));
-    let transfer = disk_transfer_factor(r_eff, P.r_s, bx_raw, P.sin_inc);
-    let kerr_emiss_boost = if (P.kerr_enable > 0.5) {
-        1.0 + 0.30 * abs(P.kerr_astar) * pow(clamp(P.r_s / max(r_eff, 1e-6), 0.0, 1.0), 1.3)
-    } else {
-        1.0
-    };
-    let source_local = max(t_rel * fade * outer_taper * kerr_emiss_boost, 0.0);
+    let transfer = disk_transfer_factor(r_eff, P.r_s, bx_raw, phi_orb, P.sin_inc);
+    let source_local = max(t_rel * fade * outer_taper, 0.0);
     let g_cov = pow(max(transfer, 1e-9), 0.25);
     let alpha_base = 0.35 * max(P.tau_scale, 0.0) * (1.0 + f32(max(i32(n_cross) - 1, 0)) * 0.4);
 
@@ -921,7 +920,7 @@ fn shade_sample(sx: f32, sy: f32) -> vec3<f32> {
         }
         let sx_disk = cos(P.az) * sxr - sin(P.az) * syr;
         let stars = starfield_from_dir(sky_dir);
-        return disk_color(hit.x, u32(hit.z), sx_disk, stars);
+        return disk_color(hit.x, hit.y, u32(hit.z), sx_disk, stars);
     }
 
     // Escaped photon — background with gravitationally lensed star field
