@@ -186,6 +186,14 @@ fn main() {
             .map(|r| format!("{r}/lib"))
             .unwrap_or_else(|_| "/opt/rocm/lib".to_string());
         println!("cargo:rustc-link-search=native={rocm_lib}");
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{rocm_lib}");
+        let rocm_lib64 = env::var("ROCM_PATH")
+            .map(|r| format!("{r}/lib64"))
+            .unwrap_or_else(|_| "/opt/rocm/lib64".to_string());
+        if std::path::Path::new(&rocm_lib64).exists() {
+            println!("cargo:rustc-link-search=native={rocm_lib64}");
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{rocm_lib64}");
+        }
         println!("cargo:rustc-link-lib=amdhip64");
         println!("cargo:rerun-if-changed=kernels/cuda_main.cu");
         println!("cargo:rerun-if-changed=kernels/tracer.cu");
