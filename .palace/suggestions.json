@@ -1,0 +1,43 @@
+[
+  {
+    "index": 2,
+    "title": "Add real-time simulation API to server",
+    "description": "The server currently only serves static files and health. Add endpoints to run simulations, query state, and stream results. This would enable the frontend to display live simulation data rather than just static demos.",
+    "priority": "medium",
+    "effort": "M",
+    "related_files": [
+      "server/src/main.rs",
+      "frontend/index.html"
+    ],
+    "tags": [
+      "backend",
+      "frontend",
+      "api"
+    ],
+    "plane_issue_id": null,
+    "created_at": "2026-02-24T10:32:48.274260839+00:00",
+    "plan": null,
+    "subtasks": null,
+    "relations": null
+  },
+  {
+    "index": 5,
+    "title": "Enhance frontend visualizations",
+    "description": "The Vue.js frontend has 4 basic views (double-slit, entanglement, tunneling, lattice). Consider adding: parameter controls, real-time metrics display, lattice state visualization with color coding, and better Three.js integration for the 3D lattice view.",
+    "priority": "high",
+    "effort": "M",
+    "related_files": [
+      "frontend/index.html",
+      "crates/gutoe-viz/src/"
+    ],
+    "tags": [
+      "frontend",
+      "visualization"
+    ],
+    "plane_issue_id": null,
+    "created_at": "2026-02-24T10:32:48.274261509+00:00",
+    "plan": null,
+    "subtasks": null,
+    "relations": null
+  }
+]
