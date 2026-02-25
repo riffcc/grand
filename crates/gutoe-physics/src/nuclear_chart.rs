@@ -11,6 +11,7 @@
  */
 
 use crate::dynamics_map::StandardModelDynamicsMap;
+use crate::constants::LAMBDA_QG;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
@@ -75,6 +76,10 @@ pub struct ShellParams {
     pub amplitude_n: f64,
     pub sigma_z: f64,
     pub sigma_n: f64,
+    pub proton_magic_weight_coeff: f64,
+    pub proton_magic_weight_cap: f64,
+    pub neutron_magic_weight_coeff: f64,
+    pub neutron_magic_weight_cap: f64,
     pub superheavy_proton_amplitude: f64,
     pub superheavy_proton_sigma: f64,
     pub superheavy_proton_gate_n_sigma: f64,
@@ -94,6 +99,10 @@ impl Default for ShellParams {
             amplitude_n: 2.8,
             sigma_z: 4.0,
             sigma_n: 5.0,
+            proton_magic_weight_coeff: 2.0 * LAMBDA_QG,
+            proton_magic_weight_cap: 1.80,
+            neutron_magic_weight_coeff: 3.0 * LAMBDA_QG,
+            neutron_magic_weight_cap: 2.15,
             superheavy_proton_amplitude: 2.0,
             superheavy_proton_sigma: 5.0,
             superheavy_proton_gate_n_sigma: 24.0,
@@ -245,6 +254,41 @@ fn shell_bonus(x: u16, magics: &[u16], amplitude: f64, sigma: f64) -> f64 {
         .sum()
 }
 
+fn shell_bonus_weighted<F>(x: u16, magics: &[u16], amplitude: f64, sigma: f64, weight: F) -> f64
+where
+    F: Fn(u16) -> f64,
+{
+    let xf = x as f64;
+    magics
+        .iter()
+        .map(|&m| {
+            let dx = xf - m as f64;
+            let w = weight(m).max(0.0);
+            amplitude * w * (-(dx * dx) / (2.0 * sigma * sigma)).exp()
+        })
+        .sum()
+}
+
+fn neutron_magic_weight(magic_n: u16, coeff: f64, cap: f64) -> f64 {
+    if magic_n <= 28 {
+        return 1.0;
+    }
+    // Cl(1,3)+Z3 correction hierarchy: heavier neutron closures require
+    // stronger shell leverage to maintain observed S2n cliffs.
+    let x = (magic_n as f64 - 28.0) / 28.0;
+    (1.0 + coeff * x * x).clamp(1.0, cap)
+}
+
+fn proton_magic_weight(magic_z: u16, coeff: f64, cap: f64) -> f64 {
+    if magic_z <= 20 {
+        return 1.0;
+    }
+    // Keep proton-shell reinforcement milder than neutron reinforcement so
+    // we shift beta-stable isobars near Z=50 without destabilizing light-Z fits.
+    let x = (magic_z as f64 - 20.0) / 30.0;
+    (1.0 + coeff * x * x).clamp(1.0, cap)
+}
+
 fn semf_binding_mev(
     z: u16,
     n: u16,
@@ -263,11 +307,35 @@ fn semf_binding_mev(
     let asymmetry = semf.a_a * n_asym * n_asym / a;
     let pairing = pairing_term(z, n, a, semf.a_p);
 
-    let shell_z = shell_bonus(z, &PROTON_MAGIC_NUMBERS, shell.amplitude_z, shell.sigma_z);
-    let shell_n = shell_bonus(n, &NEUTRON_MAGIC_NUMBERS, shell.amplitude_n, shell.sigma_n);
+    let shell_z = shell_bonus_weighted(
+        z,
+        &PROTON_MAGIC_NUMBERS,
+        shell.amplitude_z,
+        shell.sigma_z,
+        |magic| {
+            proton_magic_weight(
+                magic,
+                shell.proton_magic_weight_coeff,
+                shell.proton_magic_weight_cap,
+            )
+        },
+    );
+    let shell_n = shell_bonus_weighted(
+        n,
+        &NEUTRON_MAGIC_NUMBERS,
+        shell.amplitude_n,
+        shell.sigma_n,
+        |magic| {
+            neutron_magic_weight(
+                magic,
+                shell.neutron_magic_weight_coeff,
+                shell.neutron_magic_weight_cap,
+            )
+        },
+    );
     // A-dependent shell leverage: suppress light-nucleus over-bias and let
     // shell structure compete against Coulomb/fission in superheavy region.
-    let shell_scale = (a / 56.0).powf(0.28).clamp(0.45, 1.35);
+    let shell_scale = (a / 56.0).powf(0.32).clamp(0.45, 1.50);
     let heavy_gate = if z >= shell.heavy_gate_z_min && n >= shell.heavy_gate_n_min {
         1.0
     } else {

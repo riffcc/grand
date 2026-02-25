@@ -64,6 +64,22 @@ fn main() -> anyhow::Result<()> {
             amplitude_n: env_f64("GUTOE_NUCLEAR_AMP_N", default_shell.amplitude_n),
             sigma_z: env_f64("GUTOE_NUCLEAR_SIGMA_Z", default_shell.sigma_z),
             sigma_n: env_f64("GUTOE_NUCLEAR_SIGMA_N", default_shell.sigma_n),
+            proton_magic_weight_coeff: env_f64(
+                "GUTOE_NUCLEAR_PROTON_MAGIC_WEIGHT_COEFF",
+                default_shell.proton_magic_weight_coeff,
+            ),
+            proton_magic_weight_cap: env_f64(
+                "GUTOE_NUCLEAR_PROTON_MAGIC_WEIGHT_CAP",
+                default_shell.proton_magic_weight_cap,
+            ),
+            neutron_magic_weight_coeff: env_f64(
+                "GUTOE_NUCLEAR_NEUTRON_MAGIC_WEIGHT_COEFF",
+                default_shell.neutron_magic_weight_coeff,
+            ),
+            neutron_magic_weight_cap: env_f64(
+                "GUTOE_NUCLEAR_NEUTRON_MAGIC_WEIGHT_CAP",
+                default_shell.neutron_magic_weight_cap,
+            ),
             superheavy_proton_amplitude: env_f64(
                 "GUTOE_NUCLEAR_SUPERHEAVY_PROTON_AMP",
                 default_shell.superheavy_proton_amplitude,

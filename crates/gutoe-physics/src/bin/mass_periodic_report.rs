@@ -15,6 +15,20 @@ const PROTON_MASS_MEV_OBS: f64 = 938.272_088_16;
 const NEUTRON_MASS_MEV_OBS: f64 = 939.565_420_52;
 const BETA_MASS_COEFF_Z_MEV: f64 = (PROTON_MASS_MEV_OBS + ELECTRON_MASS_MEV_OBS) - NEUTRON_MASS_MEV_OBS;
 
+fn reference_shell_gap_bounds_mev(magic_n: u16) -> Option<(f64, f64)> {
+    // Broad experimental windows (MeV) used only for attenuation diagnostics.
+    // This is for calibration visibility, not parameter fitting.
+    match magic_n {
+        8 => Some((10.0, 14.0)),
+        20 => Some((5.0, 8.0)),
+        28 => Some((4.0, 6.0)),
+        50 => Some((5.0, 8.0)),
+        82 => Some((4.0, 6.5)),
+        126 => Some((3.0, 5.5)),
+        _ => None,
+    }
+}
+
 fn triangular(n: u32) -> u32 {
     n * (n + 1) / 2
 }
@@ -312,6 +326,66 @@ fn main() -> anyhow::Result<()> {
             / proton_magic.len() as f64
     };
 
+    let mut shell_gap_csv = String::from(
+        "magic_n,strongest_delta_s2n_mev,mean_delta_s2n_mev,ref_min_mev,ref_max_mev,ref_mid_mev,strongest_over_ref_mid,mean_over_ref_mid\n",
+    );
+    let mut heavy_gap_ratios: Vec<f64> = Vec::new();
+    let mut n50_ratio = 0.0;
+    let mut n82_ratio = 0.0;
+    let mut n126_ratio = 0.0;
+    for row in &neutron_magic {
+        if let Some((ref_min, ref_max)) = reference_shell_gap_bounds_mev(row.magic_n) {
+            let ref_mid = 0.5 * (ref_min + ref_max);
+            let strongest_ratio = if ref_mid > 0.0 {
+                row.strongest_delta_s2n_mev / ref_mid
+            } else {
+                0.0
+            };
+            let mean_ratio = if ref_mid > 0.0 {
+                row.mean_delta_s2n_mev / ref_mid
+            } else {
+                0.0
+            };
+            shell_gap_csv.push_str(&format!(
+                "{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
+                row.magic_n,
+                row.strongest_delta_s2n_mev,
+                row.mean_delta_s2n_mev,
+                ref_min,
+                ref_max,
+                ref_mid,
+                strongest_ratio,
+                mean_ratio
+            ));
+            if row.magic_n >= 50 && row.magic_n <= 126 {
+                heavy_gap_ratios.push(strongest_ratio);
+            }
+            if row.magic_n == 50 {
+                n50_ratio = strongest_ratio;
+            } else if row.magic_n == 82 {
+                n82_ratio = strongest_ratio;
+            } else if row.magic_n == 126 {
+                n126_ratio = strongest_ratio;
+            }
+        } else {
+            shell_gap_csv.push_str(&format!(
+                "{},{:.6},{:.6},,,,,\n",
+                row.magic_n, row.strongest_delta_s2n_mev, row.mean_delta_s2n_mev
+            ));
+        }
+    }
+    fs::write(out.join("shell_gap_attenuation.csv"), shell_gap_csv)?;
+    let heavy_gap_mean_ratio = if heavy_gap_ratios.is_empty() {
+        0.0
+    } else {
+        heavy_gap_ratios.iter().sum::<f64>() / heavy_gap_ratios.len() as f64
+    };
+    let heavy_gap_min_ratio = heavy_gap_ratios
+        .iter()
+        .copied()
+        .min_by(|a, b| a.total_cmp(b))
+        .unwrap_or(0.0);
+
     let mut stable_presence_correct = 0usize;
     let mut stable_presence_total = 0usize;
     let mut ref_count_abs_error_sum = 0.0;
@@ -387,6 +461,13 @@ fn main() -> anyhow::Result<()> {
             "    \"neutron_magic_hit_rate\": {:.6},\n",
             "    \"proton_closure_hit_rate\": {:.6}\n",
             "  }},\n",
+            "  \"shell_gap_attenuation\": {{\n",
+            "    \"heavy_magic_mean_ratio\": {:.6},\n",
+            "    \"heavy_magic_min_ratio\": {:.6},\n",
+            "    \"n50_ratio\": {:.6},\n",
+            "    \"n82_ratio\": {:.6},\n",
+            "    \"n126_ratio\": {:.6}\n",
+            "  }},\n",
             "  \"derived_superheavy_proton_candidates\": [{}]\n",
             "  ,\"tin_diagnostics\": {{\n",
             "    \"observed_stable_a\": [{}],\n",
@@ -426,6 +507,11 @@ fn main() -> anyhow::Result<()> {
         closest_target.map(|r| r.stability_score).unwrap_or(0.0),
         neutron_hit_rate,
         proton_hit_rate,
+        heavy_gap_mean_ratio,
+        heavy_gap_min_ratio,
+        n50_ratio,
+        n82_ratio,
+        n126_ratio,
         derived_closure_candidates
             .iter()
             .map(|z| z.to_string())
@@ -489,6 +575,7 @@ fn main() -> anyhow::Result<()> {
 
     println!("Wrote {}", out.join("mass_periodic_report.json").display());
     println!("Wrote {}", out.join("periodic_table_scoreboard.csv").display());
+    println!("Wrote {}", out.join("shell_gap_attenuation.csv").display());
     println!("Wrote {}", out.join("tin_isotope_diagnostics.csv").display());
     println!("Appended {}", trend_path.display());
     Ok(())
