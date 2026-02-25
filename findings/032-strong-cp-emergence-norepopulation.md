@@ -10,6 +10,7 @@ Key theorems:
 
 - `no_repopulation_from_subsingleton_source`
 - `no_repopulation_from_based_route1`
+- `no_repopulation_of_homotopy_invariance`
 - `no_repopulation_on_emergent_image`
 - `theta_phase_unity_of_zero_charge`
 - `theta_phase_unity_on_emergent_image`

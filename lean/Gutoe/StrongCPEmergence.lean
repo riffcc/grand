@@ -60,6 +60,37 @@ theorem no_repopulation_from_based_route1
   letI : Subsingleton {f : C(X, FundamentalGaugeGroup) // f x0 = 0} := hs
   exact no_repopulation_from_subsingleton_source toEff qEff (basedFundamentalZero x0) hbase
 
+/-- Homotopy-invariance route:
+    if effective charge is homotopy-invariant on the emergent image and the
+    emergence map preserves homotopy classes, then route-1 constantness of
+    fundamental maps forces zero emergent charge. -/
+theorem no_repopulation_of_homotopy_invariance
+    {X Eff : Type}
+    [TopologicalSpace X] [PreconnectedSpace X] [Nonempty X]
+    [TopologicalSpace Eff]
+    (toEff : C(X, FundamentalGaugeGroup) → C(X, Eff))
+    (qEff : C(X, Eff) → ℤ)
+    (hPreserve :
+      ∀ f g : C(X, FundamentalGaugeGroup),
+        f.Homotopic g → (toEff f).Homotopic (toEff g))
+    (hInv :
+      ∀ F G : C(X, Eff), F.Homotopic G → qEff F = qEff G)
+    (hConstZero :
+      ∀ g0 : FundamentalGaugeGroup, qEff (toEff (ContinuousMap.const X g0)) = 0) :
+    ∀ f : C(X, FundamentalGaugeGroup), qEff (toEff f) = 0 := by
+  intro f
+  rcases continuous_to_fundamental_group_constant f with ⟨g0, hg0⟩
+  have heq : f = ContinuousMap.const X g0 := by
+    ext x
+    simpa using congrArg (fun y : FundamentalGaugeGroup => (y : ℕ)) (hg0 x)
+  have hhomFund : f.Homotopic (ContinuousMap.const X g0) := by
+    simpa [heq] using (ContinuousMap.Homotopic.refl (ContinuousMap.const X g0))
+  have hhomEff : (toEff f).Homotopic (toEff (ContinuousMap.const X g0)) :=
+    hPreserve f (ContinuousMap.const X g0) hhomFund
+  calc
+    qEff (toEff f) = qEff (toEff (ContinuousMap.const X g0)) := hInv _ _ hhomEff
+    _ = 0 := hConstZero g0
+
 /-- Route-1 no-repopulation theorem:
     if emergent charge is pulled back from fundamental Z3-carrier maps and
     constant fundamental maps have zero charge, then emergent-image charge is zero. -/
