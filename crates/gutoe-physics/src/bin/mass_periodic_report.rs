@@ -1,7 +1,8 @@
 use gutoe_physics::{
     closest_to_target_island, derived_superheavy_proton_candidates, magic_s2n_summary, proton_s2p_summary,
-    rank_island_candidates_with_config, scan_nuclear_chart, IslandRankingConfig, NucleusRecord, ScanConfig,
-    ShellParams, StandardModelDynamicsMap,
+    rank_island_candidates_with_config, scan_nuclear_chart, score_derived_superheavy_closures,
+    superheavy_closure_constraints, IslandRankingConfig, NucleusRecord, ScanConfig, ShellParams,
+    StandardModelDynamicsMap,
 };
 use std::collections::BTreeMap;
 use std::env;
@@ -415,6 +416,26 @@ fn main() -> anyhow::Result<()> {
             .count() as f64
             / proton_magic.len() as f64
     };
+    let closure_constraints = superheavy_closure_constraints();
+    let closure_scores = score_derived_superheavy_closures(&records, 184);
+    let mut closure_csv = String::from(
+        "rank,closure_z,strongest_delta_s2p_mev,mean_delta_s2p_mev,n_at_strongest,local_island_n,local_island_score,n184_proximity,combined_score\n",
+    );
+    for row in &closure_scores {
+        closure_csv.push_str(&format!(
+            "{},{},{:.6},{:.6},{},{},{:.6},{:.6},{:.6}\n",
+            row.rank,
+            row.closure_z,
+            row.strongest_delta_s2p_mev,
+            row.mean_delta_s2p_mev,
+            row.n_at_strongest,
+            row.local_island_n,
+            row.local_island_score,
+            row.n184_proximity,
+            row.combined_score
+        ));
+    }
+    fs::write(out.join("superheavy_closure_derivation.csv"), closure_csv)?;
 
     let mut shell_gap_csv = String::from(
         "magic_n,strongest_delta_s2n_mev,mean_delta_s2n_mev,ref_min_mev,ref_max_mev,ref_mid_mev,strongest_over_ref_mid,mean_over_ref_mid\n",
@@ -517,6 +538,24 @@ fn main() -> anyhow::Result<()> {
     } else {
         0.0
     };
+    let closure_scores_json = closure_scores
+        .iter()
+        .map(|row| {
+            format!(
+                "{{\"rank\":{},\"z\":{},\"strongest_delta_s2p_mev\":{:.6},\"mean_delta_s2p_mev\":{:.6},\"n_at_strongest\":{},\"local_island_n\":{},\"local_island_score\":{:.6},\"n184_proximity\":{:.6},\"combined_score\":{:.6}}}",
+                row.rank,
+                row.closure_z,
+                row.strongest_delta_s2p_mev,
+                row.mean_delta_s2p_mev,
+                row.n_at_strongest,
+                row.local_island_n,
+                row.local_island_score,
+                row.n184_proximity,
+                row.combined_score
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
 
     let json = format!(
         concat!(
@@ -558,7 +597,22 @@ fn main() -> anyhow::Result<()> {
             "    \"n82_ratio\": {:.6},\n",
             "    \"n126_ratio\": {:.6}\n",
             "  }},\n",
-            "  \"derived_superheavy_proton_candidates\": [{}]\n",
+            "  \"derived_superheavy_proton_candidates\": [{}],\n",
+            "  \"superheavy_closure_derivation\": {{\n",
+            "    \"constraints\": {{\n",
+            "      \"clifford_dim\": {},\n",
+            "      \"z3_order\": {},\n",
+            "      \"su3_generators\": {},\n",
+            "      \"su2_generators\": {},\n",
+            "      \"u1_generators\": {},\n",
+            "      \"magnetic_triplet_card\": {},\n",
+            "      \"anchor_z\": {},\n",
+            "      \"z_triplet_shift\": {},\n",
+            "      \"z_color_shift\": {},\n",
+            "      \"z_spinor_shift\": {}\n",
+            "    }},\n",
+            "    \"scored_candidates\": [{}]\n",
+            "  }}\n",
             "  ,\"tin_diagnostics\": {{\n",
             "    \"observed_stable_a\": [{}],\n",
             "    \"predicted_stable_like_a\": [{}],\n",
@@ -607,6 +661,17 @@ fn main() -> anyhow::Result<()> {
             .map(|z| z.to_string())
             .collect::<Vec<_>>()
             .join(", "),
+        closure_constraints.clifford_dim,
+        closure_constraints.z3_order,
+        closure_constraints.su3_generators,
+        closure_constraints.su2_generators,
+        closure_constraints.u1_generators,
+        closure_constraints.magnetic_triplet_card,
+        closure_constraints.anchor_z,
+        closure_constraints.z_triplet_shift,
+        closure_constraints.z_color_shift,
+        closure_constraints.z_spinor_shift,
+        closure_scores_json,
         tin_observed_a
             .iter()
             .map(|a| a.to_string())
@@ -666,6 +731,7 @@ fn main() -> anyhow::Result<()> {
     println!("Wrote {}", out.join("mass_periodic_report.json").display());
     println!("Wrote {}", out.join("periodic_table_scoreboard.csv").display());
     println!("Wrote {}", out.join("shell_gap_attenuation.csv").display());
+    println!("Wrote {}", out.join("superheavy_closure_derivation.csv").display());
     println!("Wrote {}", out.join("tin_isotope_diagnostics.csv").display());
     println!("Appended {}", trend_path.display());
     Ok(())

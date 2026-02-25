@@ -24,6 +24,54 @@ pub const NEUTRON_MAGIC_NUMBERS: [u16; 8] = [2, 8, 20, 28, 50, 82, 126, 184];
 /// Backwards-compatible alias for existing callers expecting neutron closures.
 pub const MAGIC_NUMBERS: [u16; 8] = NEUTRON_MAGIC_NUMBERS;
 
+#[derive(Clone, Copy, Debug)]
+pub struct SuperheavyClosureConstraintSet {
+    pub clifford_dim: u32,
+    pub z3_order: u32,
+    pub su3_generators: u32,
+    pub su2_generators: u32,
+    pub u1_generators: u32,
+    pub magnetic_triplet_card: u32,
+    pub anchor_z: u16,
+    pub z_triplet_shift: u16,
+    pub z_color_shift: u16,
+    pub z_spinor_shift: u16,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SuperheavyClosureCandidateScore {
+    pub rank: usize,
+    pub closure_z: u16,
+    pub strongest_delta_s2p_mev: f64,
+    pub mean_delta_s2p_mev: f64,
+    pub n_at_strongest: u16,
+    pub local_island_n: u16,
+    pub local_island_score: f64,
+    pub n184_proximity: f64,
+    pub combined_score: f64,
+}
+
+/// Decode the Cl(1,3)/Z3 constraint chain into explicit closure-candidate terms.
+pub fn superheavy_closure_constraints() -> SuperheavyClosureConstraintSet {
+    let m = StandardModelDynamicsMap::from_clifford_z3();
+    let anchor = m.clifford_dim * (m.z3_order + m.su2_generators + m.u1_generators);
+    let z_triplet_shift = anchor + (m.magnetic_triplet_card - 1);
+    let z_color_shift = anchor + m.su3_generators;
+    let z_spinor_shift = anchor + m.clifford_dim - (m.z3_order - 1);
+    SuperheavyClosureConstraintSet {
+        clifford_dim: m.clifford_dim,
+        z3_order: m.z3_order,
+        su3_generators: m.su3_generators,
+        su2_generators: m.su2_generators,
+        u1_generators: m.u1_generators,
+        magnetic_triplet_card: m.magnetic_triplet_card,
+        anchor_z: anchor as u16,
+        z_triplet_shift: z_triplet_shift as u16,
+        z_color_shift: z_color_shift as u16,
+        z_spinor_shift: z_spinor_shift as u16,
+    }
+}
+
 /// Constraint-layer proton closure candidates derived from Cl(1,3) runtime map.
 ///
 /// This intentionally avoids hand-entered superheavy closure lists.
@@ -33,16 +81,12 @@ pub const MAGIC_NUMBERS: [u16; 8] = NEUTRON_MAGIC_NUMBERS;
 /// - SU(3), SU(2), U(1) generator counts,
 /// - magnetic triplet cardinality.
 pub fn derived_superheavy_proton_candidates() -> Vec<u16> {
-    let m = StandardModelDynamicsMap::from_clifford_z3();
-    let anchor = m.clifford_dim * (m.z3_order + m.su2_generators + m.u1_generators);
-    let z_triplet_shift = anchor + (m.magnetic_triplet_card - 1);
-    let z_color_shift = anchor + m.su3_generators;
-    let z_spinor_shift = anchor + m.clifford_dim - (m.z3_order - 1);
+    let c = superheavy_closure_constraints();
     let mut out = vec![
-        anchor as u16,
-        z_triplet_shift as u16,
-        z_color_shift as u16,
-        z_spinor_shift as u16,
+        c.anchor_z,
+        c.z_triplet_shift,
+        c.z_color_shift,
+        c.z_spinor_shift,
     ];
     out.sort_unstable();
     out.dedup();
@@ -111,15 +155,15 @@ impl Default for ShellParams {
             amplitude_z: 2.2,
             amplitude_n: 2.8,
             shell_amp: 12.0,
-            shell_scale_exp: 0.33,
+            shell_scale_exp: 0.25,
             use_strutinsky: true,
             strutinsky_gamma: 6.0,
             strutinsky_spacing_mev: 7.0,
             strutinsky_spin_orbit_mev: 2.2,
             strutinsky_coulomb_shift_mev: 0.15,
-            strutinsky_mix: 0.35,
-            sigma_z: 4.0,
-            sigma_n: 5.0,
+            strutinsky_mix: 1.0,
+            sigma_z: 2.5,
+            sigma_n: 2.5,
             proton_magic_weight_coeff: 2.0 * LAMBDA_QG,
             proton_magic_weight_cap: 1.80,
             neutron_magic_weight_coeff: 3.0 * LAMBDA_QG,
@@ -853,6 +897,62 @@ pub fn proton_s2p_summary(records: &[NucleusRecord]) -> Vec<ProtonSummaryRow> {
     out
 }
 
+/// Score Cl(1,3)-derived superheavy proton closure candidates against:
+/// 1) local S2p shell-cliff strength, and
+/// 2) viability in the N~target_n island corridor.
+pub fn score_derived_superheavy_closures(
+    records: &[NucleusRecord],
+    target_n: u16,
+) -> Vec<SuperheavyClosureCandidateScore> {
+    let summary = proton_s2p_summary(records);
+    let mut out: Vec<SuperheavyClosureCandidateScore> = summary
+        .iter()
+        .map(|row| {
+            let best_local = records
+                .iter()
+                .filter(|r| {
+                    r.z == row.closure_z
+                        && r.s2n_mev.unwrap_or(-1.0) > 0.0
+                        && r.s2p_mev.unwrap_or(-1.0) > 0.0
+                        && r.fissility < 1.1
+                })
+                .max_by(|a, b| {
+                    let sa = a.stability_score + 0.35 * gaussian_proximity(a.n as f64, target_n as f64, 14.0);
+                    let sb = b.stability_score + 0.35 * gaussian_proximity(b.n as f64, target_n as f64, 14.0);
+                    sa.total_cmp(&sb)
+                });
+            let (local_n, local_score) = best_local
+                .map(|r| (r.n, r.stability_score))
+                .unwrap_or((0, 0.0));
+            let n184_proximity = if local_n > 0 {
+                gaussian_proximity(local_n as f64, target_n as f64, 14.0)
+            } else {
+                0.0
+            };
+            let combined = row.strongest_delta_s2p_mev
+                + 0.35 * row.mean_delta_s2p_mev
+                + 0.18 * local_score
+                + 0.75 * n184_proximity;
+            SuperheavyClosureCandidateScore {
+                rank: 0,
+                closure_z: row.closure_z,
+                strongest_delta_s2p_mev: row.strongest_delta_s2p_mev,
+                mean_delta_s2p_mev: row.mean_delta_s2p_mev,
+                n_at_strongest: row.n_at_strongest,
+                local_island_n: local_n,
+                local_island_score: local_score,
+                n184_proximity,
+                combined_score: combined,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| b.combined_score.total_cmp(&a.combined_score));
+    for (idx, row) in out.iter_mut().enumerate() {
+        row.rank = idx + 1;
+    }
+    out
+}
+
 fn gaussian_proximity(x: f64, target: f64, sigma: f64) -> f64 {
     let d = x - target;
     (-(d * d) / (2.0 * sigma * sigma)).exp()
@@ -1163,5 +1263,27 @@ mod tests {
         for z in derived_superheavy_proton_candidates() {
             assert!(summary.iter().any(|row| row.closure_z == z && row.sample_count > 0));
         }
+    }
+
+    #[test]
+    fn derived_superheavy_closure_sequence_matches_constraint_terms() {
+        let c = superheavy_closure_constraints();
+        let derived = derived_superheavy_proton_candidates();
+        assert_eq!(c.anchor_z, 112);
+        assert_eq!(c.z_triplet_shift, 114);
+        assert_eq!(c.z_color_shift, 120);
+        assert_eq!(c.z_spinor_shift, 126);
+        assert_eq!(derived, vec![112, 114, 120, 126]);
+    }
+
+    #[test]
+    fn derived_closure_scoring_returns_ranked_candidates() {
+        let cfg = ScanConfig::default();
+        let records = scan_nuclear_chart(cfg);
+        let scored = score_derived_superheavy_closures(&records, 184);
+        assert_eq!(scored.len(), derived_superheavy_proton_candidates().len());
+        assert_eq!(scored.first().map(|r| r.rank), Some(1));
+        assert!(scored.iter().all(|r| r.combined_score.is_finite()));
+        assert!(scored.iter().all(|r| r.strongest_delta_s2p_mev >= 0.0));
     }
 }
