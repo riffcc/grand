@@ -44,6 +44,11 @@ Additional bridge hardening now included:
 - explicit SC edge→tensor projection scaffold:
   - `SimpEdge` with 19 unique edges from the 6-tetra decomposition
   - endpoint table `simpEdgeEndpoints`, cube coordinates `cubeCoord`, and vectors `simpEdgeVector`
+  - explicit edge incidence bookkeeping:
+    - `edgeIncidentTetrahedra`
+    - `edgeIncidentCount`
+    - body-diagonal incidence theorem (`edge_incident_count_body_diagonal = 6`)
+    - positivity/boundedness theorems (`edge_incident_count_pos`, `edge_incident_count_le_six`)
   - canonical weights `edgeProjectionWeight(μ,ν,e) = v_e^μ v_e^ν`
   - rank-6 constructive witness on symmetric spatial tensors:
     - `basisProjectionWeight`
@@ -80,6 +85,9 @@ Core theorems:
 - `z3_cube_action_order3`
 - `sc_cube_tetrahedra_z3_compatible`
 - `basis_projection_surjective`
+- `edge_incident_count_body_diagonal`
+- `edge_incident_count_pos`
+- `edge_incident_count_le_six`
 - `regge_edge_projection_to_bridge`
 - `projectedResidual_zero_of_reggeEdgeEquation`
 - `bridge_from_edge_projection_model`

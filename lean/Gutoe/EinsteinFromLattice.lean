@@ -293,6 +293,34 @@ theorem simp_edge_endpoints_distinct :
   intro e
   fin_cases e <;> decide
 
+/-- Tetrahedra from the SC decomposition incident to edge `e`. -/
+def edgeIncidentTetrahedra (e : SimpEdge) : Finset (Finset CubeVertex) :=
+  let a := (simpEdgeEndpoints e).1
+  let b := (simpEdgeEndpoints e).2
+  scCubeTetrahedra.filter (fun t => a ∈ t ∧ b ∈ t)
+
+/-- Incidence multiplicity of edge `e` in the 6-tetra decomposition. -/
+def edgeIncidentCount (e : SimpEdge) : ℕ :=
+  (edgeIncidentTetrahedra e).card
+
+/-- The body diagonal `(0,7)` is incident to all six tetrahedra. -/
+theorem edge_incident_count_body_diagonal :
+    edgeIncidentCount ⟨6, by decide⟩ = 6 := by
+  decide
+
+/-- Every enumerated SC edge is used by at least one tetrahedron in the
+    canonical decomposition. -/
+theorem edge_incident_count_pos :
+    ∀ e : SimpEdge, 1 ≤ edgeIncidentCount e := by
+  intro e
+  fin_cases e <;> decide
+
+/-- No edge is incident to more than all six tetrahedra. -/
+theorem edge_incident_count_le_six :
+    ∀ e : SimpEdge, edgeIncidentCount e ≤ 6 := by
+  intro e
+  fin_cases e <;> decide
+
 /-- Cartesian coordinates for unit-cube vertices used for edge-to-tensor projection. -/
 def cubeCoord : CubeVertex → Fin 3 → ℝ
   | 0 => ![0, 0, 0]
