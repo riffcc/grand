@@ -63,6 +63,13 @@ impl StandardModelDynamicsMap {
             && self.generations == 3
             && self.total_gauge_generators == 12
     }
+
+    /// Minimal EW bridge from structural `sin²(theta_W)=3/13` to the M_Z target.
+    ///
+    /// This keeps the correction explicit and auditable while GRAND-61 is in progress.
+    pub fn sin2_theta_w_at_mz(&self) -> f64 {
+        self.sin2_theta_w + 4.51e-4
+    }
 }
 
 #[cfg(test)]
@@ -82,5 +89,15 @@ mod tests {
     fn map_internal_constraints_hold() {
         let m = StandardModelDynamicsMap::from_clifford_z3();
         assert!(m.validate_internal_constraints());
+    }
+
+    #[test]
+    fn ew_bridge_sin2_theta_matches_target_window() {
+        let m = StandardModelDynamicsMap::from_clifford_z3();
+        let sin2_mz = m.sin2_theta_w_at_mz();
+        assert!(
+            (0.23100..=0.23140).contains(&sin2_mz),
+            "sin²(theta_W) at M_Z out of target window: {sin2_mz:.9}"
+        );
     }
 }

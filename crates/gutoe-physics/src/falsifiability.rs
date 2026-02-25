@@ -93,7 +93,7 @@ pub fn evaluate_with_corrected(
 pub fn provisional_corrected_observables() -> CorrectedObservables {
     let m = StandardModelDynamicsMap::from_clifford_z3();
     CorrectedObservables {
-        sin2_theta_w_ew: m.sin2_theta_w + 4.51e-4,
+        sin2_theta_w_ew: m.sin2_theta_w_at_mz(),
         mz_over_mw: m.mz_over_mw_sq.sqrt(),
         alpha_inverse: 1.0 / ALPHA,
     }
