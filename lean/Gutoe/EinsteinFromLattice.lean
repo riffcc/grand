@@ -62,6 +62,49 @@ def reggeStationary
     (dSdl : Edge → ℝ) : Prop :=
   ∀ e, dSdl e = 0
 
+/-- Vertex labels for one unit SC cube (`0..7`). -/
+abbrev CubeVertex := Fin 8
+
+/-- All vertices of the unit cube. -/
+def scCubeVertices : Finset CubeVertex := Finset.univ
+
+/-- Body-diagonal simplicialization of one SC cube into 6 tetrahedra.
+    This is the canonical decomposition used for Regge-style curvature bookkeeping
+    without introducing auxiliary interior vertices. -/
+def scCubeTetrahedra : Finset (Finset CubeVertex) :=
+  { ({0, 1, 3, 7} : Finset CubeVertex),
+    ({0, 3, 2, 7} : Finset CubeVertex),
+    ({0, 2, 6, 7} : Finset CubeVertex),
+    ({0, 6, 4, 7} : Finset CubeVertex),
+    ({0, 4, 5, 7} : Finset CubeVertex),
+    ({0, 5, 1, 7} : Finset CubeVertex) }
+
+/-- The canonical SC body-diagonal decomposition has exactly 6 tetrahedra. -/
+theorem sc_cube_tetrahedra_card : scCubeTetrahedra.card = 6 := by
+  decide
+
+/-- Each listed simplex in the canonical decomposition has exactly 4 vertices. -/
+theorem sc_cube_tetrahedra_listed_are_4simplices :
+    ({0, 1, 3, 7} : Finset CubeVertex).card = 4 ∧
+    ({0, 3, 2, 7} : Finset CubeVertex).card = 4 ∧
+    ({0, 2, 6, 7} : Finset CubeVertex).card = 4 ∧
+    ({0, 6, 4, 7} : Finset CubeVertex).card = 4 ∧
+    ({0, 4, 5, 7} : Finset CubeVertex).card = 4 ∧
+    ({0, 5, 1, 7} : Finset CubeVertex).card = 4 := by
+  decide
+
+/-- The six canonical tetrahedra jointly include all cube vertices `0..7`. -/
+theorem sc_cube_tetrahedra_cover_vertices :
+    (0 : CubeVertex) ∈ scCubeTetrahedra.biUnion id ∧
+    (1 : CubeVertex) ∈ scCubeTetrahedra.biUnion id ∧
+    (2 : CubeVertex) ∈ scCubeTetrahedra.biUnion id ∧
+    (3 : CubeVertex) ∈ scCubeTetrahedra.biUnion id ∧
+    (4 : CubeVertex) ∈ scCubeTetrahedra.biUnion id ∧
+    (5 : CubeVertex) ∈ scCubeTetrahedra.biUnion id ∧
+    (6 : CubeVertex) ∈ scCubeTetrahedra.biUnion id ∧
+    (7 : CubeVertex) ∈ scCubeTetrahedra.biUnion id := by
+  decide
+
 /-- Bridge hypotheses from discrete Regge dynamics to continuum Einstein dynamics.
 
 `hConvergence` and `hDiscreteDynamics` are the explicit nontrivial bridge obligations
