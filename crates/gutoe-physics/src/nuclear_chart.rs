@@ -421,14 +421,6 @@ fn woods_saxon_surface_radius_fm(shell: ShellParams) -> f64 {
     shell.strutinsky_ws_r0_fm * shell.strutinsky_ws_a_ref.max(1.0).powf(1.0 / 3.0)
 }
 
-fn orbital_radius_fm(orb: Orbital, shell: ShellParams) -> f64 {
-    let n_osc = 2.0 * (orb.n as f64 - 1.0) + orb.l as f64;
-    let r_surface = woods_saxon_surface_radius_fm(shell);
-    let ref_n = shell.strutinsky_ws_ref_nosc.max(0.0);
-    let ratio = ((n_osc + 1.5) / (ref_n + 1.5)).sqrt();
-    (r_surface * ratio).max(0.25)
-}
-
 fn woods_saxon_central_mev(r_fm: f64, shell: ShellParams) -> f64 {
     let r_surface = woods_saxon_surface_radius_fm(shell);
     let a = shell.strutinsky_ws_diffuseness_fm.max(1e-3);
@@ -456,26 +448,132 @@ fn proton_coulomb_mev(r_fm: f64, shell: ShellParams) -> f64 {
     }
 }
 
-fn orbital_energy_mev(orb: Orbital, is_proton: bool, shell: ShellParams) -> f64 {
-    let n_osc = 2.0 * (orb.n as f64 - 1.0) + orb.l as f64;
-    let hw = if shell.strutinsky_spacing_mev > 0.0 {
-        shell.strutinsky_spacing_mev
-    } else {
-        41.0 * shell.strutinsky_ws_a_ref.max(1.0).powf(-1.0 / 3.0)
-    };
-    let r_fm = orbital_radius_fm(orb, shell);
-    let v_ws = woods_saxon_central_mev(r_fm, shell);
-    let d_v_dr = woods_saxon_derivative_mev_per_fm(r_fm, shell);
+const HBAR2_OVER_2M_NUCLEON_MEV_FM2: f64 = 20.735_53;
+
+fn radial_effective_potential_mev(r_fm: f64, l: u8, ls: f64, is_proton: bool, shell: ShellParams) -> f64 {
+    let r = r_fm.max(1e-4);
+    let v_ws = woods_saxon_central_mev(r, shell);
+    let d_v_dr = woods_saxon_derivative_mev_per_fm(r, shell);
     let r_surface = woods_saxon_surface_radius_fm(shell).max(1e-3);
-    let peak_shape = (1.0 / r_surface) * (shell.strutinsky_ws_depth_mev / (4.0 * shell.strutinsky_ws_diffuseness_fm.max(1e-3)));
-    let shape = ((1.0 / r_fm.max(1e-3)) * d_v_dr) / peak_shape.max(1e-6);
-    let spin_orbit = -shell.strutinsky_spin_orbit_mev * shape * orbital_ldot_s(orb);
+    let peak_shape =
+        (1.0 / r_surface) * (shell.strutinsky_ws_depth_mev / (4.0 * shell.strutinsky_ws_diffuseness_fm.max(1e-3)));
+    let so_shape = ((1.0 / r) * d_v_dr) / peak_shape.max(1e-6);
+    let spin_orbit = -shell.strutinsky_spin_orbit_mev * so_shape * ls;
     let coulomb = if is_proton {
-        proton_coulomb_mev(r_fm, shell) + shell.strutinsky_coulomb_shift_mev * (orb.l as f64 + 0.5)
+        proton_coulomb_mev(r, shell) + shell.strutinsky_coulomb_shift_mev * (l as f64 + 0.5)
     } else {
         0.0
     };
-    hw * (n_osc + 1.5) + v_ws + spin_orbit + coulomb
+    let l_term = HBAR2_OVER_2M_NUCLEON_MEV_FM2 * (l as f64) * (l as f64 + 1.0) / (r * r);
+    v_ws + spin_orbit + coulomb + l_term
+}
+
+fn numerov_nodes_and_tail(
+    energy_mev: f64,
+    l: u8,
+    ls: f64,
+    is_proton: bool,
+    shell: ShellParams,
+    r_max_fm: f64,
+    dr_fm: f64,
+) -> (usize, f64) {
+    let steps = (r_max_fm / dr_fm).ceil().max(16.0) as usize;
+    let h2 = dr_fm * dr_fm;
+    let mut u_prev = 0.0_f64;
+    let mut u_curr = dr_fm.powf(l as f64 + 1.0);
+    let mut nodes = 0usize;
+    for i in 1..steps {
+        let r_prev = (((i - 1) as f64) * dr_fm).max(dr_fm * 0.5);
+        let r_curr = (i as f64 * dr_fm).max(dr_fm * 0.5);
+        let r_next = ((i + 1) as f64 * dr_fm).max(dr_fm * 0.5);
+        let q_prev =
+            (radial_effective_potential_mev(r_prev, l, ls, is_proton, shell) - energy_mev) / HBAR2_OVER_2M_NUCLEON_MEV_FM2;
+        let q_curr =
+            (radial_effective_potential_mev(r_curr, l, ls, is_proton, shell) - energy_mev) / HBAR2_OVER_2M_NUCLEON_MEV_FM2;
+        let q_next =
+            (radial_effective_potential_mev(r_next, l, ls, is_proton, shell) - energy_mev) / HBAR2_OVER_2M_NUCLEON_MEV_FM2;
+        let denom = 1.0 + h2 * q_next / 12.0;
+        let u_next = if denom.abs() > 1e-12 {
+            (2.0 * (1.0 - 5.0 * h2 * q_curr / 12.0) * u_curr - (1.0 + h2 * q_prev / 12.0) * u_prev) / denom
+        } else {
+            0.0
+        };
+        if u_curr * u_next < 0.0 {
+            nodes += 1;
+        }
+        if u_next.abs() > 1e120 {
+            let scale = u_next.abs();
+            u_prev /= scale;
+            u_curr /= scale;
+        }
+        u_prev = u_curr;
+        u_curr = u_next;
+    }
+    (nodes, u_curr)
+}
+
+fn solve_radial_orbital_energy_mev(orb: Orbital, is_proton: bool, shell: ShellParams) -> f64 {
+    let target_nodes = orb.n.saturating_sub(1) as usize;
+    let l = orb.l;
+    let ls = orbital_ldot_s(orb);
+    let r_surface = woods_saxon_surface_radius_fm(shell);
+    let r_max_fm = (3.0 * r_surface + 14.0).max(18.0);
+    let dr_fm = (shell.strutinsky_ws_diffuseness_fm / 8.0).clamp(0.04, 0.10);
+    let e_min = -1.4 * shell.strutinsky_ws_depth_mev - 30.0;
+    let e_max = 20.0 + 0.8 * shell.strutinsky_spacing_mev * (orb.n as f64 + orb.l as f64 + 1.0);
+    let samples = 280usize;
+
+    let mut prev_e = e_min;
+    let (mut prev_nodes, mut prev_tail) =
+        numerov_nodes_and_tail(prev_e, l, ls, is_proton, shell, r_max_fm, dr_fm);
+    let mut best_e = prev_e;
+    let mut best_err = if prev_nodes == target_nodes {
+        prev_tail.abs()
+    } else {
+        f64::INFINITY
+    };
+    let mut bracket: Option<(f64, f64)> = None;
+    for i in 1..=samples {
+        let e = e_min + (e_max - e_min) * (i as f64) / (samples as f64);
+        let (nodes, tail) = numerov_nodes_and_tail(e, l, ls, is_proton, shell, r_max_fm, dr_fm);
+        if nodes == target_nodes && tail.abs() < best_err {
+            best_err = tail.abs();
+            best_e = e;
+        }
+        if prev_nodes <= target_nodes && nodes > target_nodes {
+            bracket = Some((prev_e, e));
+            break;
+        }
+        prev_e = e;
+        prev_nodes = nodes;
+        prev_tail = tail;
+    }
+
+    if let Some((mut lo, mut hi)) = bracket {
+        for _ in 0..72 {
+            let mid = 0.5 * (lo + hi);
+            let (nodes, tail) = numerov_nodes_and_tail(mid, l, ls, is_proton, shell, r_max_fm, dr_fm);
+            if nodes > target_nodes {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+            if nodes == target_nodes && tail.abs() < best_err {
+                best_err = tail.abs();
+                best_e = mid;
+            }
+        }
+    }
+
+    if best_err.is_finite() {
+        best_e
+    } else {
+        0.5 * (e_min + e_max)
+    }
+}
+
+fn orbital_energy_mev(orb: Orbital, is_proton: bool, shell: ShellParams) -> f64 {
+    solve_radial_orbital_energy_mev(orb, is_proton, shell)
 }
 
 fn solve_chemical_potential(levels: &[f64], target_particles: usize, gamma: f64) -> f64 {
@@ -503,9 +601,14 @@ fn solve_chemical_potential(levels: &[f64], target_particles: usize, gamma: f64)
 fn build_strutinsky_shell_table(max_count: u16, is_proton: bool, shell: ShellParams) -> Vec<f64> {
     let max_count = max_count as usize;
     let mut levels: Vec<f64> = Vec::with_capacity(max_count);
-    for orb in SP_ORBITALS {
-        let e = orbital_energy_mev(orb, is_proton, shell);
-        for _ in 0..(orb.j2 as usize + 1) {
+    let mut shells: Vec<(f64, usize)> = SP_ORBITALS
+        .iter()
+        .copied()
+        .map(|orb| (orbital_energy_mev(orb, is_proton, shell), orb.j2 as usize + 1))
+        .collect();
+    shells.sort_by(|a, b| a.0.total_cmp(&b.0));
+    for (e, degeneracy) in shells {
+        for _ in 0..degeneracy {
             levels.push(e);
             if levels.len() >= max_count {
                 break;
@@ -766,17 +869,6 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
         }
     }
 
-    let mut best_by_a: BTreeMap<u16, (u16, f64)> = BTreeMap::new();
-    for (&(z, n), &(b, _, _, _, _, _, _)) in &binding_map {
-        let a = z + n;
-        match best_by_a.get(&a) {
-            Some((_, best_b)) if *best_b >= b => {}
-            _ => {
-                best_by_a.insert(a, (z, b));
-            }
-        }
-    }
-
     let mut out = Vec::with_capacity(binding_map.len());
     for (&(z, n), &(binding, shell_bonus_mev, shell_bonus_baseline_mev, shell_bonus_heavy_mev, shell_bonus_superheavy_proton_mev, shell_scale_a, pairing_mev)) in
         &binding_map
@@ -801,10 +893,29 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
         let barrier = fission_barrier_mev(z, a, f, shell_bonus_mev);
         let sf_log10 = sf_log10_half_life_seconds(z, barrier, f);
         let score = stability_score(bpa, s2n, s2p, f, barrier, sf_log10);
-        let beta_optimal_for_a = best_by_a
-            .get(&a)
-            .map(|(best_z, _)| *best_z == z)
-            .unwrap_or(false);
+        // Local beta-stability criterion along an isobar:
+        // β− channel: (Z,N) -> (Z+1,N-1), Qβ− ≈ (B_d - B_p) + (m_n - m_p - m_e).
+        // EC/β+ channel: (Z,N) -> (Z-1,N+1), Q_EC ≈ (B_d - B_p) - (m_n - m_p).
+        // A nucleus is "beta-optimal" here if both channels are closed.
+        const MN_MINUS_MP_MINUS_ME_MEV: f64 = 0.782_333;
+        const MN_MINUS_MP_MEV: f64 = 1.293_332;
+        let beta_minus_closed = if z < cfg.z_max && n > cfg.n_min {
+            binding_map
+                .get(&(z + 1, n - 1))
+                .map(|(b_d, _, _, _, _, _, _)| (*b_d - binding) <= -MN_MINUS_MP_MINUS_ME_MEV)
+                .unwrap_or(true)
+        } else {
+            true
+        };
+        let beta_plus_ec_closed = if z > cfg.z_min && n < cfg.n_max {
+            binding_map
+                .get(&(z - 1, n + 1))
+                .map(|(b_d, _, _, _, _, _, _)| (*b_d - binding) <= MN_MINUS_MP_MEV)
+                .unwrap_or(true)
+        } else {
+            true
+        };
+        let beta_optimal_for_a = beta_minus_closed && beta_plus_ec_closed;
 
         out.push(NucleusRecord {
             z,
@@ -1267,6 +1378,19 @@ mod tests {
         let rows = magic_s2n_discontinuities(&records, 20);
         assert!(!rows.is_empty());
         assert!(rows.iter().any(|r| r.delta_s2n_mev > 1.0));
+    }
+
+    #[test]
+    fn beta_stability_allows_multiple_isobars_for_some_even_a() {
+        let records = scan_nuclear_chart(ScanConfig::default());
+        let mut by_a: BTreeMap<u16, usize> = BTreeMap::new();
+        for r in records.iter().filter(|r| r.beta_optimal_for_a) {
+            *by_a.entry(r.a).or_insert(0) += 1;
+        }
+        assert!(
+            by_a.values().any(|&count| count >= 2),
+            "expected at least one even-A chain with multiple beta-stable isobars"
+        );
     }
 
     #[test]
