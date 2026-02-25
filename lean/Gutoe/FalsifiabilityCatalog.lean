@@ -18,6 +18,7 @@ import Gutoe.FineStructure
 import Gutoe.GravityMetric
 import Gutoe.KerrGeometry
 import Gutoe.StrongCP
+import Gutoe.SMQCDUnification
 
 namespace Gutoe.FalsifiabilityCatalog
 
@@ -27,6 +28,9 @@ open Gutoe.FineStructure
 open Gutoe.GravityMetric
 open Gutoe.KerrGeometry
 open Gutoe.StrongCP
+open Gutoe.SMQCDUnification
+open Gutoe.StrongCPEmergence
+open Gutoe.StrongCPVacuum
 
 /-! ### GRAND-124: Explicit falsifiable core predictions -/
 
@@ -154,5 +158,24 @@ theorem sm_gr_limits_recovered : smGrLimitBundle := by
     exact r_eff_classical_limit r
   · intro r_s hrs
     exact schwarzschild_limit_horizons hrs
+
+/-! ### SM × QCD acceptance gate (closure integration) -/
+
+/-- Top-level acceptance gate joining SM+QCD unification and SM+GR limits. -/
+def smQcdAcceptanceGate
+    {X : Type}
+    [TopologicalSpace X] [PreconnectedSpace X] [Nonempty X]
+    (x0 : X)
+    (qClass : HomotopyClass X Su3Matrix → ℤ) : Prop :=
+  smQcdGeneralCaseBundle x0 qClass ∧ smGrLimitBundle
+
+/-- Existing theorem chain satisfies the integrated SM×QCD acceptance gate. -/
+theorem sm_qcd_acceptance_gate_holds
+    {X : Type}
+    [TopologicalSpace X] [PreconnectedSpace X] [Nonempty X]
+    (x0 : X)
+    (qClass : HomotopyClass X Su3Matrix → ℤ) :
+    smQcdAcceptanceGate x0 qClass := by
+  refine ⟨sm_qcd_general_case_bundle_holds x0 qClass, sm_gr_limits_recovered⟩
 
 end Gutoe.FalsifiabilityCatalog
