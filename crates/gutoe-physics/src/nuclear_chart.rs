@@ -98,10 +98,44 @@ pub struct NucleusRecord {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub struct IslandRankingConfig {
+    pub min_z: u16,
+    pub max_fissility: f64,
+    pub target_z: u16,
+    pub target_n: u16,
+    pub sigma_z: f64,
+    pub sigma_n: f64,
+    pub proximity_weight: f64,
+    pub score_threshold: f64,
+}
+
+impl Default for IslandRankingConfig {
+    fn default() -> Self {
+        Self {
+            min_z: 104,
+            max_fissility: 1.1,
+            target_z: 114,
+            target_n: 184,
+            sigma_z: 10.0,
+            sigma_n: 18.0,
+            proximity_weight: 0.35,
+            score_threshold: 0.0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct MagicDiscontinuity {
     pub magic_n: u16,
     pub z: u16,
     pub delta_s2n_mev: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ShellGateMetrics {
+    pub top_delta_s2n_mev: f64,
+    pub avg_top5_delta_s2n_mev: f64,
+    pub strongest_n184_delta_s2n_mev: f64,
 }
 
 fn pairing_term(z: u16, n: u16, a: f64, a_p: f64) -> f64 {
@@ -256,8 +290,96 @@ pub fn magic_s2n_discontinuities(records: &[NucleusRecord], top_k: usize) -> Vec
     out
 }
 
-/// Rank superheavy candidates by coarse stability score.
+fn gaussian_proximity(x: f64, target: f64, sigma: f64) -> f64 {
+    let d = x - target;
+    (-(d * d) / (2.0 * sigma * sigma)).exp()
+}
+
+/// Rank superheavy candidates with an optional proximity pull toward a target `(Z,N)` island.
+pub fn rank_island_candidates_with_config(
+    records: &[NucleusRecord],
+    cfg: IslandRankingConfig,
+    top_k: usize,
+) -> Vec<NucleusRecord> {
+    let mut candidates: Vec<(f64, NucleusRecord)> = records
+        .iter()
+        .copied()
+        .filter(|r| {
+            r.z >= cfg.min_z
+                && r.s2n_mev.unwrap_or(-1.0) > 0.0
+                && r.s2p_mev.unwrap_or(-1.0) > 0.0
+                && r.fissility < cfg.max_fissility
+        })
+        .filter_map(|r| {
+            let proximity = gaussian_proximity(r.z as f64, cfg.target_z as f64, cfg.sigma_z)
+                * gaussian_proximity(r.n as f64, cfg.target_n as f64, cfg.sigma_n);
+            let score = r.stability_score + cfg.proximity_weight * proximity;
+            if score >= cfg.score_threshold {
+                Some((score, r))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    candidates.sort_by(|a, b| b.0.total_cmp(&a.0));
+    candidates.truncate(top_k);
+    candidates.into_iter().map(|(_, r)| r).collect()
+}
+
+/// Backwards-compatible ranker with default target pull toward the superheavy region.
 pub fn rank_island_candidates(records: &[NucleusRecord], min_z: u16, top_k: usize) -> Vec<NucleusRecord> {
+    let cfg = IslandRankingConfig {
+        min_z,
+        ..IslandRankingConfig::default()
+    };
+    rank_island_candidates_with_config(records, cfg, top_k)
+}
+
+/// Score shell/discontinuity quality for quick calibration loops.
+pub fn shell_gate_metrics(records: &[NucleusRecord]) -> ShellGateMetrics {
+    let rows = magic_s2n_discontinuities(records, records.len().min(200));
+    if rows.is_empty() {
+        return ShellGateMetrics {
+            top_delta_s2n_mev: 0.0,
+            avg_top5_delta_s2n_mev: 0.0,
+            strongest_n184_delta_s2n_mev: 0.0,
+        };
+    }
+    let top_delta = rows[0].delta_s2n_mev;
+    let top5_len = rows.len().min(5);
+    let avg_top5 = rows.iter().take(top5_len).map(|r| r.delta_s2n_mev).sum::<f64>() / top5_len as f64;
+    let n184 = rows
+        .iter()
+        .filter(|r| r.magic_n == 184)
+        .map(|r| r.delta_s2n_mev)
+        .fold(0.0_f64, f64::max);
+    ShellGateMetrics {
+        top_delta_s2n_mev: top_delta,
+        avg_top5_delta_s2n_mev: avg_top5,
+        strongest_n184_delta_s2n_mev: n184,
+    }
+}
+
+pub fn valley_of_stability(records: &[NucleusRecord]) -> Vec<NucleusRecord> {
+    records.iter().copied().filter(|r| r.beta_optimal_for_a).collect()
+}
+
+pub fn closest_to_target_island(records: &[NucleusRecord], target_z: u16, target_n: u16) -> Option<NucleusRecord> {
+    records
+        .iter()
+        .copied()
+        .filter(|r| r.s2n_mev.unwrap_or(-1.0) > 0.0 && r.s2p_mev.unwrap_or(-1.0) > 0.0)
+        .min_by(|a, b| {
+            let da = ((a.z as i32 - target_z as i32).abs() + (a.n as i32 - target_n as i32).abs()) as i64;
+            let db = ((b.z as i32 - target_z as i32).abs() + (b.n as i32 - target_n as i32).abs()) as i64;
+            da.cmp(&db)
+                .then_with(|| b.stability_score.total_cmp(&a.stability_score))
+        })
+}
+
+/// Rank superheavy candidates by coarse stability score.
+pub fn rank_island_candidates_legacy(records: &[NucleusRecord], min_z: u16, top_k: usize) -> Vec<NucleusRecord> {
     let mut candidates: Vec<NucleusRecord> = records
         .iter()
         .copied()
@@ -338,5 +460,14 @@ mod tests {
         let rows = magic_s2n_discontinuities(&records, 20);
         assert!(!rows.is_empty());
         assert!(rows.iter().any(|r| r.delta_s2n_mev > 1.0));
+    }
+
+    #[test]
+    fn ranking_with_config_returns_nonempty_superheavy_list() {
+        let cfg = ScanConfig::default();
+        let records = scan_nuclear_chart(cfg);
+        let ranked = rank_island_candidates_with_config(&records, IslandRankingConfig::default(), 20);
+        assert!(!ranked.is_empty());
+        assert!(ranked.iter().all(|r| r.z >= 104));
     }
 }
