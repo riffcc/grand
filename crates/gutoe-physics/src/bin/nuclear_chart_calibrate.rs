@@ -57,8 +57,17 @@ fn main() -> anyhow::Result<()> {
     let amp_n_grid = parse_list("GUTOE_NUCLEAR_AMP_N_GRID", &[2.2, 2.8, 3.4, 4.2]);
     let shell_amp_grid = parse_list("GUTOE_NUCLEAR_SHELL_AMP_GRID", &[12.0]);
     let shell_scale_exp_grid = parse_list("GUTOE_NUCLEAR_SHELL_SCALE_EXP_GRID", &[0.33]);
+    let shell_sigma_grid = parse_list("GUTOE_NUCLEAR_SHELL_SIGMA_GRID", &[]);
     let sigma_z_grid = parse_list("GUTOE_NUCLEAR_SIGMA_Z_GRID", &[3.0, 4.0, 5.0, 6.0]);
     let sigma_n_grid = parse_list("GUTOE_NUCLEAR_SIGMA_N_GRID", &[4.0, 5.0, 6.0, 7.0]);
+    let sigma_pairs: Vec<(f64, f64)> = if shell_sigma_grid.is_empty() {
+        sigma_z_grid
+            .iter()
+            .flat_map(|&sz| sigma_n_grid.iter().map(move |&sn| (sz, sn)))
+            .collect()
+    } else {
+        shell_sigma_grid.iter().map(|&s| (s, s)).collect()
+    };
     let superheavy_proton_amp_grid = parse_list("GUTOE_NUCLEAR_SUPERHEAVY_PROTON_AMP_GRID", &[2.0]);
     let superheavy_proton_sigma_grid = parse_list("GUTOE_NUCLEAR_SUPERHEAVY_PROTON_SIGMA_GRID", &[5.0]);
     let heavy_amp_grid = parse_list("GUTOE_NUCLEAR_HEAVY_AMP_GRID", &[0.0, 1.2, 2.4, 3.6]);
@@ -118,8 +127,7 @@ fn main() -> anyhow::Result<()> {
         for &amp_n in &amp_n_grid {
             for &shell_amp in &shell_amp_grid {
                 for &shell_scale_exp in &shell_scale_exp_grid {
-                    for &sigma_z in &sigma_z_grid {
-                        for &sigma_n in &sigma_n_grid {
+                    for &(sigma_z, sigma_n) in &sigma_pairs {
                             for &superheavy_proton_amp in &superheavy_proton_amp_grid {
                                 for &superheavy_proton_sigma in &superheavy_proton_sigma_grid {
                                     for &heavy_amp in &heavy_amp_grid {
@@ -241,7 +249,6 @@ fn main() -> anyhow::Result<()> {
                                     }
                                 }
                             }
-                        }
                     }
                 }
             }
