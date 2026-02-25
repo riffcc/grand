@@ -262,6 +262,41 @@ def EdgeToTensorProjectionModel
     spatialEinsteinResidual G H g T lP Lambda kappa μ ν =
       projectedResidual w (edgeResidual dSdl source) μ ν
 
+/-- CMS-style quantitative projection consistency:
+    the edge-projected residual approximates the spatial Einstein residual with
+    an `O(h²)` mesh error bound. -/
+def ProjectionErrorBound
+    (G H g T : TensorField (Fin 3))
+    (dSdl source : SimpEdge → ℝ)
+    (lP Lambda kappa h C : ℝ)
+    (w : Fin 3 → Fin 3 → SimpEdge → ℝ) : Prop :=
+  ∀ μ ν,
+    |spatialEinsteinResidual G H g T lP Lambda kappa μ ν -
+      projectedResidual w (edgeResidual dSdl source) μ ν| ≤ C * h ^ 2
+
+/-- If the CMS-style projection error is `O(h²)`, then at zero mesh spacing
+    (`h = 0`) the projection model is exact. -/
+theorem edge_projection_model_of_zero_mesh
+    {G H g T : TensorField (Fin 3)}
+    {dSdl source : SimpEdge → ℝ}
+    {lP Lambda kappa h C : ℝ}
+    {w : Fin 3 → Fin 3 → SimpEdge → ℝ}
+    (hBound : ProjectionErrorBound G H g T dSdl source lP Lambda kappa h C w)
+    (hMesh : h = 0) :
+    EdgeToTensorProjectionModel G H g T dSdl source lP Lambda kappa w := by
+  intro μ ν
+  have hμν := hBound μ ν
+  rw [hMesh] at hμν
+  have hAbsLeZero :
+      |spatialEinsteinResidual G H g T lP Lambda kappa μ ν -
+        projectedResidual w (edgeResidual dSdl source) μ ν| ≤ 0 := by
+    simpa using hμν
+  have hAbsEqZero :
+      |spatialEinsteinResidual G H g T lP Lambda kappa μ ν -
+        projectedResidual w (edgeResidual dSdl source) μ ν| = 0 :=
+    le_antisymm hAbsLeZero (abs_nonneg _)
+  exact sub_eq_zero.mp (abs_eq_zero.mp hAbsEqZero)
+
 /-- Discharging the projection model + edge equations yields a concrete
     `ReggeToEinsteinBridge` on the spatial tensor block. -/
 theorem bridge_from_edge_projection_model
@@ -282,6 +317,24 @@ theorem bridge_from_edge_projection_model
   have hEq0 : lhs - kappa * T μ ν = 0 := by
     simpa [lhs, spatialEinsteinResidual, hProjZero] using hModelμν
   exact sub_eq_zero.mp hEq0
+
+/-- Regge bridge constructor with CMS-style `O(h²)` projection bound in place of
+    exact projection equality. In the continuum endpoint `h = 0`, this discharges
+    `hModel` and yields the same bridge theorem. -/
+theorem bridge_from_cms_bound_zero_mesh
+    {Gdisc Gcont H g T : TensorField (Fin 3)}
+    {dSdl source : SimpEdge → ℝ}
+    {lP Lambda kappa h C : ℝ}
+    {w : Fin 3 → Fin 3 → SimpEdge → ℝ}
+    (hCont : ∀ μ ν, Gcont μ ν = Gdisc μ ν)
+    (hEq : reggeEdgeEquation dSdl source)
+    (hBound : ProjectionErrorBound Gdisc H g T dSdl source lP Lambda kappa h C w)
+    (hMesh : h = 0) :
+    ReggeToEinsteinBridge Gdisc Gcont H g T lP Lambda kappa := by
+  have hModel :
+      EdgeToTensorProjectionModel Gdisc H g T dSdl source lP Lambda kappa w :=
+    edge_projection_model_of_zero_mesh hBound hMesh
+  exact bridge_from_edge_projection_model hCont hEq hModel
 
 /-- Proposition form of `ContinuumLimit.continuum_limit_exists` for bridge packaging. -/
 def ContinuumLimitStatement : Prop :=

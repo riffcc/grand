@@ -45,6 +45,10 @@ Additional bridge hardening now included:
   - projected residual machinery + theorem:
     - `projectedResidual_zero_of_reggeEdgeEquation`
     - `bridge_from_edge_projection_model`
+- CMS-limit closure step for the remaining projection hypothesis:
+  - `ProjectionErrorBound` (`|residual - projection| ≤ C h²`)
+  - `edge_projection_model_of_zero_mesh` (exact model recovered at `h=0`)
+  - `bridge_from_cms_bound_zero_mesh` (constructs `ReggeToEinsteinBridge` using CMS-style bound + continuum endpoint)
 
 Core theorems:
 
@@ -58,6 +62,8 @@ Core theorems:
 - `regge_edge_projection_to_bridge`
 - `projectedResidual_zero_of_reggeEdgeEquation`
 - `bridge_from_edge_projection_model`
+- `edge_projection_model_of_zero_mesh`
+- `bridge_from_cms_bound_zero_mesh`
 
 ## Verification
 
