@@ -294,6 +294,265 @@ pub fn trace_photon_kerr(
     max_lambda: f64,
     dlambda: f64,
 ) -> TraceResult {
+    trace_photon_kerr_debug(
+        kerr,
+        disk_inner_re,
+        disk_outer_re,
+        bx,
+        by,
+        inclination_deg,
+        max_lambda,
+        dlambda,
+    )
+    .result
+}
+
+fn kerr_candidate_activity(c: KerrCandidate) -> f64 {
+    c.activity.max(0.0)
+}
+
+/// Lean-compatible scalar activity proxy:
+/// sum of the two admissible Kerr polar-branch activities, normalized by `2*max_lambda`.
+pub fn trace_photon_kerr_activity(
+    kerr: &KerrMetric,
+    disk_inner_re: f64,
+    disk_outer_re: f64,
+    bx: f64,
+    by: f64,
+    inclination_deg: f64,
+    max_lambda: f64,
+    dlambda: f64,
+) -> f64 {
+    let up = trace_photon_kerr_oracle_activity(
+        kerr,
+        bx,
+        by,
+        inclination_deg,
+        max_lambda,
+        dlambda,
+        1.0,
+    );
+    let down = trace_photon_kerr_oracle_activity(
+        kerr,
+        bx,
+        by,
+        inclination_deg,
+        max_lambda,
+        dlambda,
+        -1.0,
+    );
+    let raw = kerr_candidate_activity(up) + kerr_candidate_activity(down);
+    (raw / (2.0 * max_lambda.max(1e-9))).clamp(0.0, 1.0)
+}
+
+fn trace_photon_kerr_oracle_activity(
+    kerr: &KerrMetric,
+    bx: f64,
+    by: f64,
+    inclination_deg: f64,
+    max_lambda: f64,
+    dlambda: f64,
+    sgn_th_init: f64,
+) -> KerrCandidate {
+    let r_s = kerr.r_s;
+    let (r_plus, _) = kerr.horizons();
+    // Lean-style observer convention parity with `tracePhiKerrBranch`.
+    let theta_obs = inclination_deg.to_radians().clamp(1e-4, PI - 1e-4);
+    let (xi, eta) = kerr.image_to_constants(bx, by, theta_obs);
+
+    let b = (bx * bx + by * by).sqrt();
+    let r_start = (40.0 * r_s).max(12.0 * b).max(20.0);
+
+    let mut r = r_start;
+    let mut theta = theta_obs;
+    let mut phi = 0.0_f64;
+    let mut lambda = 0.0_f64;
+    let mut activity = 0.0_f64;
+    let mut phase_accum = 0.0_f64;
+    let mut sgn_r = -1.0_f64;
+    let mut sgn_th = sgn_th_init;
+
+    let max_steps = (max_lambda / dlambda).ceil() as usize + 1;
+
+    for _ in 0..max_steps {
+        let a = kerr.a();
+        let sin_th = theta.sin();
+        let sin2 = (sin_th * sin_th).max(1e-9);
+        let sigma = kerr.sigma(r, theta).max(1e-12);
+        let delta = kerr.delta(r);
+        let p = (r * r + a * a) - a * xi;
+        let rpot = kerr.radial_potential(r, xi, eta);
+        if rpot <= 1e-12 {
+            sgn_r = -sgn_r;
+        }
+        let tpot = kerr.polar_potential(theta, xi, eta);
+        if tpot <= 1e-12 {
+            sgn_th = -sgn_th;
+        }
+
+        let rr = rpot.max(0.0).sqrt();
+        let thh = tpot.max(0.0).sqrt();
+
+        let dr = sgn_r * rr / sigma;
+        let dth = sgn_th * thh / sigma;
+        let dphi = if delta.abs() < 1e-9 {
+            (xi / sin2 - a) / sigma
+        } else {
+            (xi / sin2 - a + a * p / delta) / sigma
+        };
+
+        let activity_new =
+            activity + (dphi * dlambda).abs() + 0.15 * (dth * dlambda).abs() + 0.02 * (dr * dlambda / r_s.max(1e-6)).abs();
+        let phase_new = phase_accum + kerr_phase_increment(r, theta, dr, dth, dphi, dlambda, r_s);
+
+        let r_new = r + dlambda * dr;
+        let th_new = (theta + dlambda * dth).clamp(1e-4, PI - 1e-4);
+        let phi_new = phi + dlambda * dphi;
+
+        if !r_new.is_finite() || !th_new.is_finite() || !phi_new.is_finite() {
+            return KerrCandidate {
+                result: TraceResult::Captured,
+                lambda_event: lambda,
+                sgn_th_init,
+                activity: activity_new,
+                phase_accum: phase_new,
+            };
+        }
+
+        if r_new <= r_plus * 1.001 {
+            return KerrCandidate {
+                result: TraceResult::Captured,
+                lambda_event: lambda,
+                sgn_th_init,
+                activity: activity_new,
+                phase_accum: phase_new,
+            };
+        }
+
+        if sgn_r > 0.0 && r_new >= r_start * 0.995 {
+            return KerrCandidate {
+                result: TraceResult::Escaped {
+                    phi_total: phi_new.abs(),
+                },
+                lambda_event: lambda,
+                sgn_th_init,
+                activity: activity_new,
+                phase_accum: phase_new,
+            };
+        }
+
+        r = r_new;
+        theta = th_new;
+        phi = phi_new;
+        lambda += dlambda;
+        activity = activity_new;
+        phase_accum = phase_new;
+
+        if lambda >= max_lambda {
+            return KerrCandidate {
+                result: TraceResult::Escaped {
+                    phi_total: phi.abs(),
+                },
+                lambda_event: lambda,
+                sgn_th_init,
+                activity,
+                phase_accum,
+            };
+        }
+    }
+
+    let timeout_result = if sgn_r > 0.0 && r > 0.5 * r_start {
+        TraceResult::Escaped {
+            phi_total: phi.abs(),
+        }
+    } else if r > (3.0 * r_s).max(1.2 * r_plus) {
+        TraceResult::Escaped {
+            phi_total: phi.abs(),
+        }
+    } else {
+        TraceResult::Captured
+    };
+
+    KerrCandidate {
+        result: timeout_result,
+        lambda_event: max_lambda,
+        sgn_th_init,
+        activity,
+        phase_accum,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KerrTraceDebug {
+    pub result: TraceResult,
+    /// Initial polar branch sign chosen by the Kerr branch selector.
+    /// +1 => upward branch, -1 => downward branch.
+    pub branch_sign: i32,
+    /// Normalized accumulated phase proxy along the selected Kerr branch.
+    /// Units are radians with wavelength normalized to `r_s`.
+    pub phase_accum: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KerrWaveSample {
+    pub result: TraceResult,
+    pub branch_sign: i32,
+    pub phase_accum: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct KerrDiskCrossing {
+    pub r_eff: f64,
+    pub phi_orb: f64,
+    pub n_cross: u32,
+    pub phase_accum: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KerrBranchCrossings {
+    pub branch_sign: i32,
+    pub termination: TraceResult,
+    pub count: usize,
+    pub crossings: [KerrDiskCrossing; 8],
+}
+
+#[derive(Clone, Copy)]
+struct KerrCandidate {
+    result: TraceResult,
+    lambda_event: f64,
+    sgn_th_init: f64,
+    activity: f64,
+    phase_accum: f64,
+}
+
+fn kerr_phase_increment(r: f64, theta: f64, dr: f64, dth: f64, dphi: f64, dlambda: f64, r_s: f64) -> f64 {
+    let ds_r = dr * dlambda;
+    let ds_th = r * dth * dlambda;
+    let ds_phi = r * theta.sin().abs() * dphi * dlambda;
+    let ds = (ds_r * ds_r + ds_th * ds_th + ds_phi * ds_phi).sqrt();
+    // Normalize wavelength to r_s: k0 = 2π / r_s.
+    (2.0 * PI * ds / r_s.max(1e-9)).abs()
+}
+
+fn rank_kerr_result(r: TraceResult) -> i32 {
+    match r {
+        TraceResult::DiskHit { .. } => 0,
+        TraceResult::Escaped { .. } => 1,
+        TraceResult::Captured => 2,
+    }
+}
+
+fn trace_photon_kerr_branch(
+    kerr: &KerrMetric,
+    disk_inner_re: f64,
+    disk_outer_re: f64,
+    bx: f64,
+    by: f64,
+    inclination_deg: f64,
+    max_lambda: f64,
+    dlambda: f64,
+    sgn_th_init: f64,
+) -> KerrCandidate {
     let r_s = kerr.r_s;
     let (r_plus, _) = kerr.horizons();
     // Kerr image constants must use the true observer inclination.
@@ -313,12 +572,13 @@ pub fn trace_photon_kerr(
 
     // Ingoing branch from observer.
     let mut sgn_r = -1.0_f64;
-    // Initial polar direction from image-plane beta sign.
-    // In our screen convention, +beta is toward decreasing θ (toward +z),
-    // so the dθ/dλ sign is opposite beta.
-    let mut sgn_th = if by >= 0.0 { -1.0 } else { 1.0 };
+    // Initial polar direction: beta sign maps to polar momentum branch.
+    // For our screen convention, +beta corresponds to increasing θ.
+    let mut sgn_th = sgn_th_init;
 
     let mut lambda = 0.0_f64;
+    let mut activity = 0.0_f64;
+    let mut phase_accum = 0.0_f64;
     let max_steps = (max_lambda / dlambda).ceil() as usize + 1;
 
     for _ in 0..max_steps {
@@ -351,23 +611,49 @@ pub fn trace_photon_kerr(
         } else {
             (xi / sin2 - a + a * p / delta) / sigma
         };
+        // Lean parity scalar: integrated geodesic activity.
+        let activity_new = activity
+            + (dphi * dlambda).abs()
+            + 0.15 * (dth * dlambda).abs()
+            + 0.02 * (dr * dlambda / r_s.max(1e-6)).abs();
+        let phase_new = phase_accum + kerr_phase_increment(r, theta, dr, dth, dphi, dlambda, r_s);
 
         let r_new = r + dlambda * dr;
         let th_new = (theta + dlambda * dth).clamp(1e-4, PI - 1e-4);
         let phi_new = phi + dlambda * dphi;
 
         if !r_new.is_finite() || !th_new.is_finite() || !phi_new.is_finite() {
-            return TraceResult::Captured;
+            return KerrCandidate {
+                result: TraceResult::Captured,
+                lambda_event: lambda,
+                sgn_th_init,
+                activity: activity_new,
+                phase_accum: phase_new,
+            };
         }
 
         // Capture: crossed outer horizon.
         if r_new <= r_plus * 1.001 {
-            return TraceResult::Captured;
+            return KerrCandidate {
+                result: TraceResult::Captured,
+                lambda_event: lambda,
+                sgn_th_init,
+                activity: activity_new,
+                phase_accum: phase_new,
+            };
         }
 
         // Escape: returned to asymptotic radius on outgoing branch.
         if sgn_r > 0.0 && r_new >= r_start * 0.995 {
-            return TraceResult::Escaped { phi_total: phi_new.abs() };
+            return KerrCandidate {
+                result: TraceResult::Escaped {
+                    phi_total: phi_new.abs(),
+                },
+                lambda_event: lambda,
+                sgn_th_init,
+                activity: activity_new,
+                phase_accum: phase_new,
+            };
         }
 
         // Disk crossing at θ = π/2.
@@ -377,10 +663,16 @@ pub fn trace_photon_kerr(
             let t = ((pi2 - theta) / (th_new - theta)).clamp(0.0, 1.0);
             let r_cross = r + t * (r_new - r);
             if r_cross >= disk_inner_re && r_cross <= disk_outer_re {
-                return TraceResult::DiskHit {
-                    r_eff: r_cross,
-                    phi_orb: phi_new.abs(),
-                    n_cross,
+                return KerrCandidate {
+                    result: TraceResult::DiskHit {
+                        r_eff: r_cross,
+                        phi_orb: phi_new.abs(),
+                        n_cross,
+                    },
+                    lambda_event: lambda,
+                    sgn_th_init,
+                    activity: activity_new,
+                    phase_accum: phase_new,
                 };
             }
         }
@@ -389,19 +681,361 @@ pub fn trace_photon_kerr(
         theta = th_new;
         phi = phi_new;
         lambda += dlambda;
+        activity = activity_new;
+        phase_accum = phase_new;
         if lambda >= max_lambda {
             break;
         }
     }
 
-    if sgn_r > 0.0 && r > 0.5 * r_start {
-        TraceResult::Escaped { phi_total: phi.abs() }
+    let timeout_result = if sgn_r > 0.0 && r > 0.5 * r_start {
+        TraceResult::Escaped {
+            phi_total: phi.abs(),
+        }
     } else if r > (3.0 * r_s).max(1.2 * r_plus) {
         // Conservative timeout classification: still far outside strong-field region.
-        TraceResult::Escaped { phi_total: phi.abs() }
+        TraceResult::Escaped {
+            phi_total: phi.abs(),
+        }
     } else {
         TraceResult::Captured
+    };
+    KerrCandidate {
+        result: timeout_result,
+        lambda_event: max_lambda,
+        sgn_th_init,
+        activity,
+        phase_accum,
     }
+}
+
+fn choose_kerr_candidate(
+    up: KerrCandidate,
+    down: KerrCandidate,
+    by: f64,
+    max_lambda: f64,
+) -> KerrCandidate {
+    // Screen convention: +beta should map to increasing theta at the observer.
+    // Prefer the branch whose initial polar sign matches beta's sign.
+    let preferred_sign = if by >= 0.0 { 1.0 } else { -1.0 };
+    let (pref, alt) = if (up.sgn_th_init - preferred_sign).abs() < 0.5 {
+        (up, down)
+    } else {
+        (down, up)
+    };
+    let early_disk_cut = 0.02 * max_lambda;
+    let pick = match (pref.result, alt.result) {
+        // Pathological "all orange" case guard: reject tiny-lambda disk hit
+        // if the other branch does not immediately hit the disk.
+        (TraceResult::DiskHit { .. }, TraceResult::Escaped { .. } | TraceResult::Captured)
+            if pref.lambda_event <= early_disk_cut =>
+        {
+            alt
+        }
+        // If both branches hit disk, prefer the first intersection encountered
+        // along the geodesic (smaller affine parameter).
+        // Choosing the farther one biases branch selection and can collapse
+        // morphology into near-uniform donut-like disk hits.
+        (TraceResult::DiskHit { .. }, TraceResult::DiskHit { .. }) => {
+            if pref.lambda_event <= alt.lambda_event {
+                pref
+            } else {
+                alt
+            }
+        }
+        // Otherwise honor the preferred camera-consistent branch.
+        _ => pref,
+    };
+    // Keep branch choice camera-consistent. Do not globally prefer "stronger"
+    // outcomes (e.g. disk-hit everywhere), which collapses Kerr images into
+    // pathological full-donut maps.
+    pick
+}
+
+pub fn trace_photon_kerr_debug(
+    kerr: &KerrMetric,
+    disk_inner_re: f64,
+    disk_outer_re: f64,
+    bx: f64,
+    by: f64,
+    inclination_deg: f64,
+    max_lambda: f64,
+    dlambda: f64,
+) -> KerrTraceDebug {
+    // Kerr polar equation has two admissible initial branches; selecting only one
+    // creates a hemisphere split (half-disk artifact).
+    let up = trace_photon_kerr_branch(
+        kerr,
+        disk_inner_re,
+        disk_outer_re,
+        bx,
+        by,
+        inclination_deg,
+        max_lambda,
+        dlambda,
+        1.0,
+    );
+    let down = trace_photon_kerr_branch(
+        kerr,
+        disk_inner_re,
+        disk_outer_re,
+        bx,
+        by,
+        inclination_deg,
+        max_lambda,
+        dlambda,
+        -1.0,
+    );
+    let chosen = choose_kerr_candidate(up, down, by, max_lambda);
+    KerrTraceDebug {
+        result: chosen.result,
+        branch_sign: if chosen.sgn_th_init >= 0.0 { 1 } else { -1 },
+        phase_accum: chosen.phase_accum,
+    }
+}
+
+/// Returns the selected-branch accumulated phase proxy for a Kerr geodesic.
+pub fn trace_photon_kerr_phase(
+    kerr: &KerrMetric,
+    disk_inner_re: f64,
+    disk_outer_re: f64,
+    bx: f64,
+    by: f64,
+    inclination_deg: f64,
+    max_lambda: f64,
+    dlambda: f64,
+) -> f64 {
+    let up = trace_photon_kerr_branch(
+        kerr,
+        disk_inner_re,
+        disk_outer_re,
+        bx,
+        by,
+        inclination_deg,
+        max_lambda,
+        dlambda,
+        1.0,
+    );
+    let down = trace_photon_kerr_branch(
+        kerr,
+        disk_inner_re,
+        disk_outer_re,
+        bx,
+        by,
+        inclination_deg,
+        max_lambda,
+        dlambda,
+        -1.0,
+    );
+    choose_kerr_candidate(up, down, by, max_lambda).phase_accum
+}
+
+pub fn trace_photon_kerr_wave_samples(
+    kerr: &KerrMetric,
+    disk_inner_re: f64,
+    disk_outer_re: f64,
+    bx: f64,
+    by: f64,
+    inclination_deg: f64,
+    max_lambda: f64,
+    dlambda: f64,
+) -> [KerrWaveSample; 2] {
+    let up = trace_photon_kerr_branch(
+        kerr,
+        disk_inner_re,
+        disk_outer_re,
+        bx,
+        by,
+        inclination_deg,
+        max_lambda,
+        dlambda,
+        1.0,
+    );
+    let down = trace_photon_kerr_branch(
+        kerr,
+        disk_inner_re,
+        disk_outer_re,
+        bx,
+        by,
+        inclination_deg,
+        max_lambda,
+        dlambda,
+        -1.0,
+    );
+    [
+        KerrWaveSample {
+            result: up.result,
+            branch_sign: 1,
+            phase_accum: up.phase_accum,
+        },
+        KerrWaveSample {
+            result: down.result,
+            branch_sign: -1,
+            phase_accum: down.phase_accum,
+        },
+    ]
+}
+
+fn trace_photon_kerr_branch_crossings(
+    kerr: &KerrMetric,
+    disk_inner_re: f64,
+    disk_outer_re: f64,
+    bx: f64,
+    by: f64,
+    inclination_deg: f64,
+    max_lambda: f64,
+    dlambda: f64,
+    sgn_th_init: f64,
+    max_crossings: usize,
+) -> KerrBranchCrossings {
+    let r_s = kerr.r_s;
+    let (r_plus, _) = kerr.horizons();
+    let theta_obs = inclination_deg.to_radians().clamp(1e-4, PI - 1e-4);
+    let (xi, eta) = kerr.image_to_constants(bx, by, theta_obs);
+    let b = (bx * bx + by * by).sqrt();
+    let r_start = (40.0 * r_s).max(12.0 * b).max(20.0);
+
+    let mut r = r_start;
+    let mut theta = theta_obs;
+    let mut phi = 0.0_f64;
+    let mut n_cross = 0_u32;
+    let mut sgn_r = -1.0_f64;
+    let mut sgn_th = sgn_th_init;
+    let mut lambda = 0.0_f64;
+    let mut phase_accum = 0.0_f64;
+    let mut crossings = [KerrDiskCrossing::default(); 8];
+    let mut count = 0usize;
+    let max_keep = max_crossings.min(crossings.len());
+    let max_steps = (max_lambda / dlambda).ceil() as usize + 1;
+    let mut termination = TraceResult::Captured;
+
+    for _ in 0..max_steps {
+        let a = kerr.a();
+        let sin_th = theta.sin();
+        let sin2 = (sin_th * sin_th).max(1e-9);
+        let sigma = kerr.sigma(r, theta).max(1e-12);
+        let delta = kerr.delta(r);
+        let p = (r * r + a * a) - a * xi;
+        let rpot = kerr.radial_potential(r, xi, eta);
+        if rpot <= 1e-12 {
+            sgn_r = -sgn_r;
+        }
+        let tpot = kerr.polar_potential(theta, xi, eta);
+        if tpot <= 1e-12 {
+            sgn_th = -sgn_th;
+        }
+
+        let rr = rpot.max(0.0).sqrt();
+        let thh = tpot.max(0.0).sqrt();
+        let dr = sgn_r * rr / sigma;
+        let dth = sgn_th * thh / sigma;
+        let dphi = if delta.abs() < 1e-9 {
+            (xi / sin2 - a) / sigma
+        } else {
+            (xi / sin2 - a + a * p / delta) / sigma
+        };
+        let phase_new = phase_accum + kerr_phase_increment(r, theta, dr, dth, dphi, dlambda, r_s);
+        let r_new = r + dlambda * dr;
+        let th_new = (theta + dlambda * dth).clamp(1e-4, PI - 1e-4);
+        let phi_new = phi + dlambda * dphi;
+
+        if !r_new.is_finite() || !th_new.is_finite() || !phi_new.is_finite() {
+            termination = TraceResult::Captured;
+            break;
+        }
+        if r_new <= r_plus * 1.001 {
+            termination = TraceResult::Captured;
+            break;
+        }
+        if sgn_r > 0.0 && r_new >= r_start * 0.995 {
+            termination = TraceResult::Escaped {
+                phi_total: phi_new.abs(),
+            };
+            break;
+        }
+
+        let pi2 = PI * 0.5;
+        if (theta - pi2) * (th_new - pi2) <= 0.0 {
+            n_cross += 1;
+            let t = ((pi2 - theta) / (th_new - theta)).clamp(0.0, 1.0);
+            let r_cross = r + t * (r_new - r);
+            if r_cross >= disk_inner_re && r_cross <= disk_outer_re && count < max_keep {
+                crossings[count] = KerrDiskCrossing {
+                    r_eff: r_cross,
+                    phi_orb: phi_new.abs(),
+                    n_cross,
+                    phase_accum: phase_new,
+                };
+                count += 1;
+            }
+        }
+
+        r = r_new;
+        theta = th_new;
+        phi = phi_new;
+        lambda += dlambda;
+        phase_accum = phase_new;
+        if lambda >= max_lambda {
+            termination = if sgn_r > 0.0 && r > 0.5 * r_start {
+                TraceResult::Escaped {
+                    phi_total: phi.abs(),
+                }
+            } else if r > (3.0 * r_s).max(1.2 * r_plus) {
+                TraceResult::Escaped {
+                    phi_total: phi.abs(),
+                }
+            } else {
+                TraceResult::Captured
+            };
+            break;
+        }
+    }
+
+    KerrBranchCrossings {
+        branch_sign: if sgn_th_init >= 0.0 { 1 } else { -1 },
+        termination,
+        count,
+        crossings,
+    }
+}
+
+pub fn trace_photon_kerr_wave_branches(
+    kerr: &KerrMetric,
+    disk_inner_re: f64,
+    disk_outer_re: f64,
+    bx: f64,
+    by: f64,
+    inclination_deg: f64,
+    max_lambda: f64,
+    dlambda: f64,
+    max_crossings: usize,
+) -> [KerrBranchCrossings; 2] {
+    [
+        trace_photon_kerr_branch_crossings(
+            kerr,
+            disk_inner_re,
+            disk_outer_re,
+            bx,
+            by,
+            inclination_deg,
+            max_lambda,
+            dlambda,
+            1.0,
+            max_crossings,
+        ),
+        trace_photon_kerr_branch_crossings(
+            kerr,
+            disk_inner_re,
+            disk_outer_re,
+            bx,
+            by,
+            inclination_deg,
+            max_lambda,
+            dlambda,
+            -1.0,
+            max_crossings,
+        ),
+    ]
 }
 
 // ── Interior-camera trace ─────────────────────────────────────────────────────

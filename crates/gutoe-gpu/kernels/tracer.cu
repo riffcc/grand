@@ -431,7 +431,9 @@ int trace_photon_gpu_kerr(
     double sgn_r = -1.0;
     // Match CPU Kerr tracer convention under this screen basis:
     // +beta points toward decreasing θ, so dθ/dλ sign is opposite β.
-    double sgn_th = (by >= 0.0) ? -1.0 : 1.0;
+    /* Polar momentum branch from image-plane beta sign.
+       In this screen convention, +beta maps to increasing theta. */
+    double sgn_th = (by >= 0.0) ? 1.0 : -1.0;
     unsigned int n_cross = 0;
     int max_steps = (int)(max_lambda / dlambda) + 1;
 
@@ -675,6 +677,7 @@ void bh_pixel_color(double r_eff, double r_isco, double r_outer, double r_s,
                      double bx_raw, double phi_orb, double sin_inc,
                      unsigned int n_cross, int doppler, int ring_mode, int spectral_band,
                      int plasma_model,
+                     double kerr_astar,
                      int use_transfer, double tau_scale, double fixed_exposure,
                      unsigned char* r_o, unsigned char* g_o, unsigned char* b_o)
 {
@@ -694,8 +697,13 @@ void bh_pixel_color(double r_eff, double r_isco, double r_outer, double r_s,
     double transfer = 1.0;
     double r_safe = fmax(r_eff, 1e-12);
     double g_gr = sqrt(fmax(1.0 - r_s / r_safe, 0.0));
+    double beta = fmin(sqrt(r_s / (2.0 * r_safe)), 0.7);
+    double omega_boost = 0.0;
+    if (fabs(kerr_astar) > 1e-12) {
+        omega_boost = 0.35 * fabs(kerr_astar) * pow(fmax(fmin(r_s / r_safe, 1.0), 0.0), 1.5);
+        beta = fmin(beta * (1.0 + omega_boost), 0.85);
+    }
     if (doppler) {
-        double beta    = fmin(sqrt(r_s / (2.0 * r_safe)), 0.7);
         double gamma   = 1.0 / sqrt(fmax(1.0 - beta*beta, 1e-12));
         double mu_phi = fmax(fmin(sin(phi_orb), 1.0), -1.0);
         double mu_screen = fmax(fmin(bx_raw / r_safe, 1.0), -1.0);
@@ -703,9 +711,9 @@ void bh_pixel_color(double r_eff, double r_isco, double r_outer, double r_s,
         double beta_obs = beta * sin_inc * mu;
         double g_dop = 1.0 / (gamma * (1.0 - beta_obs));
         double g = g_gr * g_dop;
-        transfer = fmax(fmin(g*g*g*g, 300.0), 1e-6);
+        transfer = fmax(fmin(g*g*g*g, 300.0), 1e-6) * (1.0 + 0.15 * omega_boost);
     } else {
-        transfer = fmax(fmin(g_gr*g_gr*g_gr*g_gr, 300.0), 1e-6);
+        transfer = fmax(fmin(g_gr*g_gr*g_gr*g_gr, 300.0), 1e-6) * (1.0 + 0.15 * omega_boost);
     }
 
     /* Band-limited emissivity proxy from Planck shape x^3/(e^x-1). */
@@ -787,12 +795,14 @@ void bh_riaf_composite_color(double r_eff, double r_isco, double r_outer, double
                               unsigned int n_cross, double phi_orb,
                               int doppler, int ring_mode, int spectral_band,
                               int plasma_model,
+                              double kerr_astar,
                               int use_transfer, double tau_scale, double fixed_exposure,
                               unsigned char* r_o, unsigned char* g_o, unsigned char* b_o)
 {
     unsigned char dr, dg, db;
     bh_pixel_color(r_eff, r_isco, r_outer, r_s, bx_raw, phi_orb, sin_inc, n_cross,
-                   doppler, ring_mode, spectral_band, plasma_model, use_transfer, tau_scale, fixed_exposure,
+                   doppler, ring_mode, spectral_band, plasma_model, kerr_astar,
+                   use_transfer, tau_scale, fixed_exposure,
                    &dr, &dg, &db);
 
     unsigned char br, bg, bb;
@@ -926,12 +936,14 @@ void bh_render_kernel(
                         n_cross, phi_total,
                         doppler, ring_mode, spectral_band,
                         plasma_model,
+                        kerr_enable ? kerr_astar : 0.0,
                         use_transfer, tau_scale, fixed_exposure,
                         &r_px, &g_px, &b_px);
                 } else {
                     bh_pixel_color(
                         r_eff, r_isco, disk_outer, r_s, bx_raw, phi_total, sin_inc,
                         n_cross, doppler, ring_mode, spectral_band, plasma_model,
+                        kerr_enable ? kerr_astar : 0.0,
                         use_transfer, tau_scale, fixed_exposure,
                         &r_px, &g_px, &b_px);
                 }
