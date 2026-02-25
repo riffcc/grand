@@ -122,6 +122,23 @@ theorem zRe_theta_pi_negative : zRe Real.pi = -6 := by
   rw [zRe_eq_six_cos]
   norm_num
 
+/-- Route-2 candidate set used in the principal-branch exclusion step. -/
+def route2Candidate (theta : ℝ) : Prop := theta = 0 ∨ theta = Real.pi
+
+/-- Nonnegative-weight variant of route-2 exclusion:
+    if candidates are `{0, π}` and `zRe(θ) ≥ 0`, then `θ = 0`. -/
+theorem theta_zero_of_discrete_candidates_and_nonnegative_weight
+    (theta : ℝ)
+    (hdisc : route2Candidate theta)
+    (hnonneg : 0 ≤ zRe theta) :
+    theta = 0 := by
+  rcases hdisc with h0 | hpi
+  · exact h0
+  · exfalso
+    have hneg : zRe theta = -6 := by simpa [hpi] using zRe_theta_pi_negative
+    rw [hneg] at hnonneg
+    linarith
+
 /-- Route-2 exclusion step in the principal branch:
     if a candidate is constrained to `{0, π}` and the vacuum weight is positive,
     then `θ = 0` (the `π` branch is excluded). -/
@@ -136,5 +153,22 @@ theorem theta_zero_of_discrete_candidates_and_positive_weight
     have hneg : zRe theta = -6 := by simpa [hpi] using zRe_theta_pi_negative
     rw [hneg] at hpos
     linarith
+
+/-- Structural `θ_QCD` is a route-2 candidate (in fact the `0` branch). -/
+theorem theta_qcd_structural_route2_candidate :
+    route2Candidate thetaQcdStructural := by
+  left
+  exact theta_qcd_structural_zero
+
+/-- Structural route-2 closure, phrased through the nonnegative-weight gate. -/
+theorem theta_qcd_structural_route2_closed :
+    thetaQcdStructural = 0 := by
+  exact
+    theta_zero_of_discrete_candidates_and_nonnegative_weight
+      thetaQcdStructural
+      theta_qcd_structural_route2_candidate
+      (by
+        rw [theta_qcd_structural_zero, zRe_theta_zero_positive]
+        norm_num)
 
 end Gutoe.StrongCPPathIntegral

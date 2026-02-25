@@ -17,12 +17,18 @@ Status: in progress; structural skeleton formalized, full nonperturbative closur
 - Added route-2 exclusion lemma in the principal branch:
   - if candidates are constrained to `{0, π}` and vacuum weight is positive,
     then `θ = 0` (since `Z_re(π) = -6`).
+- Added route-2 hardening lemmas:
+  - `route2Candidate` (`θ = 0 ∨ θ = π`)
+  - `theta_zero_of_discrete_candidates_and_nonnegative_weight`
+    (nonnegative-weight gate now also excludes `π`)
+  - `theta_qcd_structural_route2_candidate`
+  - `theta_qcd_structural_route2_closed`
 
 ## Why this matters
 
 This goes beyond the previous classical proxy-only statement by encoding
 vacuum-sector phase-channel behavior in Lean and making the `π` branch
-exclusion explicit under a positivity condition.
+exclusion explicit under positivity and nonnegativity conditions.
 
 ## What is still missing (the real GRAND-267 core)
 
