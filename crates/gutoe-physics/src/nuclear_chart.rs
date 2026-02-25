@@ -156,6 +156,11 @@ pub struct ShellParams {
     pub heavy_amplitude: f64,
     pub heavy_gate_z_min: u16,
     pub heavy_gate_n_min: u16,
+    // Localized Z≈50 curvature support with isovector tilt.
+    // This is intentionally orthogonal to heavy-shell controls so we can
+    // tighten tin/isobar closure behavior without warping N=82/N=126 anchors.
+    pub z50_isovector_valley_amplitude: f64,
+    pub z50_isovector_beta_coeff: f64,
 }
 
 impl Default for ShellParams {
@@ -193,6 +198,8 @@ impl Default for ShellParams {
             heavy_amplitude: 1.8,
             heavy_gate_z_min: 96,
             heavy_gate_n_min: 140,
+            z50_isovector_valley_amplitude: 0.0,
+            z50_isovector_beta_coeff: 0.0,
         }
     }
 }
@@ -367,6 +374,22 @@ fn proton_magic_weight(magic_z: u16, coeff: f64, cap: f64) -> f64 {
     // we shift beta-stable isobars near Z=50 without destabilizing light-Z fits.
     let x = (magic_z as f64 - 20.0) / 30.0;
     (1.0 + coeff * x * x).clamp(1.0, cap)
+}
+
+fn z50_isovector_valley_term_mev(z: u16, n: u16, shell: ShellParams) -> f64 {
+    let amp = shell.z50_isovector_valley_amplitude;
+    if amp.abs() < 1e-12 {
+        return 0.0;
+    }
+    let a = (z + n) as f64;
+    let beta = (n as f64 - z as f64) / a.max(1.0);
+    // Reference beta near stable Sn isotopes; positive coeff strengthens the
+    // neutron-rich flank (useful for Sn-124) without over-boosting proton-rich side.
+    let beta_ref = 0.125;
+    let isovector = (1.0 + shell.z50_isovector_beta_coeff * (beta - beta_ref)).clamp(0.35, 2.50);
+    let z_window = gaussian_proximity(z as f64, 50.0, 4.5);
+    let a_window = gaussian_proximity(a, 118.0, 18.0);
+    amp * z_window * a_window * isovector
 }
 
 fn neutron_strutinsky_mass_weight(a: f64, shell: ShellParams) -> f64 {
@@ -767,7 +790,8 @@ fn semf_binding_mev(
             shell.superheavy_proton_sigma,
         )
         * proton_gate_n;
-    let shell_baseline = (shell_z + shell_n + shell_superheavy_proton) * shell_scale;
+    let shell_z50_isovector = z50_isovector_valley_term_mev(z, n, shell);
+    let shell_baseline = (shell_z + shell_n + shell_superheavy_proton) * shell_scale + shell_z50_isovector;
     // Separate heavy-island sharpening layer centered near candidate IoS region.
     let shell_heavy = heavy_gate
         * shell.heavy_amplitude

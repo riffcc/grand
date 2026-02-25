@@ -151,6 +151,14 @@ fn main() -> anyhow::Result<()> {
             heavy_amplitude: env_f64("GUTOE_NUCLEAR_HEAVY_AMP", default_shell.heavy_amplitude),
             heavy_gate_z_min: env_u16("GUTOE_NUCLEAR_HEAVY_GATE_Z_MIN", default_shell.heavy_gate_z_min),
             heavy_gate_n_min: env_u16("GUTOE_NUCLEAR_HEAVY_GATE_N_MIN", default_shell.heavy_gate_n_min),
+            z50_isovector_valley_amplitude: env_f64(
+                "GUTOE_NUCLEAR_Z50_ISOVECTOR_VALLEY_AMP",
+                default_shell.z50_isovector_valley_amplitude,
+            ),
+            z50_isovector_beta_coeff: env_f64(
+                "GUTOE_NUCLEAR_Z50_ISOVECTOR_BETA_COEFF",
+                default_shell.z50_isovector_beta_coeff,
+            ),
         },
         ..ScanConfig::default()
     };
