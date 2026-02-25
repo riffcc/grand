@@ -362,6 +362,9 @@ fn main() -> anyhow::Result<()> {
         *isotopes_per_z.entry(r.z).or_insert(0) += 1;
     }
 
+    let binding_by_za: BTreeMap<(u16, u16), f64> =
+        records.iter().map(|r| ((r.z, r.a), r.binding_mev)).collect();
+
     // Tin diagnostics (magic-proton showcase): compare exact stable A-set.
     let mut tin_predicted_a: Vec<u16> = stable_like
         .iter()
@@ -384,15 +387,53 @@ fn main() -> anyhow::Result<()> {
         .copied()
         .filter(|a| !tin_observed_a.contains(a))
         .collect();
+    let tin_delta_112_zminus1 = binding_by_za
+        .get(&(49, 112))
+        .zip(binding_by_za.get(&(50, 112)))
+        .map(|(b49, b50)| b49 - b50)
+        .unwrap_or(f64::NAN);
+    let tin_delta_112_zplus1 = binding_by_za
+        .get(&(51, 112))
+        .zip(binding_by_za.get(&(50, 112)))
+        .map(|(b51, b50)| b51 - b50)
+        .unwrap_or(f64::NAN);
+    let tin_delta_115_zminus1 = binding_by_za
+        .get(&(49, 115))
+        .zip(binding_by_za.get(&(50, 115)))
+        .map(|(b49, b50)| b49 - b50)
+        .unwrap_or(f64::NAN);
+    let tin_delta_115_zplus1 = binding_by_za
+        .get(&(51, 115))
+        .zip(binding_by_za.get(&(50, 115)))
+        .map(|(b51, b50)| b51 - b50)
+        .unwrap_or(f64::NAN);
+    let tin_delta_124_zminus1 = binding_by_za
+        .get(&(49, 124))
+        .zip(binding_by_za.get(&(50, 124)))
+        .map(|(b49, b50)| b49 - b50)
+        .unwrap_or(f64::NAN);
+    let tin_delta_124_zplus1 = binding_by_za
+        .get(&(51, 124))
+        .zip(binding_by_za.get(&(50, 124)))
+        .map(|(b51, b50)| b51 - b50)
+        .unwrap_or(f64::NAN);
     let mut tin_csv = String::from(
-        "A,N,predicted_long_lived,observed_stable,fail_beta_optimal,fail_fissility,fail_s2n,fail_s2p,fail_sf,stability_score,s2n_mev,s2p_mev,fissility,sf_log10_half_life_s\n",
+        "A,N,predicted_long_lived,observed_stable,fail_beta_optimal,fail_fissility,fail_s2n,fail_s2p,fail_sf,stability_score,s2n_mev,s2p_mev,delta_binding_vs_zminus1_mev,delta_binding_vs_zplus1_mev,fissility,sf_log10_half_life_s\n",
     );
     for r in records.iter().filter(|r| r.z == 50 && (100..=130).contains(&r.a)) {
         let beta_ok = beta_local_min.get(&(r.z, r.n)).copied().unwrap_or(false);
         let (pred, fail_beta, fail_fiss, fail_s2n, fail_s2p, fail_sf) = classify_long_lived(r, beta_ok);
         let observed = tin_observed_a.contains(&r.a);
+        let delta_vs_zminus1 = binding_by_za
+            .get(&(49, r.a))
+            .map(|b| b - r.binding_mev)
+            .unwrap_or(f64::NAN);
+        let delta_vs_zplus1 = binding_by_za
+            .get(&(51, r.a))
+            .map(|b| b - r.binding_mev)
+            .unwrap_or(f64::NAN);
         tin_csv.push_str(&format!(
-            "{},{},{},{},{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
+            "{},{},{},{},{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
             r.a,
             r.n,
             pred,
@@ -405,6 +446,8 @@ fn main() -> anyhow::Result<()> {
             r.stability_score,
             r.s2n_mev.unwrap_or(f64::NAN),
             r.s2p_mev.unwrap_or(f64::NAN),
+            delta_vs_zminus1,
+            delta_vs_zplus1,
             r.fissility,
             r.sf_log10_half_life_s
         ));
@@ -642,6 +685,14 @@ fn main() -> anyhow::Result<()> {
             "    \"predicted_stable_like_a\": [{}],\n",
             "    \"missing_from_prediction\": [{}],\n",
             "    \"extra_in_prediction\": [{}],\n",
+            "    \"neighbor_binding_deltas_mev\": {{\n",
+            "      \"a112_vs_zminus1\": {:.6},\n",
+            "      \"a112_vs_zplus1\": {:.6},\n",
+            "      \"a115_vs_zminus1\": {:.6},\n",
+            "      \"a115_vs_zplus1\": {:.6},\n",
+            "      \"a124_vs_zminus1\": {:.6},\n",
+            "      \"a124_vs_zplus1\": {:.6}\n",
+            "    }},\n",
             "    \"observed_count\": {},\n",
             "    \"predicted_count\": {}\n",
             "  }}\n",
@@ -716,6 +767,12 @@ fn main() -> anyhow::Result<()> {
             .map(|a| a.to_string())
             .collect::<Vec<_>>()
             .join(", "),
+        tin_delta_112_zminus1,
+        tin_delta_112_zplus1,
+        tin_delta_115_zminus1,
+        tin_delta_115_zplus1,
+        tin_delta_124_zminus1,
+        tin_delta_124_zplus1,
         tin_observed_a.len(),
         tin_predicted_a.len()
     );
