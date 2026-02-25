@@ -45,6 +45,13 @@ pub struct ShellParams {
     pub amplitude_n: f64,
     pub sigma_z: f64,
     pub sigma_n: f64,
+    pub heavy_target_z: f64,
+    pub heavy_target_n: f64,
+    pub heavy_sigma_z: f64,
+    pub heavy_sigma_n: f64,
+    pub heavy_amplitude: f64,
+    pub heavy_gate_z_min: u16,
+    pub heavy_gate_n_min: u16,
 }
 
 impl Default for ShellParams {
@@ -54,6 +61,13 @@ impl Default for ShellParams {
             amplitude_n: 2.8,
             sigma_z: 4.0,
             sigma_n: 5.0,
+            heavy_target_z: 114.0,
+            heavy_target_n: 184.0,
+            heavy_sigma_z: 9.0,
+            heavy_sigma_n: 14.0,
+            heavy_amplitude: 1.8,
+            heavy_gate_z_min: 96,
+            heavy_gate_n_min: 140,
         }
     }
 }
@@ -89,6 +103,8 @@ pub struct NucleusRecord {
     pub binding_mev: f64,
     pub binding_per_nucleon_mev: f64,
     pub shell_bonus_mev: f64,
+    pub shell_bonus_baseline_mev: f64,
+    pub shell_bonus_heavy_mev: f64,
     pub shell_scale_a: f64,
     pub pairing_mev: f64,
     pub s2n_mev: Option<f64>,
@@ -173,7 +189,12 @@ fn shell_bonus(x: u16, magics: &[u16], amplitude: f64, sigma: f64) -> f64 {
         .sum()
 }
 
-fn semf_binding_mev(z: u16, n: u16, semf: SemfParams, shell: ShellParams) -> (f64, f64, f64) {
+fn semf_binding_mev(
+    z: u16,
+    n: u16,
+    semf: SemfParams,
+    shell: ShellParams,
+) -> (f64, f64, f64, f64, f64, f64) {
     let a_u16 = z + n;
     let a = a_u16 as f64;
     let zf = z as f64;
@@ -190,10 +211,28 @@ fn semf_binding_mev(z: u16, n: u16, semf: SemfParams, shell: ShellParams) -> (f6
     // A-dependent shell leverage: suppress light-nucleus over-bias and let
     // shell structure compete against Coulomb/fission in superheavy region.
     let shell_scale = (a / 56.0).powf(0.28).clamp(0.45, 1.35);
-    let shell_total = (shell_z + shell_n) * shell_scale;
+    let shell_baseline = (shell_z + shell_n) * shell_scale;
+    let heavy_gate = if z >= shell.heavy_gate_z_min && n >= shell.heavy_gate_n_min {
+        1.0
+    } else {
+        0.0
+    };
+    // Separate heavy-island sharpening layer centered near candidate IoS region.
+    let shell_heavy = heavy_gate
+        * shell.heavy_amplitude
+        * gaussian_proximity(z as f64, shell.heavy_target_z, shell.heavy_sigma_z)
+        * gaussian_proximity(n as f64, shell.heavy_target_n, shell.heavy_sigma_n);
+    let shell_total = shell_baseline + shell_heavy;
 
     let binding = volume - surface - coulomb - asymmetry + pairing + shell_total;
-    (binding, shell_total, pairing)
+    (
+        binding,
+        shell_total,
+        shell_baseline,
+        shell_heavy,
+        shell_scale,
+        pairing,
+    )
 }
 
 fn fissility(z: u16, a: u16) -> f64 {
@@ -244,16 +283,27 @@ fn stability_score(
 
 /// Build a full nuclide table with SEMF+shell observables.
 pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
-    let mut binding_map: BTreeMap<(u16, u16), (f64, f64, f64)> = BTreeMap::new();
+    let mut binding_map: BTreeMap<(u16, u16), (f64, f64, f64, f64, f64, f64)> = BTreeMap::new();
     for z in cfg.z_min..=cfg.z_max {
         for n in cfg.n_min..=cfg.n_max {
-            let (binding, shell_bonus_mev, pairing_mev) = semf_binding_mev(z, n, cfg.semf, cfg.shell);
-            binding_map.insert((z, n), (binding, shell_bonus_mev, pairing_mev));
+            let (binding, shell_bonus_mev, shell_bonus_baseline_mev, shell_bonus_heavy_mev, shell_scale_a, pairing_mev) =
+                semf_binding_mev(z, n, cfg.semf, cfg.shell);
+            binding_map.insert(
+                (z, n),
+                (
+                    binding,
+                    shell_bonus_mev,
+                    shell_bonus_baseline_mev,
+                    shell_bonus_heavy_mev,
+                    shell_scale_a,
+                    pairing_mev,
+                ),
+            );
         }
     }
 
     let mut best_by_a: BTreeMap<u16, (u16, f64)> = BTreeMap::new();
-    for (&(z, n), &(b, _, _)) in &binding_map {
+    for (&(z, n), &(b, _, _, _, _, _)) in &binding_map {
         let a = z + n;
         match best_by_a.get(&a) {
             Some((_, best_b)) if *best_b >= b => {}
@@ -264,15 +314,17 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
     }
 
     let mut out = Vec::with_capacity(binding_map.len());
-    for (&(z, n), &(binding, shell_bonus_mev, pairing_mev)) in &binding_map {
+    for (&(z, n), &(binding, shell_bonus_mev, shell_bonus_baseline_mev, shell_bonus_heavy_mev, shell_scale_a, pairing_mev)) in
+        &binding_map
+    {
         let a = z + n;
         let s2n = if n >= cfg.n_min + 2 {
-            binding_map.get(&(z, n - 2)).map(|(b_prev, _, _)| binding - *b_prev)
+            binding_map.get(&(z, n - 2)).map(|(b_prev, _, _, _, _, _)| binding - *b_prev)
         } else {
             None
         };
         let s2p = if z >= cfg.z_min + 2 {
-            binding_map.get(&(z - 2, n)).map(|(b_prev, _, _)| binding - *b_prev)
+            binding_map.get(&(z - 2, n)).map(|(b_prev, _, _, _, _, _)| binding - *b_prev)
         } else {
             None
         };
@@ -281,7 +333,6 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
         let barrier = fission_barrier_mev(z, a, f, shell_bonus_mev);
         let sf_log10 = sf_log10_half_life_seconds(z, barrier, f);
         let score = stability_score(bpa, s2n, s2p, f, barrier, sf_log10);
-        let shell_scale_a = ((a as f64) / 56.0).powf(0.28).clamp(0.45, 1.35);
         let beta_optimal_for_a = best_by_a
             .get(&a)
             .map(|(best_z, _)| *best_z == z)
@@ -294,6 +345,8 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
             binding_mev: binding,
             binding_per_nucleon_mev: bpa,
             shell_bonus_mev,
+            shell_bonus_baseline_mev,
+            shell_bonus_heavy_mev,
             shell_scale_a,
             pairing_mev,
             s2n_mev: s2n,
@@ -431,7 +484,7 @@ pub fn rank_island_candidates(records: &[NucleusRecord], min_z: u16, top_k: usiz
 
 /// Score shell/discontinuity quality for quick calibration loops.
 pub fn shell_gate_metrics(records: &[NucleusRecord]) -> ShellGateMetrics {
-    let rows = magic_s2n_discontinuities(records, records.len().min(200));
+    let rows = magic_s2n_discontinuities(records, records.len());
     if rows.is_empty() {
         return ShellGateMetrics {
             top_delta_s2n_mev: 0.0,
@@ -494,20 +547,22 @@ pub fn write_records_csv(path: impl AsRef<Path>, records: &[NucleusRecord]) -> s
     let mut file = fs::File::create(path)?;
     writeln!(
         file,
-        "Z,N,A,binding_mev,binding_per_nucleon_mev,shell_bonus_mev,shell_scale_a,pairing_mev,s2n_mev,s2p_mev,beta_optimal_for_a,fissility,fission_barrier_mev,sf_log10_half_life_s,stability_score"
+        "Z,N,A,binding_mev,binding_per_nucleon_mev,shell_bonus_mev,shell_bonus_baseline_mev,shell_bonus_heavy_mev,shell_scale_a,pairing_mev,s2n_mev,s2p_mev,beta_optimal_for_a,fissility,fission_barrier_mev,sf_log10_half_life_s,stability_score"
     )?;
     for r in records {
         let s2n = r.s2n_mev.map(|v| format!("{v:.6}")).unwrap_or_default();
         let s2p = r.s2p_mev.map(|v| format!("{v:.6}")).unwrap_or_default();
         writeln!(
             file,
-            "{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{},{:.6},{:.6},{:.6},{:.6}",
+            "{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{},{:.6},{:.6},{:.6},{:.6}",
             r.z,
             r.n,
             r.a,
             r.binding_mev,
             r.binding_per_nucleon_mev,
             r.shell_bonus_mev,
+            r.shell_bonus_baseline_mev,
+            r.shell_bonus_heavy_mev,
             r.shell_scale_a,
             r.pairing_mev,
             s2n,

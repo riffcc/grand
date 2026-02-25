@@ -57,6 +57,7 @@ fn main() -> anyhow::Result<()> {
     let amp_n_grid = parse_list("GUTOE_NUCLEAR_AMP_N_GRID", &[2.2, 2.8, 3.4, 4.2]);
     let sigma_z_grid = parse_list("GUTOE_NUCLEAR_SIGMA_Z_GRID", &[3.0, 4.0, 5.0, 6.0]);
     let sigma_n_grid = parse_list("GUTOE_NUCLEAR_SIGMA_N_GRID", &[4.0, 5.0, 6.0, 7.0]);
+    let heavy_amp_grid = parse_list("GUTOE_NUCLEAR_HEAVY_AMP_GRID", &[0.0, 1.2, 2.4, 3.6]);
 
     #[derive(Clone, Copy)]
     struct Row {
@@ -65,6 +66,7 @@ fn main() -> anyhow::Result<()> {
         amp_n: f64,
         sigma_z: f64,
         sigma_n: f64,
+        heavy_amp: f64,
         top_delta_s2n: f64,
         avg_top5_delta_s2n: f64,
         n184_delta: f64,
@@ -79,83 +81,90 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut leaderboard = String::from(
-        "rank,score,amp_z,amp_n,sigma_z,sigma_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
+        "rank,score,amp_z,amp_n,sigma_z,sigma_n,heavy_amp,top_delta_s2n,avg_top5_delta_s2n,n184_delta,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
     );
     let mut rows: Vec<Row> = Vec::new();
     let mut best_score = f64::NEG_INFINITY;
     let mut best_records = Vec::new();
     let mut best_ranked = Vec::new();
     let mut best_metrics = None;
-    let mut best_params = (0.0, 0.0, 0.0, 0.0);
+    let mut best_params = (0.0, 0.0, 0.0, 0.0, 0.0);
 
     for &amp_z in &amp_z_grid {
         for &amp_n in &amp_n_grid {
             for &sigma_z in &sigma_z_grid {
                 for &sigma_n in &sigma_n_grid {
-                    let cfg = ScanConfig {
-                        z_min,
-                        z_max,
-                        n_min,
-                        n_max,
-                        shell: ShellParams {
-                            amplitude_z: amp_z,
-                            amplitude_n: amp_n,
+                    for &heavy_amp in &heavy_amp_grid {
+                        let cfg = ScanConfig {
+                            z_min,
+                            z_max,
+                            n_min,
+                            n_max,
+                            shell: ShellParams {
+                                amplitude_z: amp_z,
+                                amplitude_n: amp_n,
+                                sigma_z,
+                                sigma_n,
+                                heavy_target_z: target_z as f64,
+                                heavy_target_n: target_n as f64,
+                                heavy_amplitude: heavy_amp,
+                                ..ShellParams::default()
+                            },
+                            ..ScanConfig::default()
+                        };
+                        let records = scan_nuclear_chart(cfg);
+                        let metrics = shell_gate_metrics(&records);
+                        let ranking_cfg = IslandRankingConfig {
+                            min_z: 104,
+                            target_z,
+                            target_n,
+                            ..IslandRankingConfig::default()
+                        };
+                        let ranked = rank_island_candidates_with_config(&records, ranking_cfg, top_k);
+                        let closest = closest_to_target_island(&records, target_z, target_n);
+                        let top = ranked.first().copied();
+
+                        let top_score = top.map(|r| r.stability_score).unwrap_or(-1.0e9);
+                        let closest_score = closest.map(|r| r.stability_score).unwrap_or(-1.0e9);
+                        let objective = 0.55 * metrics.strongest_n184_delta_s2n_mev
+                            + 0.20 * metrics.avg_top5_delta_s2n_mev
+                            + 0.15 * top_score
+                            + 0.10 * closest_score;
+
+                        let (top_candidate_z, top_candidate_n) =
+                            top.map(|r| (r.z, r.n)).unwrap_or((0, 0));
+                        let top_candidate_barrier = top.map(|r| r.fission_barrier_mev).unwrap_or(0.0);
+                        let top_candidate_sf_log10 =
+                            top.map(|r| r.sf_log10_half_life_s).unwrap_or(-1.0e9);
+                        let (closest_z, closest_n) =
+                            closest.map(|r| (r.z, r.n)).unwrap_or((0, 0));
+                        rows.push(Row {
+                            score: objective,
+                            amp_z,
+                            amp_n,
                             sigma_z,
                             sigma_n,
-                        },
-                        ..ScanConfig::default()
-                    };
-                    let records = scan_nuclear_chart(cfg);
-                    let metrics = shell_gate_metrics(&records);
-                    let ranking_cfg = IslandRankingConfig {
-                        min_z: 104,
-                        target_z,
-                        target_n,
-                        ..IslandRankingConfig::default()
-                    };
-                    let ranked = rank_island_candidates_with_config(&records, ranking_cfg, top_k);
-                    let closest = closest_to_target_island(&records, target_z, target_n);
-                    let top = ranked.first().copied();
+                            heavy_amp,
+                            top_delta_s2n: metrics.top_delta_s2n_mev,
+                            avg_top5_delta_s2n: metrics.avg_top5_delta_s2n_mev,
+                            n184_delta: metrics.strongest_n184_delta_s2n_mev,
+                            closest_z,
+                            closest_n,
+                            closest_score,
+                            top_candidate_z,
+                            top_candidate_n,
+                            top_candidate_score: top_score,
+                            top_candidate_barrier,
+                            top_candidate_sf_log10,
+                        });
 
-                    let top_score = top.map(|r| r.stability_score).unwrap_or(-1.0e9);
-                    let closest_score = closest.map(|r| r.stability_score).unwrap_or(-1.0e9);
-                    let objective = 0.55 * metrics.strongest_n184_delta_s2n_mev
-                        + 0.20 * metrics.avg_top5_delta_s2n_mev
-                        + 0.15 * top_score
-                        + 0.10 * closest_score;
-
-                    let (top_candidate_z, top_candidate_n) =
-                        top.map(|r| (r.z, r.n)).unwrap_or((0, 0));
-                    let top_candidate_barrier = top.map(|r| r.fission_barrier_mev).unwrap_or(0.0);
-                    let top_candidate_sf_log10 =
-                        top.map(|r| r.sf_log10_half_life_s).unwrap_or(-1.0e9);
-                    let (closest_z, closest_n) =
-                        closest.map(|r| (r.z, r.n)).unwrap_or((0, 0));
-                    rows.push(Row {
-                        score: objective,
-                        amp_z,
-                        amp_n,
-                        sigma_z,
-                        sigma_n,
-                        top_delta_s2n: metrics.top_delta_s2n_mev,
-                        avg_top5_delta_s2n: metrics.avg_top5_delta_s2n_mev,
-                        n184_delta: metrics.strongest_n184_delta_s2n_mev,
-                        closest_z,
-                        closest_n,
-                        closest_score,
-                        top_candidate_z,
-                        top_candidate_n,
-                        top_candidate_score: top_score,
-                        top_candidate_barrier,
-                        top_candidate_sf_log10,
-                    });
-
-                    if objective > best_score {
-                        best_score = objective;
-                        best_records = records;
-                        best_ranked = ranked;
-                        best_metrics = Some(metrics);
-                        best_params = (amp_z, amp_n, sigma_z, sigma_n);
+                        if objective > best_score {
+                            best_score = objective;
+                            best_records = records;
+                            best_ranked = ranked;
+                            best_metrics = Some(metrics);
+                            best_params = (amp_z, amp_n, sigma_z, sigma_n, heavy_amp);
+                        }
                     }
                 }
             }
@@ -166,13 +175,14 @@ fn main() -> anyhow::Result<()> {
 
     for (idx, row) in rows.iter().enumerate() {
         leaderboard.push_str(&format!(
-            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
+            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
             idx + 1,
             row.score,
             row.amp_z,
             row.amp_n,
             row.sigma_z,
             row.sigma_n,
+            row.heavy_amp,
             row.top_delta_s2n,
             row.avg_top5_delta_s2n,
             row.n184_delta,
@@ -189,19 +199,20 @@ fn main() -> anyhow::Result<()> {
 
     let best_magic = gutoe_physics::magic_s2n_discontinuities(&best_records, top_k);
     let best_magic_summary = magic_s2n_summary(&best_records);
-    let (amp_z, amp_n, sigma_z, sigma_n) = best_params;
+    let (amp_z, amp_n, sigma_z, sigma_n, heavy_amp) = best_params;
     let metrics = best_metrics.unwrap_or(gutoe_physics::ShellGateMetrics {
         top_delta_s2n_mev: 0.0,
         avg_top5_delta_s2n_mev: 0.0,
         strongest_n184_delta_s2n_mev: 0.0,
     });
     let best_desc = format!(
-        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},sigma_z:{:.3},sigma_n:{:.3}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\n",
+        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},sigma_z:{:.3},sigma_n:{:.3},heavy_amp:{:.3}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\n",
         best_score,
         amp_z,
         amp_n,
         sigma_z,
         sigma_n,
+        heavy_amp,
         metrics.top_delta_s2n_mev,
         metrics.avg_top5_delta_s2n_mev,
         metrics.strongest_n184_delta_s2n_mev
