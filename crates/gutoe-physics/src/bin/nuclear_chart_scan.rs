@@ -1,6 +1,7 @@
 use gutoe_physics::{
-    magic_s2n_discontinuities, magic_s2n_summary, rank_island_candidates, scan_nuclear_chart,
-    write_magic_discontinuities_csv, write_magic_summary_csv, write_records_csv, NucleusRecord, ScanConfig,
+    magic_s2n_discontinuities, magic_s2n_summary, proton_s2p_discontinuities, proton_s2p_summary,
+    rank_island_candidates, scan_nuclear_chart, write_magic_discontinuities_csv, write_magic_summary_csv,
+    write_proton_discontinuities_csv, write_proton_summary_csv, write_records_csv, NucleusRecord, ScanConfig,
 };
 use std::env;
 use std::fs;
@@ -99,11 +100,15 @@ fn main() -> anyhow::Result<()> {
     let records = scan_nuclear_chart(cfg);
     let magic = magic_s2n_discontinuities(&records, top_k);
     let magic_summary = magic_s2n_summary(&records);
+    let proton = proton_s2p_discontinuities(&records, top_k);
+    let proton_summary = proton_s2p_summary(&records);
     let islands = rank_island_candidates(&records, min_island_z, top_k);
 
     write_records_csv(out.join("nuclides.csv"), &records)?;
     write_magic_discontinuities_csv(out.join("magic_s2n_discontinuities.csv"), &magic)?;
     write_magic_summary_csv(out.join("magic_s2n_summary.csv"), &magic_summary)?;
+    write_proton_discontinuities_csv(out.join("proton_s2p_discontinuities.csv"), &proton)?;
+    write_proton_summary_csv(out.join("proton_s2p_summary.csv"), &proton_summary)?;
     write_top_islands_csv(out.join("top_islands.csv"), &islands)?;
 
     let slice_z_min = env_u16("GUTOE_NUCLEAR_SLICE_Z_MIN", 104);
@@ -157,6 +162,8 @@ fn main() -> anyhow::Result<()> {
     println!("  {}", out.join("valley_of_stability.csv").display());
     println!("  {}", out.join("magic_s2n_discontinuities.csv").display());
     println!("  {}", out.join("magic_s2n_summary.csv").display());
+    println!("  {}", out.join("proton_s2p_discontinuities.csv").display());
+    println!("  {}", out.join("proton_s2p_summary.csv").display());
     println!("  {}", out.join("top_islands.csv").display());
     println!("  {}", out.join("zslice_superheavy.csv").display());
     println!("  {}", out.join("summary.txt").display());

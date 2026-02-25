@@ -88,6 +88,11 @@ fn main() -> anyhow::Result<()> {
         top_delta_s2n: f64,
         avg_top5_delta_s2n: f64,
         n184_delta: f64,
+        proton114_delta_s2p: f64,
+        proton120_delta_s2p: f64,
+        proton126_delta_s2p: f64,
+        proton_avg_delta_s2p: f64,
+        proton_min_delta_s2p: f64,
         closest_z: u16,
         closest_n: u16,
         closest_score: f64,
@@ -99,7 +104,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut leaderboard = String::from(
-        "rank,score,amp_z,amp_n,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
+        "rank,score,amp_z,amp_n,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,proton114_delta_s2p,proton120_delta_s2p,proton126_delta_s2p,proton_avg_delta_s2p,proton_min_delta_s2p,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
     );
     let mut rows: Vec<Row> = Vec::new();
     let mut best_score = f64::NEG_INFINITY;
@@ -158,10 +163,12 @@ fn main() -> anyhow::Result<()> {
                                                     top.map(|r| r.stability_score).unwrap_or(-1.0e9);
                                                 let closest_score =
                                                     closest.map(|r| r.stability_score).unwrap_or(-1.0e9);
-                                                let objective = 0.58 * metrics.strongest_n184_delta_s2n_mev
-                                                    + 0.17 * metrics.avg_top5_delta_s2n_mev
-                                                    + 0.15 * top_score
-                                                    + 0.10 * closest_score;
+                                                let objective = 0.42 * metrics.strongest_n184_delta_s2n_mev
+                                                    + 0.14 * metrics.avg_top5_delta_s2n_mev
+                                                    + 0.20 * metrics.avg_superheavy_proton_delta_s2p_mev
+                                                    + 0.10 * metrics.min_superheavy_proton_delta_s2p_mev
+                                                    + 0.08 * top_score
+                                                    + 0.06 * closest_score;
 
                                                 let (top_candidate_z, top_candidate_n) =
                                                     top.map(|r| (r.z, r.n)).unwrap_or((0, 0));
@@ -187,6 +194,11 @@ fn main() -> anyhow::Result<()> {
                                                     top_delta_s2n: metrics.top_delta_s2n_mev,
                                                     avg_top5_delta_s2n: metrics.avg_top5_delta_s2n_mev,
                                                     n184_delta: metrics.strongest_n184_delta_s2n_mev,
+                                                    proton114_delta_s2p: metrics.proton114_delta_s2p_mev,
+                                                    proton120_delta_s2p: metrics.proton120_delta_s2p_mev,
+                                                    proton126_delta_s2p: metrics.proton126_delta_s2p_mev,
+                                                    proton_avg_delta_s2p: metrics.avg_superheavy_proton_delta_s2p_mev,
+                                                    proton_min_delta_s2p: metrics.min_superheavy_proton_delta_s2p_mev,
                                                     closest_z,
                                                     closest_n,
                                                     closest_score,
@@ -232,7 +244,7 @@ fn main() -> anyhow::Result<()> {
 
     for (idx, row) in rows.iter().enumerate() {
         leaderboard.push_str(&format!(
-            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
+            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
             idx + 1,
             row.score,
             row.amp_z,
@@ -249,6 +261,11 @@ fn main() -> anyhow::Result<()> {
             row.top_delta_s2n,
             row.avg_top5_delta_s2n,
             row.n184_delta,
+            row.proton114_delta_s2p,
+            row.proton120_delta_s2p,
+            row.proton126_delta_s2p,
+            row.proton_avg_delta_s2p,
+            row.proton_min_delta_s2p,
             row.closest_z,
             row.closest_n,
             row.closest_score,
@@ -280,9 +297,15 @@ fn main() -> anyhow::Result<()> {
         top_delta_s2n_mev: 0.0,
         avg_top5_delta_s2n_mev: 0.0,
         strongest_n184_delta_s2n_mev: 0.0,
+        strongest_superheavy_proton_delta_s2p_mev: 0.0,
+        avg_superheavy_proton_delta_s2p_mev: 0.0,
+        min_superheavy_proton_delta_s2p_mev: 0.0,
+        proton114_delta_s2p_mev: 0.0,
+        proton120_delta_s2p_mev: 0.0,
+        proton126_delta_s2p_mev: 0.0,
     });
     let best_desc = format!(
-        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},sigma_z:{:.3},sigma_n:{:.3},superheavy_proton_amp:{:.3},superheavy_proton_sigma:{:.3},heavy_amp:{:.3},heavy_sigma_z:{:.3},heavy_sigma_n:{:.3},heavy_target_z:{:.3},heavy_target_n:{:.3}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\n",
+        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},sigma_z:{:.3},sigma_n:{:.3},superheavy_proton_amp:{:.3},superheavy_proton_sigma:{:.3},heavy_amp:{:.3},heavy_sigma_z:{:.3},heavy_sigma_n:{:.3},heavy_target_z:{:.3},heavy_target_n:{:.3}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\nproton114_delta_s2p={:.6}\nproton120_delta_s2p={:.6}\nproton126_delta_s2p={:.6}\nproton_avg_delta_s2p={:.6}\nproton_min_delta_s2p={:.6}\n",
         best_score,
         amp_z,
         amp_n,
@@ -297,7 +320,12 @@ fn main() -> anyhow::Result<()> {
         heavy_target_n,
         metrics.top_delta_s2n_mev,
         metrics.avg_top5_delta_s2n_mev,
-        metrics.strongest_n184_delta_s2n_mev
+        metrics.strongest_n184_delta_s2n_mev,
+        metrics.proton114_delta_s2p_mev,
+        metrics.proton120_delta_s2p_mev,
+        metrics.proton126_delta_s2p_mev,
+        metrics.avg_superheavy_proton_delta_s2p_mev,
+        metrics.min_superheavy_proton_delta_s2p_mev
     );
     let mut top_csv = String::from(
         "rank,Z,N,A,binding_per_nucleon_mev,s2n_mev,s2p_mev,fissility,fission_barrier_mev,sf_log10_half_life_s,stability_score\n",

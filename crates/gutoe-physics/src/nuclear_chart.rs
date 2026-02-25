@@ -21,6 +21,8 @@ pub const PROTON_MAGIC_NUMBERS: [u16; 7] = [2, 8, 20, 28, 50, 82, 126];
 pub const NEUTRON_MAGIC_NUMBERS: [u16; 8] = [2, 8, 20, 28, 50, 82, 126, 184];
 /// Superheavy proton-shell candidates to stress-test IoS behavior.
 pub const SUPERHEAVY_PROTON_CANDIDATES: [u16; 2] = [114, 120];
+/// Proton closures to monitor in S2p discontinuity diagnostics.
+pub const PROTON_CLOSURE_METRIC_CANDIDATES: [u16; 3] = [114, 120, 126];
 /// Backwards-compatible alias for existing callers expecting neutron closures.
 pub const MAGIC_NUMBERS: [u16; 8] = NEUTRON_MAGIC_NUMBERS;
 
@@ -173,10 +175,32 @@ pub struct MagicSummaryRow {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub struct ProtonDiscontinuity {
+    pub closure_z: u16,
+    pub n: u16,
+    pub delta_s2p_mev: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ProtonSummaryRow {
+    pub closure_z: u16,
+    pub strongest_delta_s2p_mev: f64,
+    pub mean_delta_s2p_mev: f64,
+    pub n_at_strongest: u16,
+    pub sample_count: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct ShellGateMetrics {
     pub top_delta_s2n_mev: f64,
     pub avg_top5_delta_s2n_mev: f64,
     pub strongest_n184_delta_s2n_mev: f64,
+    pub strongest_superheavy_proton_delta_s2p_mev: f64,
+    pub avg_superheavy_proton_delta_s2p_mev: f64,
+    pub min_superheavy_proton_delta_s2p_mev: f64,
+    pub proton114_delta_s2p_mev: f64,
+    pub proton120_delta_s2p_mev: f64,
+    pub proton126_delta_s2p_mev: f64,
 }
 
 fn pairing_term(z: u16, n: u16, a: f64, a_p: f64) -> f64 {
@@ -474,6 +498,78 @@ pub fn magic_s2n_summary(records: &[NucleusRecord]) -> Vec<MagicSummaryRow> {
     out
 }
 
+/// Return strongest proton shell-closure signatures around selected closure Z.
+pub fn proton_s2p_discontinuities(records: &[NucleusRecord], top_k: usize) -> Vec<ProtonDiscontinuity> {
+    let mut by_zn: BTreeMap<(u16, u16), &NucleusRecord> = BTreeMap::new();
+    for r in records {
+        by_zn.insert((r.z, r.n), r);
+    }
+
+    let mut out = Vec::new();
+    for &closure_z in &PROTON_CLOSURE_METRIC_CANDIDATES {
+        for r in records {
+            if r.z == closure_z {
+                let Some(s2p_here) = r.s2p_mev else {
+                    continue;
+                };
+                let Some(next) = by_zn.get(&(closure_z + 2, r.n)) else {
+                    continue;
+                };
+                let Some(s2p_next) = next.s2p_mev else {
+                    continue;
+                };
+                out.push(ProtonDiscontinuity {
+                    closure_z,
+                    n: r.n,
+                    delta_s2p_mev: s2p_here - s2p_next,
+                });
+            }
+        }
+    }
+
+    out.sort_by(|a, b| b.delta_s2p_mev.total_cmp(&a.delta_s2p_mev));
+    out.truncate(top_k);
+    out
+}
+
+/// Summarize S2p shell cliffs for monitored proton closure candidates.
+pub fn proton_s2p_summary(records: &[NucleusRecord]) -> Vec<ProtonSummaryRow> {
+    let all = proton_s2p_discontinuities(records, records.len());
+    let mut out = Vec::new();
+    for &closure_z in &PROTON_CLOSURE_METRIC_CANDIDATES {
+        let mut strongest = ProtonDiscontinuity {
+            closure_z,
+            n: 0,
+            delta_s2p_mev: f64::NEG_INFINITY,
+        };
+        let mut sum = 0.0;
+        let mut count = 0usize;
+        for row in &all {
+            if row.closure_z == closure_z {
+                count += 1;
+                sum += row.delta_s2p_mev;
+                if row.delta_s2p_mev > strongest.delta_s2p_mev {
+                    strongest = *row;
+                }
+            }
+        }
+        let strongest_delta = if count > 0 {
+            strongest.delta_s2p_mev
+        } else {
+            0.0
+        };
+        let mean_delta = if count > 0 { sum / count as f64 } else { 0.0 };
+        out.push(ProtonSummaryRow {
+            closure_z,
+            strongest_delta_s2p_mev: strongest_delta,
+            mean_delta_s2p_mev: mean_delta,
+            n_at_strongest: if count > 0 { strongest.n } else { 0 },
+            sample_count: count,
+        });
+    }
+    out
+}
+
 fn gaussian_proximity(x: f64, target: f64, sigma: f64) -> f64 {
     let d = x - target;
     (-(d * d) / (2.0 * sigma * sigma)).exp()
@@ -523,26 +619,50 @@ pub fn rank_island_candidates(records: &[NucleusRecord], min_z: u16, top_k: usiz
 
 /// Score shell/discontinuity quality for quick calibration loops.
 pub fn shell_gate_metrics(records: &[NucleusRecord]) -> ShellGateMetrics {
-    let rows = magic_s2n_discontinuities(records, records.len());
-    if rows.is_empty() {
-        return ShellGateMetrics {
-            top_delta_s2n_mev: 0.0,
-            avg_top5_delta_s2n_mev: 0.0,
-            strongest_n184_delta_s2n_mev: 0.0,
-        };
-    }
-    let top_delta = rows[0].delta_s2n_mev;
-    let top5_len = rows.len().min(5);
-    let avg_top5 = rows.iter().take(top5_len).map(|r| r.delta_s2n_mev).sum::<f64>() / top5_len as f64;
-    let n184 = rows
+    let neutron_rows = magic_s2n_discontinuities(records, records.len());
+    let proton_summary = proton_s2p_summary(records);
+
+    let top_delta = neutron_rows.first().map(|r| r.delta_s2n_mev).unwrap_or(0.0);
+    let top5_len = neutron_rows.len().min(5);
+    let avg_top5 = if top5_len > 0 {
+        neutron_rows.iter().take(top5_len).map(|r| r.delta_s2n_mev).sum::<f64>() / top5_len as f64
+    } else {
+        0.0
+    };
+    let n184 = neutron_rows
         .iter()
         .filter(|r| r.magic_n == 184)
         .map(|r| r.delta_s2n_mev)
         .fold(0.0_f64, f64::max);
+    let proton_deltas: Vec<f64> = proton_summary.iter().map(|row| row.strongest_delta_s2p_mev).collect();
+    let proton_avg = if proton_deltas.is_empty() {
+        0.0
+    } else {
+        proton_deltas.iter().sum::<f64>() / proton_deltas.len() as f64
+    };
+    let proton_strongest = proton_deltas.iter().copied().fold(0.0_f64, f64::max);
+    let proton_min = if proton_deltas.is_empty() {
+        0.0
+    } else {
+        proton_deltas.iter().copied().fold(f64::INFINITY, f64::min)
+    };
+    let closure_delta = |z: u16| {
+        proton_summary
+            .iter()
+            .find(|row| row.closure_z == z)
+            .map(|row| row.strongest_delta_s2p_mev)
+            .unwrap_or(0.0)
+    };
     ShellGateMetrics {
         top_delta_s2n_mev: top_delta,
         avg_top5_delta_s2n_mev: avg_top5,
         strongest_n184_delta_s2n_mev: n184,
+        strongest_superheavy_proton_delta_s2p_mev: proton_strongest,
+        avg_superheavy_proton_delta_s2p_mev: proton_avg,
+        min_superheavy_proton_delta_s2p_mev: proton_min,
+        proton114_delta_s2p_mev: closure_delta(114),
+        proton120_delta_s2p_mev: closure_delta(120),
+        proton126_delta_s2p_mev: closure_delta(126),
     }
 }
 
@@ -645,6 +765,31 @@ pub fn write_magic_summary_csv(path: impl AsRef<Path>, rows: &[MagicSummaryRow])
     Ok(())
 }
 
+pub fn write_proton_discontinuities_csv(path: impl AsRef<Path>, rows: &[ProtonDiscontinuity]) -> std::io::Result<()> {
+    let mut file = fs::File::create(path)?;
+    writeln!(file, "closure_z,N,delta_s2p_mev")?;
+    for row in rows {
+        writeln!(file, "{},{},{:.6}", row.closure_z, row.n, row.delta_s2p_mev)?;
+    }
+    Ok(())
+}
+
+pub fn write_proton_summary_csv(path: impl AsRef<Path>, rows: &[ProtonSummaryRow]) -> std::io::Result<()> {
+    let mut file = fs::File::create(path)?;
+    writeln!(
+        file,
+        "closure_z,strongest_delta_s2p_mev,mean_delta_s2p_mev,n_at_strongest,sample_count"
+    )?;
+    for row in rows {
+        writeln!(
+            file,
+            "{},{:.6},{:.6},{},{}",
+            row.closure_z, row.strongest_delta_s2p_mev, row.mean_delta_s2p_mev, row.n_at_strongest, row.sample_count
+        )?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -735,5 +880,15 @@ mod tests {
             .find(|r| r.z == 104 && r.n == 184)
             .expect("comparison record must exist");
         assert!(near.shell_bonus_superheavy_proton_mev > far.shell_bonus_superheavy_proton_mev);
+    }
+
+    #[test]
+    fn proton_summary_reports_all_superheavy_closure_candidates() {
+        let cfg = ScanConfig::default();
+        let records = scan_nuclear_chart(cfg);
+        let summary = proton_s2p_summary(&records);
+        for z in PROTON_CLOSURE_METRIC_CANDIDATES {
+            assert!(summary.iter().any(|row| row.closure_z == z && row.sample_count > 0));
+        }
     }
 }
