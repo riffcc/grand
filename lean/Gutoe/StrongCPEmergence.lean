@@ -19,6 +19,47 @@ namespace Gutoe.StrongCPEmergence
 
 open Gutoe.StrongCPVacuum
 
+/-- A charge functional on the emergent image cannot repopulate nonzero sectors
+    when its source space is subsingleton and a single base state is normalized
+    to zero charge. This captures the "no topology created from nothing" step
+    without requiring an explicit pointwise coarse-graining formula. -/
+theorem no_repopulation_from_subsingleton_source
+    {S X Eff : Type}
+    [Subsingleton S]
+    [TopologicalSpace X]
+    [TopologicalSpace Eff]
+    (toEff : S → C(X, Eff))
+    (qEff : C(X, Eff) → ℤ)
+    (s0 : S)
+    (hbase : qEff (toEff s0) = 0) :
+    ∀ s : S, qEff (toEff s) = 0 := by
+  intro s
+  have hs : s = s0 := Subsingleton.elim s s0
+  rw [hs]
+  exact hbase
+
+/-- Canonical based fundamental map: constant map to `0 : Fin 3`. -/
+def basedFundamentalZero {X : Type} [TopologicalSpace X] (x0 : X) :
+    {f : C(X, FundamentalGaugeGroup) // f x0 = 0} :=
+  ⟨ContinuousMap.const X 0, by simp⟩
+
+/-- Route-1 no-repopulation for based sectors:
+    since based fundamental maps into the discrete Z3 carrier are subsingleton,
+    any emergent charge functional is pinned by its value on one base state. -/
+theorem no_repopulation_from_based_route1
+    {X Eff : Type}
+    [TopologicalSpace X] [PreconnectedSpace X] [Nonempty X]
+    [TopologicalSpace Eff]
+    (x0 : X)
+    (toEff : {f : C(X, FundamentalGaugeGroup) // f x0 = 0} → C(X, Eff))
+    (qEff : C(X, Eff) → ℤ)
+    (hbase : qEff (toEff (basedFundamentalZero x0)) = 0) :
+    ∀ fb : {f : C(X, FundamentalGaugeGroup) // f x0 = 0}, qEff (toEff fb) = 0 := by
+  have hs : Subsingleton {f : C(X, FundamentalGaugeGroup) // f x0 = 0} :=
+    based_fundamental_sector_unique x0
+  letI : Subsingleton {f : C(X, FundamentalGaugeGroup) // f x0 = 0} := hs
+  exact no_repopulation_from_subsingleton_source toEff qEff (basedFundamentalZero x0) hbase
+
 /-- Route-1 no-repopulation theorem:
     if emergent charge is pulled back from fundamental Z3-carrier maps and
     constant fundamental maps have zero charge, then emergent-image charge is zero. -/

@@ -8,6 +8,8 @@ Status: theorem-level bridge added; final closure still requires model-complete 
 
 Key theorems:
 
+- `no_repopulation_from_subsingleton_source`
+- `no_repopulation_from_based_route1`
 - `no_repopulation_on_emergent_image`
 - `theta_phase_unity_of_zero_charge`
 - `theta_phase_unity_on_emergent_image`
@@ -37,6 +39,10 @@ Additionally, it now includes a pointwise coarse-graining theorem:
 if `CG f = φ ∘ f` and effective charge vanishes on constant fields, then
 coarse-graining cannot create nontrivial effective sectors from the fundamental
 Z3-carrier field space.
+
+It also includes a stronger abstract bridge:
+once the based fundamental source space is subsingleton (route-1 vacuum result),
+any emergent charge functional is globally pinned by one normalized base state.
 
 ## Remaining gap
 
