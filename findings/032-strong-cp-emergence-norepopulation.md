@@ -13,6 +13,8 @@ Key theorems:
 - `theta_phase_unity_on_emergent_image`
 - `coarse_grain_cannot_create_nontrivial_sector`
 - `theta_phase_unity_of_coarse_grain_no_creation`
+- `su3_effective_no_repopulation`
+- `su3_effective_theta_phase_unity`
 
 ## What this proves
 

@@ -109,4 +109,31 @@ theorem theta_phase_unity_of_coarse_grain_no_creation
   rw [hq0]
   exact theta_phase_unity_of_zero_charge theta
 
+/-- SU(3)-matrix specialization of the coarse-grain no-repopulation theorem. -/
+theorem su3_effective_no_repopulation
+    {X : Type}
+    [TopologicalSpace X] [PreconnectedSpace X] [Nonempty X]
+    (CG : C(X, FundamentalGaugeGroup) → C(X, Matrix (Fin 3) (Fin 3) ℂ))
+    (phi : C(FundamentalGaugeGroup, Matrix (Fin 3) (Fin 3) ℂ))
+    (hCG : ∀ f, CG f = phi.comp f)
+    (qEff : C(X, Matrix (Fin 3) (Fin 3) ℂ) → ℤ)
+    (hqConstZero : ∀ e0 : Matrix (Fin 3) (Fin 3) ℂ, qEff (ContinuousMap.const X e0) = 0) :
+    ∀ f : C(X, FundamentalGaugeGroup), qEff (CG f) = 0 := by
+  intro f
+  exact coarse_grain_cannot_create_nontrivial_sector CG phi hCG qEff hqConstZero f
+
+/-- SU(3)-matrix specialization of theta-phase collapse on emergent image. -/
+theorem su3_effective_theta_phase_unity
+    {X : Type}
+    [TopologicalSpace X] [PreconnectedSpace X] [Nonempty X]
+    (CG : C(X, FundamentalGaugeGroup) → C(X, Matrix (Fin 3) (Fin 3) ℂ))
+    (phi : C(FundamentalGaugeGroup, Matrix (Fin 3) (Fin 3) ℂ))
+    (hCG : ∀ f, CG f = phi.comp f)
+    (qEff : C(X, Matrix (Fin 3) (Fin 3) ℂ) → ℤ)
+    (hqConstZero : ∀ e0 : Matrix (Fin 3) (Fin 3) ℂ, qEff (ContinuousMap.const X e0) = 0) :
+    ∀ (f : C(X, FundamentalGaugeGroup)) (theta : ℝ),
+      thetaPhase theta (qEff (CG f)) = 1 := by
+  intro f theta
+  exact theta_phase_unity_of_coarse_grain_no_creation CG phi hCG qEff hqConstZero f theta
+
 end Gutoe.StrongCPEmergence
