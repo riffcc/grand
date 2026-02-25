@@ -78,6 +78,12 @@ pub struct ShellParams {
     pub shell_amp: f64,
     // A-scaling exponent for shell leverage; textbook guidance is A^(-1/3).
     pub shell_scale_exp: f64,
+    // Enable Strutinsky-like shell correction from a Woods-Saxon orbital proxy.
+    pub use_strutinsky: bool,
+    pub strutinsky_gamma: f64,
+    pub strutinsky_spacing_mev: f64,
+    pub strutinsky_spin_orbit_mev: f64,
+    pub strutinsky_coulomb_shift_mev: f64,
     pub sigma_z: f64,
     pub sigma_n: f64,
     pub proton_magic_weight_coeff: f64,
@@ -103,6 +109,11 @@ impl Default for ShellParams {
             amplitude_n: 2.8,
             shell_amp: 12.0,
             shell_scale_exp: 0.33,
+            use_strutinsky: true,
+            strutinsky_gamma: 6.0,
+            strutinsky_spacing_mev: 7.0,
+            strutinsky_spin_orbit_mev: 2.2,
+            strutinsky_coulomb_shift_mev: 0.15,
             sigma_z: 4.0,
             sigma_n: 5.0,
             proton_magic_weight_coeff: 2.0 * LAMBDA_QG,
@@ -295,12 +306,150 @@ fn proton_magic_weight(magic_z: u16, coeff: f64, cap: f64) -> f64 {
     (1.0 + coeff * x * x).clamp(1.0, cap)
 }
 
+#[derive(Clone, Copy)]
+struct Orbital {
+    n: u8,
+    l: u8,
+    j2: u8, // 2*j
+}
+
+const SP_ORBITALS: [Orbital; 31] = [
+    Orbital { n: 1, l: 0, j2: 1 },  // 1s1/2
+    Orbital { n: 1, l: 1, j2: 3 },  // 1p3/2
+    Orbital { n: 1, l: 1, j2: 1 },  // 1p1/2
+    Orbital { n: 1, l: 2, j2: 5 },  // 1d5/2
+    Orbital { n: 2, l: 0, j2: 1 },  // 2s1/2
+    Orbital { n: 1, l: 2, j2: 3 },  // 1d3/2
+    Orbital { n: 1, l: 3, j2: 7 },  // 1f7/2
+    Orbital { n: 2, l: 1, j2: 3 },  // 2p3/2
+    Orbital { n: 1, l: 3, j2: 5 },  // 1f5/2
+    Orbital { n: 2, l: 1, j2: 1 },  // 2p1/2
+    Orbital { n: 1, l: 4, j2: 9 },  // 1g9/2
+    Orbital { n: 1, l: 4, j2: 7 },  // 1g7/2
+    Orbital { n: 2, l: 2, j2: 5 },  // 2d5/2
+    Orbital { n: 3, l: 0, j2: 1 },  // 3s1/2
+    Orbital { n: 2, l: 2, j2: 3 },  // 2d3/2
+    Orbital { n: 1, l: 5, j2: 11 }, // 1h11/2
+    Orbital { n: 2, l: 3, j2: 7 },  // 2f7/2
+    Orbital { n: 3, l: 1, j2: 3 },  // 3p3/2
+    Orbital { n: 1, l: 5, j2: 9 },  // 1h9/2
+    Orbital { n: 2, l: 3, j2: 5 },  // 2f5/2
+    Orbital { n: 3, l: 1, j2: 1 },  // 3p1/2
+    Orbital { n: 1, l: 6, j2: 13 }, // 1i13/2
+    Orbital { n: 2, l: 4, j2: 9 },  // 2g9/2
+    Orbital { n: 3, l: 2, j2: 5 },  // 3d5/2
+    Orbital { n: 4, l: 0, j2: 1 },  // 4s1/2
+    Orbital { n: 2, l: 4, j2: 7 },  // 2g7/2
+    Orbital { n: 3, l: 2, j2: 3 },  // 3d3/2
+    Orbital { n: 1, l: 6, j2: 11 }, // 1i11/2
+    Orbital { n: 2, l: 5, j2: 11 }, // 2h11/2
+    Orbital { n: 3, l: 3, j2: 7 },  // 3f7/2
+    Orbital { n: 3, l: 3, j2: 5 },  // 3f5/2
+];
+
+fn orbital_ldot_s(orb: Orbital) -> f64 {
+    let l = orb.l as f64;
+    if orb.j2 == 2 * orb.l + 1 {
+        0.5 * l
+    } else {
+        -0.5 * (l + 1.0)
+    }
+}
+
+fn orbital_energy_mev(orb: Orbital, is_proton: bool, shell: ShellParams) -> f64 {
+    let n_osc = 2.0 * (orb.n as f64 - 1.0) + orb.l as f64;
+    let base = shell.strutinsky_spacing_mev * (n_osc + 1.5);
+    let spin_orbit = -shell.strutinsky_spin_orbit_mev * orbital_ldot_s(orb) / (n_osc + 1.0);
+    let coulomb = if is_proton {
+        shell.strutinsky_coulomb_shift_mev * (orb.l as f64 + 0.5)
+    } else {
+        0.0
+    };
+    base + spin_orbit + coulomb
+}
+
+fn build_strutinsky_shell_table(max_count: u16, is_proton: bool, shell: ShellParams) -> Vec<f64> {
+    let max_count = max_count as usize;
+    let mut levels: Vec<f64> = Vec::with_capacity(max_count);
+    for orb in SP_ORBITALS {
+        let e = orbital_energy_mev(orb, is_proton, shell);
+        for _ in 0..(orb.j2 as usize + 1) {
+            levels.push(e);
+            if levels.len() >= max_count {
+                break;
+            }
+        }
+        if levels.len() >= max_count {
+            break;
+        }
+    }
+    while levels.len() < max_count {
+        let next = levels.last().copied().unwrap_or(0.0) + 0.75 * shell.strutinsky_spacing_mev;
+        levels.push(next);
+    }
+
+    let mut e_disc = vec![0.0; max_count + 1];
+    for n in 1..=max_count {
+        e_disc[n] = e_disc[n - 1] + levels[n - 1];
+    }
+
+    let gamma = shell.strutinsky_gamma.max(1.0);
+    let radius = (4.0 * gamma).ceil() as isize;
+    let mut delta = vec![0.0; max_count + 1];
+    for n in 1..=max_count {
+        let ni = n as isize;
+        let lo = (ni - radius).max(1) as usize;
+        let hi = (ni + radius).min(max_count as isize) as usize;
+        let mut wsum = 0.0;
+        let mut esum = 0.0;
+        for k in lo..=hi {
+            let x = (n as f64 - k as f64) / gamma;
+            let w = (-0.5 * x * x).exp();
+            wsum += w;
+            esum += w * e_disc[k];
+        }
+        let e_smooth = if wsum > 0.0 { esum / wsum } else { e_disc[n] };
+        delta[n] = e_smooth - e_disc[n];
+    }
+
+    // Keep closure bonuses positive around known magic counts.
+    let closure_list: &[u16] = if is_proton {
+        &PROTON_MAGIC_NUMBERS
+    } else {
+        &NEUTRON_MAGIC_NUMBERS
+    };
+    let mut closure_sum = 0.0;
+    for &m in closure_list {
+        if (m as usize) <= max_count {
+            closure_sum += delta[m as usize];
+        }
+    }
+    if closure_sum < 0.0 {
+        for d in &mut delta {
+            *d = -*d;
+        }
+    }
+
+    let max_abs = delta
+        .iter()
+        .copied()
+        .fold(0.0_f64, |acc, v| acc.max(v.abs()))
+        .max(1e-9);
+    let mut table = vec![0.0; max_count + 1];
+    for n in 1..=max_count {
+        table[n] = shell.shell_amp * delta[n] / max_abs;
+    }
+    table
+}
+
 fn semf_binding_mev(
     z: u16,
     n: u16,
     semf: SemfParams,
     shell: ShellParams,
     superheavy_candidates: &[u16],
+    proton_shell_table: Option<&[f64]>,
+    neutron_shell_table: Option<&[f64]>,
 ) -> (f64, f64, f64, f64, f64, f64, f64) {
     let a_u16 = z + n;
     let a = a_u16 as f64;
@@ -313,37 +462,52 @@ fn semf_binding_mev(
     let asymmetry = semf.a_a * n_asym * n_asym / a;
     let pairing = pairing_term(z, n, a, semf.a_p);
 
-    let shell_z = shell_bonus_weighted(
-        z,
-        &PROTON_MAGIC_NUMBERS,
-        shell.amplitude_z,
-        shell.sigma_z,
-        |magic| {
-            proton_magic_weight(
-                magic,
-                shell.proton_magic_weight_coeff,
-                shell.proton_magic_weight_cap,
-            )
-        },
-    );
-    let shell_n = shell_bonus_weighted(
-        n,
-        &NEUTRON_MAGIC_NUMBERS,
-        shell.amplitude_n,
-        shell.sigma_n,
-        |magic| {
-            neutron_magic_weight(
-                magic,
-                shell.neutron_magic_weight_coeff,
-                shell.neutron_magic_weight_cap,
-            )
-        },
-    );
+    let (shell_z, shell_n) = if shell.use_strutinsky {
+        let sz = proton_shell_table
+            .and_then(|tab| tab.get(z as usize).copied())
+            .unwrap_or(0.0);
+        let sn = neutron_shell_table
+            .and_then(|tab| tab.get(n as usize).copied())
+            .unwrap_or(0.0);
+        (sz, sn)
+    } else {
+        let sz = shell_bonus_weighted(
+            z,
+            &PROTON_MAGIC_NUMBERS,
+            shell.amplitude_z,
+            shell.sigma_z,
+            |magic| {
+                proton_magic_weight(
+                    magic,
+                    shell.proton_magic_weight_coeff,
+                    shell.proton_magic_weight_cap,
+                )
+            },
+        );
+        let sn = shell_bonus_weighted(
+            n,
+            &NEUTRON_MAGIC_NUMBERS,
+            shell.amplitude_n,
+            shell.sigma_n,
+            |magic| {
+                neutron_magic_weight(
+                    magic,
+                    shell.neutron_magic_weight_coeff,
+                    shell.neutron_magic_weight_cap,
+                )
+            },
+        );
+        (sz, sn)
+    };
     // A-dependent shell leverage: suppress light-nucleus over-bias and let
     // shell structure compete against Coulomb/fission in superheavy region.
     // Keep backward-compatibility with legacy calibration scale (6.5) while
     // moving to physically motivated A^(-shell_scale_exp) attenuation.
-    let shell_scale = (shell.shell_amp / 6.5) * (a / 56.0).powf(-shell.shell_scale_exp);
+    let shell_scale = if shell.use_strutinsky {
+        (a / 56.0).powf(-shell.shell_scale_exp)
+    } else {
+        (shell.shell_amp / 6.5) * (a / 56.0).powf(-shell.shell_scale_exp)
+    };
     let heavy_gate = if z >= shell.heavy_gate_z_min && n >= shell.heavy_gate_n_min {
         1.0
     } else {
@@ -429,6 +593,16 @@ fn stability_score(
 /// Build a full nuclide table with SEMF+shell observables.
 pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
     let superheavy_candidates = derived_superheavy_proton_candidates();
+    let proton_shell_table = if cfg.shell.use_strutinsky {
+        Some(build_strutinsky_shell_table(cfg.z_max, true, cfg.shell))
+    } else {
+        None
+    };
+    let neutron_shell_table = if cfg.shell.use_strutinsky {
+        Some(build_strutinsky_shell_table(cfg.n_max, false, cfg.shell))
+    } else {
+        None
+    };
     let mut binding_map: BTreeMap<(u16, u16), (f64, f64, f64, f64, f64, f64, f64)> = BTreeMap::new();
     for z in cfg.z_min..=cfg.z_max {
         for n in cfg.n_min..=cfg.n_max {
@@ -440,7 +614,15 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
                 shell_bonus_superheavy_proton_mev,
                 shell_scale_a,
                 pairing_mev,
-            ) = semf_binding_mev(z, n, cfg.semf, cfg.shell, &superheavy_candidates);
+            ) = semf_binding_mev(
+                z,
+                n,
+                cfg.semf,
+                cfg.shell,
+                &superheavy_candidates,
+                proton_shell_table.as_deref(),
+                neutron_shell_table.as_deref(),
+            );
             binding_map.insert(
                 (z, n),
                 (

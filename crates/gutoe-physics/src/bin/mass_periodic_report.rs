@@ -220,6 +220,17 @@ fn env_u16(name: &str, default: u16) -> u16 {
         .unwrap_or(default)
 }
 
+fn env_bool(name: &str, default: bool) -> bool {
+    match env::var(name) {
+        Ok(v) => match v.to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => true,
+            "0" | "false" | "no" | "off" => false,
+            _ => default,
+        },
+        Err(_) => default,
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let out_dir = env::var("GUTOE_MASS_PERIODIC_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart".to_string());
     fs::create_dir_all(&out_dir)?;
@@ -244,6 +255,20 @@ fn main() -> anyhow::Result<()> {
             amplitude_n: env_f64("GUTOE_NUCLEAR_AMP_N", default_shell.amplitude_n),
             shell_amp: env_f64("GUTOE_NUCLEAR_SHELL_AMP", default_shell.shell_amp),
             shell_scale_exp: env_f64("GUTOE_NUCLEAR_SHELL_SCALE_EXP", default_shell.shell_scale_exp),
+            use_strutinsky: env_bool("GUTOE_NUCLEAR_USE_STRUTINSKY", default_shell.use_strutinsky),
+            strutinsky_gamma: env_f64("GUTOE_NUCLEAR_STRUTINSKY_GAMMA", default_shell.strutinsky_gamma),
+            strutinsky_spacing_mev: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_SPACING_MEV",
+                default_shell.strutinsky_spacing_mev,
+            ),
+            strutinsky_spin_orbit_mev: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_SPIN_ORBIT_MEV",
+                default_shell.strutinsky_spin_orbit_mev,
+            ),
+            strutinsky_coulomb_shift_mev: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_COULOMB_SHIFT_MEV",
+                default_shell.strutinsky_coulomb_shift_mev,
+            ),
             sigma_z: env_f64("GUTOE_NUCLEAR_SIGMA_Z", default_shell.sigma_z),
             sigma_n: env_f64("GUTOE_NUCLEAR_SIGMA_N", default_shell.sigma_n),
             proton_magic_weight_coeff: env_f64(
