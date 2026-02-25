@@ -1,7 +1,7 @@
 use gutoe_physics::{
     closest_to_target_island, magic_s2n_summary, rank_island_candidates_with_config, scan_nuclear_chart,
     shell_gate_metrics, write_magic_discontinuities_csv, write_magic_summary_csv, write_records_csv,
-    IslandRankingConfig, ScanConfig, ShellParams,
+    IslandRankingConfig, MagicSummaryRow, ScanConfig, ShellParams,
 };
 use std::env;
 use std::fs;
@@ -63,6 +63,37 @@ fn env_usize(name: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
+fn reference_shell_gap_bounds_mev(magic_n: u16) -> Option<(f64, f64)> {
+    match magic_n {
+        50 => Some((5.0, 8.0)),
+        82 => Some((4.0, 6.5)),
+        126 => Some((3.0, 5.5)),
+        _ => None,
+    }
+}
+
+fn strongest_ratio_for_magic(summary: &[MagicSummaryRow], magic_n: u16) -> f64 {
+    let Some((ref_min, ref_max)) = reference_shell_gap_bounds_mev(magic_n) else {
+        return 0.0;
+    };
+    let ref_mid = 0.5 * (ref_min + ref_max);
+    summary
+        .iter()
+        .find(|row| row.magic_n == magic_n)
+        .map(|row| row.strongest_delta_s2n_mev / ref_mid)
+        .unwrap_or(0.0)
+}
+
+fn band_penalty(value: f64, low: f64, high: f64) -> f64 {
+    if value < low {
+        (low - value).powi(2)
+    } else if value > high {
+        (value - high).powi(2)
+    } else {
+        0.0
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let output_dir = env::var("GUTOE_NUCLEAR_CAL_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart_cal".to_string());
     fs::create_dir_all(&output_dir)?;
@@ -75,6 +106,18 @@ fn main() -> anyhow::Result<()> {
     let target_z = env_u16("GUTOE_NUCLEAR_TARGET_Z", 114);
     let target_n = env_u16("GUTOE_NUCLEAR_TARGET_N", 184);
     let top_k = env_usize("GUTOE_NUCLEAR_TOP_K", 30);
+    let ratio_band_low = env::var("GUTOE_NUCLEAR_RATIO_BAND_LOW")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(0.80);
+    let ratio_band_high = env::var("GUTOE_NUCLEAR_RATIO_BAND_HIGH")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(1.20);
+    let ratio_penalty_weight = env::var("GUTOE_NUCLEAR_RATIO_BAND_WEIGHT")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(12.0);
     let default_shell = ShellParams::default();
 
     let amp_z_grid = parse_list("GUTOE_NUCLEAR_AMP_Z_GRID", &[1.8, 2.2, 2.8, 3.4]);
@@ -165,6 +208,10 @@ fn main() -> anyhow::Result<()> {
         n184_delta: f64,
         proton_avg_delta_s2p: f64,
         proton_min_delta_s2p: f64,
+        n50_ratio: f64,
+        n82_ratio: f64,
+        n126_ratio: f64,
+        ratio_penalty: f64,
         closest_z: u16,
         closest_n: u16,
         closest_score: f64,
@@ -176,7 +223,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut leaderboard = String::from(
-        "rank,score,amp_z,amp_n,shell_amp,shell_scale_exp,use_strutinsky,strutinsky_mix,strutinsky_gamma,strutinsky_spacing_mev,strutinsky_spin_orbit_mev,strutinsky_coulomb_shift_mev,strutinsky_ws_depth_mev,strutinsky_ws_diffuseness_fm,strutinsky_ws_a_ref,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,proton_avg_delta_s2p,proton_min_delta_s2p,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
+        "rank,score,amp_z,amp_n,shell_amp,shell_scale_exp,use_strutinsky,strutinsky_mix,strutinsky_gamma,strutinsky_spacing_mev,strutinsky_spin_orbit_mev,strutinsky_coulomb_shift_mev,strutinsky_ws_depth_mev,strutinsky_ws_diffuseness_fm,strutinsky_ws_a_ref,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,proton_avg_delta_s2p,proton_min_delta_s2p,n50_ratio,n82_ratio,n126_ratio,ratio_penalty,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
     );
     let mut rows: Vec<Row> = Vec::new();
     let mut best_score = f64::NEG_INFINITY;
@@ -240,6 +287,23 @@ fn main() -> anyhow::Result<()> {
                                                                             };
                                                                             let records = scan_nuclear_chart(cfg);
                                                                             let metrics = shell_gate_metrics(&records);
+                                                                            let summary = magic_s2n_summary(&records);
+                                                                            let n50_ratio = strongest_ratio_for_magic(&summary, 50);
+                                                                            let n82_ratio = strongest_ratio_for_magic(&summary, 82);
+                                                                            let n126_ratio = strongest_ratio_for_magic(&summary, 126);
+                                                                            let ratio_penalty = band_penalty(
+                                                                                n50_ratio,
+                                                                                ratio_band_low,
+                                                                                ratio_band_high,
+                                                                            ) + band_penalty(
+                                                                                n82_ratio,
+                                                                                ratio_band_low,
+                                                                                ratio_band_high,
+                                                                            ) + band_penalty(
+                                                                                n126_ratio,
+                                                                                ratio_band_low,
+                                                                                ratio_band_high,
+                                                                            );
                                                                             let ranking_cfg = IslandRankingConfig {
                                                                                 min_z: 104,
                                                                                 target_z,
@@ -262,12 +326,14 @@ fn main() -> anyhow::Result<()> {
                                                                             let closest_score = closest
                                                                                 .map(|r| r.stability_score)
                                                                                 .unwrap_or(-1.0e9);
-                                                                            let objective = 0.42 * metrics.strongest_n184_delta_s2n_mev
+                                                                            let objective_base = 0.42 * metrics.strongest_n184_delta_s2n_mev
                                                                                 + 0.14 * metrics.avg_top5_delta_s2n_mev
                                                                                 + 0.20 * metrics.avg_superheavy_proton_delta_s2p_mev
                                                                                 + 0.10 * metrics.min_superheavy_proton_delta_s2p_mev
                                                                                 + 0.08 * top_score
                                                                                 + 0.06 * closest_score;
+                                                                            let objective = objective_base
+                                                                                - ratio_penalty_weight * ratio_penalty;
 
                                                                             let (top_candidate_z, top_candidate_n) =
                                                                                 top.map(|r| (r.z, r.n)).unwrap_or((0, 0));
@@ -309,6 +375,10 @@ fn main() -> anyhow::Result<()> {
                                                                                 n184_delta: metrics.strongest_n184_delta_s2n_mev,
                                                                                 proton_avg_delta_s2p: metrics.avg_superheavy_proton_delta_s2p_mev,
                                                                                 proton_min_delta_s2p: metrics.min_superheavy_proton_delta_s2p_mev,
+                                                                                n50_ratio,
+                                                                                n82_ratio,
+                                                                                n126_ratio,
+                                                                                ratio_penalty,
                                                                                 closest_z,
                                                                                 closest_n,
                                                                                 closest_score,
@@ -352,7 +422,7 @@ fn main() -> anyhow::Result<()> {
 
     for (idx, row) in rows.iter().enumerate() {
         leaderboard.push_str(&format!(
-            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6},{:.6}\n",
+            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
             idx + 1,
             row.score,
             row.amp_z,
@@ -382,6 +452,10 @@ fn main() -> anyhow::Result<()> {
             row.n184_delta,
             row.proton_avg_delta_s2p,
             row.proton_min_delta_s2p,
+            row.n50_ratio,
+            row.n82_ratio,
+            row.n126_ratio,
+            row.ratio_penalty,
             row.closest_z,
             row.closest_n,
             row.closest_score,
