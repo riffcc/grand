@@ -10,6 +10,7 @@
  *   - superheavy island ranking
  */
 
+use crate::dynamics_map::StandardModelDynamicsMap;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
@@ -19,12 +20,33 @@ use std::path::Path;
 pub const PROTON_MAGIC_NUMBERS: [u16; 7] = [2, 8, 20, 28, 50, 82, 126];
 /// Canonical neutron-shell closures used by the baseline shell correction layer.
 pub const NEUTRON_MAGIC_NUMBERS: [u16; 8] = [2, 8, 20, 28, 50, 82, 126, 184];
-/// Superheavy proton-shell candidates to stress-test IoS behavior.
-pub const SUPERHEAVY_PROTON_CANDIDATES: [u16; 2] = [114, 120];
-/// Proton closures to monitor in S2p discontinuity diagnostics.
-pub const PROTON_CLOSURE_METRIC_CANDIDATES: [u16; 3] = [114, 120, 126];
 /// Backwards-compatible alias for existing callers expecting neutron closures.
 pub const MAGIC_NUMBERS: [u16; 8] = NEUTRON_MAGIC_NUMBERS;
+
+/// Constraint-layer proton closure candidates derived from Cl(1,3) runtime map.
+///
+/// This intentionally avoids hand-entered superheavy closure lists.
+/// Candidate values are built from structural counts only:
+/// - Cl(1,3) dimension,
+/// - Z3 order / generations,
+/// - SU(3), SU(2), U(1) generator counts,
+/// - magnetic triplet cardinality.
+pub fn derived_superheavy_proton_candidates() -> Vec<u16> {
+    let m = StandardModelDynamicsMap::from_clifford_z3();
+    let anchor = m.clifford_dim * (m.z3_order + m.su2_generators + m.u1_generators);
+    let z_triplet_shift = anchor + (m.magnetic_triplet_card - 1);
+    let z_color_shift = anchor + m.su3_generators;
+    let z_spinor_shift = anchor + m.clifford_dim - (m.z3_order - 1);
+    let mut out = vec![
+        anchor as u16,
+        z_triplet_shift as u16,
+        z_color_shift as u16,
+        z_spinor_shift as u16,
+    ];
+    out.sort_unstable();
+    out.dedup();
+    out
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct SemfParams {
@@ -198,9 +220,6 @@ pub struct ShellGateMetrics {
     pub strongest_superheavy_proton_delta_s2p_mev: f64,
     pub avg_superheavy_proton_delta_s2p_mev: f64,
     pub min_superheavy_proton_delta_s2p_mev: f64,
-    pub proton114_delta_s2p_mev: f64,
-    pub proton120_delta_s2p_mev: f64,
-    pub proton126_delta_s2p_mev: f64,
 }
 
 fn pairing_term(z: u16, n: u16, a: f64, a_p: f64) -> f64 {
@@ -231,6 +250,7 @@ fn semf_binding_mev(
     n: u16,
     semf: SemfParams,
     shell: ShellParams,
+    superheavy_candidates: &[u16],
 ) -> (f64, f64, f64, f64, f64, f64, f64) {
     let a_u16 = z + n;
     let a = a_u16 as f64;
@@ -259,7 +279,7 @@ fn semf_binding_mev(
     let shell_superheavy_proton = heavy_gate
         * shell_bonus(
             z,
-            &SUPERHEAVY_PROTON_CANDIDATES,
+            superheavy_candidates,
             shell.superheavy_proton_amplitude,
             shell.superheavy_proton_sigma,
         )
@@ -332,6 +352,7 @@ fn stability_score(
 
 /// Build a full nuclide table with SEMF+shell observables.
 pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
+    let superheavy_candidates = derived_superheavy_proton_candidates();
     let mut binding_map: BTreeMap<(u16, u16), (f64, f64, f64, f64, f64, f64, f64)> = BTreeMap::new();
     for z in cfg.z_min..=cfg.z_max {
         for n in cfg.n_min..=cfg.n_max {
@@ -343,8 +364,7 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
                 shell_bonus_superheavy_proton_mev,
                 shell_scale_a,
                 pairing_mev,
-            ) =
-                semf_binding_mev(z, n, cfg.semf, cfg.shell);
+            ) = semf_binding_mev(z, n, cfg.semf, cfg.shell, &superheavy_candidates);
             binding_map.insert(
                 (z, n),
                 (
@@ -504,9 +524,10 @@ pub fn proton_s2p_discontinuities(records: &[NucleusRecord], top_k: usize) -> Ve
     for r in records {
         by_zn.insert((r.z, r.n), r);
     }
+    let closures = derived_superheavy_proton_candidates();
 
     let mut out = Vec::new();
-    for &closure_z in &PROTON_CLOSURE_METRIC_CANDIDATES {
+    for &closure_z in &closures {
         for r in records {
             if r.z == closure_z {
                 let Some(s2p_here) = r.s2p_mev else {
@@ -535,8 +556,9 @@ pub fn proton_s2p_discontinuities(records: &[NucleusRecord], top_k: usize) -> Ve
 /// Summarize S2p shell cliffs for monitored proton closure candidates.
 pub fn proton_s2p_summary(records: &[NucleusRecord]) -> Vec<ProtonSummaryRow> {
     let all = proton_s2p_discontinuities(records, records.len());
+    let closures = derived_superheavy_proton_candidates();
     let mut out = Vec::new();
-    for &closure_z in &PROTON_CLOSURE_METRIC_CANDIDATES {
+    for &closure_z in &closures {
         let mut strongest = ProtonDiscontinuity {
             closure_z,
             n: 0,
@@ -646,13 +668,6 @@ pub fn shell_gate_metrics(records: &[NucleusRecord]) -> ShellGateMetrics {
     } else {
         proton_deltas.iter().copied().fold(f64::INFINITY, f64::min)
     };
-    let closure_delta = |z: u16| {
-        proton_summary
-            .iter()
-            .find(|row| row.closure_z == z)
-            .map(|row| row.strongest_delta_s2p_mev)
-            .unwrap_or(0.0)
-    };
     ShellGateMetrics {
         top_delta_s2n_mev: top_delta,
         avg_top5_delta_s2n_mev: avg_top5,
@@ -660,9 +675,6 @@ pub fn shell_gate_metrics(records: &[NucleusRecord]) -> ShellGateMetrics {
         strongest_superheavy_proton_delta_s2p_mev: proton_strongest,
         avg_superheavy_proton_delta_s2p_mev: proton_avg,
         min_superheavy_proton_delta_s2p_mev: proton_min,
-        proton114_delta_s2p_mev: closure_delta(114),
-        proton120_delta_s2p_mev: closure_delta(120),
-        proton126_delta_s2p_mev: closure_delta(126),
     }
 }
 
@@ -887,7 +899,7 @@ mod tests {
         let cfg = ScanConfig::default();
         let records = scan_nuclear_chart(cfg);
         let summary = proton_s2p_summary(&records);
-        for z in PROTON_CLOSURE_METRIC_CANDIDATES {
+        for z in derived_superheavy_proton_candidates() {
             assert!(summary.iter().any(|row| row.closure_z == z && row.sample_count > 0));
         }
     }

@@ -88,9 +88,6 @@ fn main() -> anyhow::Result<()> {
         top_delta_s2n: f64,
         avg_top5_delta_s2n: f64,
         n184_delta: f64,
-        proton114_delta_s2p: f64,
-        proton120_delta_s2p: f64,
-        proton126_delta_s2p: f64,
         proton_avg_delta_s2p: f64,
         proton_min_delta_s2p: f64,
         closest_z: u16,
@@ -104,7 +101,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut leaderboard = String::from(
-        "rank,score,amp_z,amp_n,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,proton114_delta_s2p,proton120_delta_s2p,proton126_delta_s2p,proton_avg_delta_s2p,proton_min_delta_s2p,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
+        "rank,score,amp_z,amp_n,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,proton_avg_delta_s2p,proton_min_delta_s2p,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
     );
     let mut rows: Vec<Row> = Vec::new();
     let mut best_score = f64::NEG_INFINITY;
@@ -194,9 +191,6 @@ fn main() -> anyhow::Result<()> {
                                                     top_delta_s2n: metrics.top_delta_s2n_mev,
                                                     avg_top5_delta_s2n: metrics.avg_top5_delta_s2n_mev,
                                                     n184_delta: metrics.strongest_n184_delta_s2n_mev,
-                                                    proton114_delta_s2p: metrics.proton114_delta_s2p_mev,
-                                                    proton120_delta_s2p: metrics.proton120_delta_s2p_mev,
-                                                    proton126_delta_s2p: metrics.proton126_delta_s2p_mev,
                                                     proton_avg_delta_s2p: metrics.avg_superheavy_proton_delta_s2p_mev,
                                                     proton_min_delta_s2p: metrics.min_superheavy_proton_delta_s2p_mev,
                                                     closest_z,
@@ -244,7 +238,7 @@ fn main() -> anyhow::Result<()> {
 
     for (idx, row) in rows.iter().enumerate() {
         leaderboard.push_str(&format!(
-            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
+            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
             idx + 1,
             row.score,
             row.amp_z,
@@ -261,9 +255,6 @@ fn main() -> anyhow::Result<()> {
             row.top_delta_s2n,
             row.avg_top5_delta_s2n,
             row.n184_delta,
-            row.proton114_delta_s2p,
-            row.proton120_delta_s2p,
-            row.proton126_delta_s2p,
             row.proton_avg_delta_s2p,
             row.proton_min_delta_s2p,
             row.closest_z,
@@ -300,12 +291,9 @@ fn main() -> anyhow::Result<()> {
         strongest_superheavy_proton_delta_s2p_mev: 0.0,
         avg_superheavy_proton_delta_s2p_mev: 0.0,
         min_superheavy_proton_delta_s2p_mev: 0.0,
-        proton114_delta_s2p_mev: 0.0,
-        proton120_delta_s2p_mev: 0.0,
-        proton126_delta_s2p_mev: 0.0,
     });
     let best_desc = format!(
-        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},sigma_z:{:.3},sigma_n:{:.3},superheavy_proton_amp:{:.3},superheavy_proton_sigma:{:.3},heavy_amp:{:.3},heavy_sigma_z:{:.3},heavy_sigma_n:{:.3},heavy_target_z:{:.3},heavy_target_n:{:.3}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\nproton114_delta_s2p={:.6}\nproton120_delta_s2p={:.6}\nproton126_delta_s2p={:.6}\nproton_avg_delta_s2p={:.6}\nproton_min_delta_s2p={:.6}\n",
+        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},sigma_z:{:.3},sigma_n:{:.3},superheavy_proton_amp:{:.3},superheavy_proton_sigma:{:.3},heavy_amp:{:.3},heavy_sigma_z:{:.3},heavy_sigma_n:{:.3},heavy_target_z:{:.3},heavy_target_n:{:.3}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\nproton_avg_delta_s2p={:.6}\nproton_min_delta_s2p={:.6}\n",
         best_score,
         amp_z,
         amp_n,
@@ -321,9 +309,6 @@ fn main() -> anyhow::Result<()> {
         metrics.top_delta_s2n_mev,
         metrics.avg_top5_delta_s2n_mev,
         metrics.strongest_n184_delta_s2n_mev,
-        metrics.proton114_delta_s2p_mev,
-        metrics.proton120_delta_s2p_mev,
-        metrics.proton126_delta_s2p_mev,
         metrics.avg_superheavy_proton_delta_s2p_mev,
         metrics.min_superheavy_proton_delta_s2p_mev
     );
