@@ -32,6 +32,7 @@ lean_lib Gutoe where
              `Gutoe.StrongCPPathIntegral,
              `Gutoe.StrongCPVacuum,
              `Gutoe.StrongCPEmergence,
+             `Gutoe.StrongCPGeneralCases,
              `Gutoe.FalsifiabilityCatalog,
              `Gutoe.AsymptoticFreedomEntropy,
              `Gutoe.SM.Rep,
