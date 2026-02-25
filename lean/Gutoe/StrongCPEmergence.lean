@@ -19,6 +19,9 @@ namespace Gutoe.StrongCPEmergence
 
 open Gutoe.StrongCPVacuum
 
+/-- Effective emergent SU(3)-carrier matrix type used in the concrete bridge. -/
+abbrev Su3Matrix : Type := Matrix (Fin 3) (Fin 3) ℂ
+
 /-- Setoid of continuous maps modulo homotopy equivalence. -/
 def homotopySetoid (X Y : Type) [TopologicalSpace X] [TopologicalSpace Y] :
     Setoid C(X, Y) where
@@ -297,5 +300,67 @@ theorem su3_effective_theta_phase_unity
       thetaPhase theta (qEff (CG f)) = 1 := by
   intro f theta
   exact theta_phase_unity_of_coarse_grain_no_creation CG phi hCG qEff hqConstZero f theta
+
+/-- Concrete `Z₃ → SU(3)` permutation representation (identity). -/
+def z3RepI : Su3Matrix := !![1, 0, 0; 0, 1, 0; 0, 0, 1]
+
+/-- Concrete `Z₃ → SU(3)` permutation representation (one-step cycle). -/
+def z3RepP : Su3Matrix := !![0, 1, 0; 0, 0, 1; 1, 0, 0]
+
+/-- Concrete `Z₃ → SU(3)` permutation representation (two-step cycle). -/
+def z3RepP2 : Su3Matrix := !![0, 0, 1; 1, 0, 0; 0, 1, 0]
+
+/-- Concrete emergent map `φ : Fin 3 → SU(3)` used for GRAND-267 closure. -/
+def z3RepMatrix (g : FundamentalGaugeGroup) : Su3Matrix :=
+  if g = 0 then z3RepI else if g = 1 then z3RepP else z3RepP2
+
+/-- Continuous-map packaging of the concrete `Z₃ → SU(3)` representation. -/
+def z3ToSu3 : C(FundamentalGaugeGroup, Su3Matrix) := ⟨z3RepMatrix, by continuity⟩
+
+/-- Anchored class-induced effective charge:
+    subtracts the class-value of the constant field at basepoint image.
+    This is the formal normalization enforcing `Q[const] = 0`. -/
+noncomputable def qEffFromClassAnchored
+    {X Eff : Type}
+    [TopologicalSpace X] [TopologicalSpace Eff]
+    (x0 : X)
+    (qClass : HomotopyClass X Eff → ℤ) :
+    C(X, Eff) → ℤ :=
+  fun F =>
+    qClass (Quotient.mk (s := homotopySetoid X Eff) F) -
+    qClass (Quotient.mk (s := homotopySetoid X Eff) (ContinuousMap.const X (F x0)))
+
+/-- Normalization theorem: anchored class-induced charge vanishes on every
+    constant field, by construction. -/
+theorem qEffFromClassAnchored_const_zero
+    {X Eff : Type}
+    [TopologicalSpace X] [TopologicalSpace Eff]
+    (x0 : X)
+    (qClass : HomotopyClass X Eff → ℤ)
+    (e0 : Eff) :
+    qEffFromClassAnchored x0 qClass (ContinuousMap.const X e0) = 0 := by
+  simp [qEffFromClassAnchored]
+
+/-- Concrete closure theorem for GRAND-267:
+    with explicit `Z₃ → SU(3)` representation and anchored topological-charge
+    normalization, emergent-image theta phases are identically unity. -/
+theorem su3_effective_theta_phase_unity_concrete
+    {X : Type}
+    [TopologicalSpace X] [PreconnectedSpace X] [Nonempty X]
+    (x0 : X)
+    (qClass : HomotopyClass X Su3Matrix → ℤ) :
+    ∀ (f : C(X, FundamentalGaugeGroup)) (theta : ℝ),
+      thetaPhase theta (qEffFromClassAnchored x0 qClass (z3ToSu3.comp f)) = 1 := by
+  intro f theta
+  exact
+    theta_phase_unity_of_coarse_grain_no_creation
+      (CG := fun g => z3ToSu3.comp g)
+      (phi := z3ToSu3)
+      (hCG := by intro g; rfl)
+      (qEff := qEffFromClassAnchored x0 qClass)
+      (hqConstZero := by
+        intro e0
+        exact qEffFromClassAnchored_const_zero x0 qClass e0)
+      f theta
 
 end Gutoe.StrongCPEmergence
