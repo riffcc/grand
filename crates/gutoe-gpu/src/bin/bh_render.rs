@@ -929,6 +929,7 @@ fn plasma_profile_scales(
         let ti_over_te = (r_high * b2 + r_low) / (1.0 + b2).max(1e-9);
         (1.0 / ti_over_te).clamp(1e-3, 1.0)
     }
+    let f_nonthermal = parse_env_f64("BH_NONTHERMAL_FRAC", 0.0).clamp(0.0, 1.0);
 
     match plasma_model {
         PlasmaModel::Nt => (1.0, 1.0),
@@ -948,8 +949,14 @@ fn plasma_profile_scales(
             let te_ti = te_over_ti_rbeta(beta, r_low, r_high);
             let electron_boost = te_ti.sqrt();
             let ring = 1.0 + n_cross.saturating_sub(1) as f64 * 0.08;
-            let j_scale = (ne * b * te.sqrt() * electron_boost * ring).clamp(0.08, 6.0);
-            let a_scale = (ne * b / (te * te_ti).max(1e-6) * ring).clamp(0.05, 8.0);
+            // Non-thermal electrons add a high-energy emissive tail and reduce
+            // self-absorption efficiency relative to purely thermal electrons.
+            let nonthermal_j = 1.0 + 4.0 * f_nonthermal;
+            let nonthermal_a = (1.0 - 0.45 * f_nonthermal).max(0.2);
+            let thermal_j = (ne * b * te.sqrt() * electron_boost * ring).clamp(0.08, 6.0);
+            let thermal_a = (ne * b / (te * te_ti).max(1e-6) * ring).clamp(0.05, 8.0);
+            let j_scale = (thermal_j * nonthermal_j).clamp(0.08, 6.0);
+            let a_scale = (thermal_a * nonthermal_a).clamp(0.05, 8.0);
             (j_scale, a_scale)
         }
     }
@@ -1756,6 +1763,14 @@ fn render_view(
     eprintln!("    spectrum={} (BH_SPECTRUM)", spectral_band.as_label());
     eprintln!("    disk_model={} (BH_DISK_MODEL)", disk_model.as_label());
     eprintln!("    plasma_model={} (BH_PLASMA_MODEL)", plasma_model.as_label());
+    if plasma_model == PlasmaModel::Grmhd {
+        let f_nonthermal = std::env::var("BH_NONTHERMAL_FRAC")
+            .ok()
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0);
+        eprintln!("    nonthermal_frac={:.3} (BH_NONTHERMAL_FRAC)", f_nonthermal);
+    }
     eprintln!(
         "    transfer={} tau_scale={:.3} (BH_USE_TRANSFER/BH_TAU_SCALE)",
         use_transfer, tau_scale
@@ -5590,6 +5605,22 @@ mod tests {
         assert!(cuda.contains("255.0 * pow(tone, 0.36)"));
         assert!(cuda.contains("170.0 * pow(tone, 0.62)"));
         assert!(cuda.contains("45.0 * pow(tone, 1.50)"));
+    }
+
+    #[test]
+    fn plasma_profile_nonthermal_fraction_modulates_scales() {
+        let prev = std::env::var("BH_NONTHERMAL_FRAC").ok();
+        std::env::set_var("BH_NONTHERMAL_FRAC", "0.0");
+        let (j0, a0) = plasma_profile_scales(1.6, 1.0, 3, PlasmaModel::Grmhd);
+        std::env::set_var("BH_NONTHERMAL_FRAC", "0.5");
+        let (j1, a1) = plasma_profile_scales(1.6, 1.0, 3, PlasmaModel::Grmhd);
+        if let Some(v) = prev {
+            std::env::set_var("BH_NONTHERMAL_FRAC", v);
+        } else {
+            std::env::remove_var("BH_NONTHERMAL_FRAC");
+        }
+        assert!(j1 > j0, "non-thermal tail should boost emissivity: {j0} -> {j1}");
+        assert!(a1 < a0, "non-thermal tail should reduce absorption: {a0} -> {a1}");
     }
 }
 
