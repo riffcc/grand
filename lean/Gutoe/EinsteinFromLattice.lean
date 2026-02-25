@@ -62,6 +62,36 @@ def reggeStationary
     (dSdl : Edge → ℝ) : Prop :=
   ∀ e, dSdl e = 0
 
+/-- Regge deficit angle around an edge:
+    `δ_e = 2π - Σ_t θ_{e,t}`. -/
+noncomputable def deficitAngle (sumDihedral : ℝ) : ℝ :=
+  2 * Real.pi - sumDihedral
+
+/-- Flat-edge normalization: if the local dihedral sum is exactly `2π`,
+    the deficit angle is zero. -/
+theorem deficitAngle_zero_of_full_angle
+    (hsum : sumDihedral = 2 * Real.pi) :
+    deficitAngle sumDihedral = 0 := by
+  unfold deficitAngle
+  linarith
+
+/-- Discrete Einstein equation written on edges:
+    each edge variation is balanced by projected stress-energy. -/
+def reggeEdgeEquation
+    {Edge : Type}
+    (dSdl source : Edge → ℝ) : Prop :=
+  ∀ e, dSdl e = source e
+
+/-- Stationarity implies zero-source edge equations. -/
+theorem regge_stationary_implies_zero_source
+    {Edge : Type}
+    {dSdl : Edge → ℝ}
+    (hstat : reggeStationary dSdl) :
+    reggeEdgeEquation dSdl (fun _ => 0) := by
+  intro e
+  specialize hstat e
+  simpa using hstat
+
 /-- Vertex labels for one unit SC cube (`0..7`). -/
 abbrev CubeVertex := Fin 8
 
@@ -115,6 +145,27 @@ def ReggeToEinsteinBridge
     (lP Lambda kappa : ℝ) : Prop :=
   (∀ μ ν, Gcont μ ν = Gdisc μ ν) ∧
   (∀ μ ν, Gdisc μ ν + lambda_qg * lP ^ 2 * H μ ν + Lambda * g μ ν = kappa * T μ ν)
+
+/-- Bridge constructor from an edge-level Regge equation and a projection map
+    from edge equations into tensor components.
+
+`hProject` is the explicit GRAND-269/270 obligation carrying geometric content. -/
+theorem regge_edge_projection_to_bridge
+    {ι Edge : Type}
+    (embed : ι → ι → Edge)
+    (Gdisc Gcont H g T : TensorField ι)
+    (dSdl source : Edge → ℝ)
+    (lP Lambda kappa : ℝ)
+    (hCont : ∀ μ ν, Gcont μ ν = Gdisc μ ν)
+    (hEdgeEq : reggeEdgeEquation dSdl source)
+    (hProject :
+      ∀ μ ν,
+        dSdl (embed μ ν) = source (embed μ ν) →
+        Gdisc μ ν + lambda_qg * lP ^ 2 * H μ ν + Lambda * g μ ν = kappa * T μ ν) :
+    ReggeToEinsteinBridge Gdisc Gcont H g T lP Lambda kappa := by
+  refine ⟨hCont, ?_⟩
+  intro μ ν
+  exact hProject μ ν (hEdgeEq (embed μ ν))
 
 /-- Proposition form of `ContinuumLimit.continuum_limit_exists` for bridge packaging. -/
 def ContinuumLimitStatement : Prop :=
