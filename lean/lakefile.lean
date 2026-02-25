@@ -23,9 +23,16 @@ lean_lib Gutoe where
              `Gutoe.GravityMetric,
              `Gutoe.KerrGeometry,
              `Gutoe.KerrCameraStability,
+             `Gutoe.KerrTracerEquations,
+             `Gutoe.KerrReferenceFrame,
              `Gutoe.Geodesic3DProjection,
              `Gutoe.SynchrotronGRMHD,
              `Gutoe.SynchrotronTransfer,
              `Gutoe.FalsifiabilityCatalog,
              `Gutoe.AsymptoticFreedomEntropy,
+             `Gutoe.SM.Rep,
+             `Gutoe.SM.Anomalies,
              `Gutoe.LambdaQG]
+
+lean_exe kerr_ref_frame where
+  root := `Gutoe.KerrReferenceFrameGen
