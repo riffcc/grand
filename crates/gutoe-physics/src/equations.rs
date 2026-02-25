@@ -201,6 +201,33 @@ pub fn gamma_ray_delay(distance: f64, E: f64, E_QG: f64) -> f64 {
     distance * (E / E_QG).powi(2) / C
 }
 
+/// Lane-Emden-style compression proxy used by the Lean stellar-fusion bridge.
+#[inline]
+pub fn lane_emden_compression_proxy(mass: f64, rho_c: f64) -> f64 {
+    mass * rho_c
+}
+
+/// Polytropic core-temperature proxy:
+/// T_c ∝ ξ G μ √(M ρ_c)
+///
+/// Mirrors `coreTemperaturePolytropic` in `Gutoe/StellarFusion.lean`.
+pub fn core_temperature_polytropic(g: f64, mu: f64, xi: f64, mass: f64, rho_c: f64) -> f64 {
+    let compression = lane_emden_compression_proxy(mass, rho_c).max(0.0);
+    xi * g * mu * compression.sqrt()
+}
+
+/// Compression threshold for ignition in the polytropic proxy model.
+#[inline]
+pub fn minimum_polytropic_compression(g: f64, mu: f64, xi: f64, t_ign: f64) -> f64 {
+    (t_ign / (xi * g * mu)).powi(2)
+}
+
+/// Ignition condition in the polytropic proxy model.
+#[inline]
+pub fn polytropic_ignition_condition(g: f64, mu: f64, xi: f64, t_ign: f64, mass: f64, rho_c: f64) -> bool {
+    lane_emden_compression_proxy(mass, rho_c) >= minimum_polytropic_compression(g, mu, xi, t_ign)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -276,6 +303,31 @@ mod tests {
     }
 
     fn v_from_c() -> f64 { 1.0 } // unit velocity for dimensionless tests
+
+    #[test]
+    fn polytropic_ignition_threshold_matches_temperature_proxy() {
+        let g = 2.0;
+        let mu = 3.0;
+        let xi = 4.0;
+        let t_ign = 5.0;
+        let mass = 1.0;
+        let rho_c = minimum_polytropic_compression(g, mu, xi, t_ign);
+
+        assert!(polytropic_ignition_condition(g, mu, xi, t_ign, mass, rho_c));
+
+        let t_core = core_temperature_polytropic(g, mu, xi, mass, rho_c);
+        assert!((t_core - t_ign).abs() < 1e-10);
+    }
+
+    #[test]
+    fn stronger_compression_increases_polytropic_core_temperature() {
+        let g = 1.0;
+        let mu = 1.0;
+        let xi = 1.0;
+        let t_low = core_temperature_polytropic(g, mu, xi, 1.0, 1.0);
+        let t_high = core_temperature_polytropic(g, mu, xi, 4.0, 4.0);
+        assert!(t_high > t_low);
+    }
 
     // ── Black-hole entropy ───────────────────────────────────────────────────
 

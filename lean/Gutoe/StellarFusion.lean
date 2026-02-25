@@ -219,6 +219,19 @@ noncomputable def minimumIgnitionMass (G μ TIgn : ℝ) : ℝ :=
 def HydrostaticEquilibrium (pGrav pThermal pRadiation : ℝ) : Prop :=
   pGrav = pThermal + pRadiation
 
+/-- Lane-Emden-style compression proxy (mass-density product). -/
+def laneEmdenCompressionProxy (M rhoCentral : ℝ) : ℝ := M * rhoCentral
+
+/-- Polytropic core-temperature proxy:
+    `T_c ∝ ξ G μ √(M ρ_c)` with Lane-Emden structural factor `ξ`. -/
+noncomputable def coreTemperaturePolytropic (G μ ξ M rhoCentral : ℝ) : ℝ :=
+  ξ * G * μ * Real.sqrt (laneEmdenCompressionProxy M rhoCentral)
+
+/-- Compression threshold corresponding to ignition temperature in the
+    polytropic proxy model. -/
+noncomputable def minimumPolytropicCompression (G μ ξ TIgn : ℝ) : ℝ :=
+  (TIgn / (ξ * G * μ)) ^ 2
+
 theorem newton_from_lattice_positive
     {v κ : ℝ} (hv : v ≠ 0) (hκ : 0 < κ) :
     0 < newtonFromLattice v κ := by
@@ -226,6 +239,37 @@ theorem newton_from_lattice_positive
   have hv2 : 0 < v ^ 2 := by
     nlinarith [sq_pos_of_ne_zero hv]
   exact div_pos hv2 hκ
+
+theorem polytropic_ignition_from_compression
+    (hG : 0 < G) (hμ : 0 < μ) (hξ : 0 < ξ) (hTIgn : 0 < TIgn)
+    {M rhoCentral : ℝ}
+    (hComp : laneEmdenCompressionProxy M rhoCentral ≥
+      minimumPolytropicCompression G μ ξ TIgn) :
+    coreTemperaturePolytropic G μ ξ M rhoCentral ≥ TIgn := by
+  unfold coreTemperaturePolytropic laneEmdenCompressionProxy minimumPolytropicCompression at *
+  let base : ℝ := ξ * G * μ
+  have hbase : 0 < base := by
+    unfold base
+    exact mul_pos (mul_pos hξ hG) hμ
+  have hComp' : (TIgn / base) ^ 2 ≤ M * rhoCentral := by
+    simpa [base] using hComp
+  have hsqrt_bound : Real.sqrt ((TIgn / base) ^ 2) ≤ Real.sqrt (M * rhoCentral) := by
+    exact Real.sqrt_le_sqrt hComp'
+  have hratio_nonneg : 0 ≤ TIgn / base := by
+    exact div_nonneg (le_of_lt hTIgn) (le_of_lt hbase)
+  have hsqrt_sq : Real.sqrt ((TIgn / base) ^ 2) = TIgn / base := by
+    rw [Real.sqrt_sq_eq_abs, abs_of_nonneg hratio_nonneg]
+  have hratio_le : TIgn / base ≤ Real.sqrt (M * rhoCentral) := by
+    calc
+      TIgn / base = Real.sqrt ((TIgn / base) ^ 2) := by symm; exact hsqrt_sq
+      _ ≤ Real.sqrt (M * rhoCentral) := hsqrt_bound
+  have hmul : TIgn ≤ base * Real.sqrt (M * rhoCentral) := by
+    have hmul' : base * (TIgn / base) ≤ base * Real.sqrt (M * rhoCentral) := by
+      exact mul_le_mul_of_nonneg_left hratio_le (le_of_lt hbase)
+    have hcancel : base * (TIgn / base) = TIgn := by
+      field_simp [hbase.ne']
+    linarith [hmul', hcancel]
+  simpa [base, mul_assoc] using hmul
 
 theorem ignition_mass_threshold
     (hG : 0 < G) (hμ : 0 < μ) (hTIgn : 0 < TIgn)
@@ -290,5 +334,35 @@ theorem stellar_ignition_equilibrium_exists_from_lattice_params
     (hG := newton_from_lattice_positive hv hκ)
     (hμ := hμ) (hTIgn := hTIgn) (hM := hM)
     (hEq := hEq) (hm := hm) (hE := hE)
+
+/-- Polytropic/Lane-Emden-style ignition witness built from lattice parameters. -/
+theorem stellar_ignition_equilibrium_exists_polytropic_from_lattice_params
+    {v κ μ ξ TIgn M rhoCentral pGrav pThermal pRadiation mReduced E : ℝ}
+    (hv : v ≠ 0)
+    (hκ : 0 < κ)
+    (hμ : 0 < μ)
+    (hξ : 0 < ξ)
+    (hTIgn : 0 < TIgn)
+    (hComp : laneEmdenCompressionProxy M rhoCentral ≥
+      minimumPolytropicCompression (newtonFromLattice v κ) μ ξ TIgn)
+    (hEq : HydrostaticEquilibrium pGrav pThermal pRadiation)
+    (hm : 0 < mReduced)
+    (hE : 0 < E) :
+    ppChainNetQMeV > 0 ∧
+    (∃ J : QuarkType → QuarkType,
+      J QuarkType.UP = QuarkType.DOWN ∧
+      quarkCharge QuarkType.UP =
+        quarkCharge (J QuarkType.UP) + positronCharge + electronNeutrinoCharge) ∧
+    (0 < gamowFactor alphaEM mReduced E ∧
+      gamowFactor alphaEM mReduced E < 1) ∧
+    (∃ M' : ℝ,
+      coreTemperaturePolytropic (newtonFromLattice v κ) μ ξ M' rhoCentral ≥ TIgn ∧
+      HydrostaticEquilibrium pGrav pThermal pRadiation) := by
+  refine ⟨pp_chain_exothermic, weak_vertex_exists, ?_, ?_⟩
+  · exact gamow_penetration_positive mReduced E hm hE
+  · refine ⟨M, ?_, hEq⟩
+    exact polytropic_ignition_from_compression
+      (hG := newton_from_lattice_positive hv hκ)
+      (hμ := hμ) (hξ := hξ) (hTIgn := hTIgn) hComp
 
 end Gutoe.StellarFusion
