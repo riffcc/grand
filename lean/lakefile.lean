@@ -33,6 +33,7 @@ lean_lib Gutoe where
              `Gutoe.SM.Rep,
              `Gutoe.SM.Anomalies,
              `Gutoe.SM.HyperchargeBridge,
+             `Gutoe.SM.Closure,
              `Gutoe.LambdaQG]
 
 lean_exe kerr_ref_frame where
