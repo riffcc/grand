@@ -105,7 +105,9 @@ pub struct SemfParams {
 impl Default for SemfParams {
     fn default() -> Self {
         Self {
-            a_v: 15.8,
+            // Slightly reduced from textbook 15.8 to remove systematic overbinding
+            // bias seen against AME2020 while keeping shell topology unchanged.
+            a_v: 15.7825,
             a_s: 18.3,
             a_c: 0.714,
             a_a: 23.2,
