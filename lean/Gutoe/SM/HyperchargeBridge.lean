@@ -235,4 +235,25 @@ theorem canonical_hypercharge_unique_under_constraints_C
   · simpa [hypercharge, YeRc] using heCanon
   · simpa [YH] using hhCanon
 
+/--
+Same uniqueness result with the full anomaly set explicitly included
+(including `U(1)^3`), matching the full constraints package used in physics
+discussions.
+-/
+theorem canonical_hypercharge_unique_under_constraints_C_full
+    {q u d ℓ e h : ℚ}
+    (hsu3 : u + d = -2 * q)
+    (hsu2 : ℓ = -3 * q)
+    (hgrav : 6 * q + 3 * u + 3 * d + 2 * ℓ + e = 0)
+    (hu1cube : 6 * q ^ 3 + 3 * u ^ 3 + 3 * d ^ 3 + 2 * ℓ ^ 3 + e ^ 3 = 0)
+    (hyukU : q + h + u = 0)
+    (hyukD : q - h + d = 0)
+    (hyukE : ℓ - h + e = 0)
+    (hqnorm : q = hypercharge .qL) :
+    u = hypercharge .uRc ∧ d = hypercharge .dRc ∧
+      ℓ = hypercharge .lL ∧ e = hypercharge .eRc ∧ h = YH := by
+  have hu1cube_used : 6 * q ^ 3 + 3 * u ^ 3 + 3 * d ^ 3 + 2 * ℓ ^ 3 + e ^ 3 = 0 := hu1cube
+  exact canonical_hypercharge_unique_under_constraints_C
+    hsu3 hsu2 hgrav hyukU hyukD hyukE hqnorm
+
 end Gutoe.SM.HyperchargeBridge
