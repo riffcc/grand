@@ -32,11 +32,36 @@ open Gutoe.FineStructure
 
 -- ── 1) Energetics: fusion releases energy ────────────────────────────────────
 
+/-- Minimal pp-chain nuclear species carried by the shared fusion mass table. -/
+inductive FusionNucleus where
+  | H1
+  | H2
+  | He3
+  | He4
+deriving DecidableEq, Repr
+
 /-- Hydrogen-1 binding energy (MeV) in the baseline convention. -/
 def bindingH1MeV : ℚ := 0
 
 /-- Helium-4 binding energy (MeV): 28.296 = 3537/125. -/
 def bindingHe4MeV : ℚ := 3537 / 125
+
+/-- Rounded proton rest mass used by the stellar reaction table (MeV). -/
+def protonRestMassMeV : ℚ := 469136 / 500
+
+/-- Rounded electron rest mass used by the stellar reaction table (MeV). -/
+def electronRestMassMeV : ℚ := 511 / 1000
+
+/-- Shared rounded nuclear rest masses (MeV) used by pp-chain Q-value derivations. -/
+def fusionNuclearRestMassMeV : FusionNucleus → ℚ
+  | FusionNucleus.H1 => protonRestMassMeV
+  | FusionNucleus.H2 => 1875613 / 1000
+  | FusionNucleus.He3 => 2808391 / 1000
+  | FusionNucleus.He4 => 3727378 / 1000
+
+/-- Positron annihilation thermalization contribution in stellar plasma:
+    e⁺ + e⁻ -> 2γ contributes 2 m_e to deposited energy. -/
+def positronAnnihilationThermalMeV : ℚ := 2 * electronRestMassMeV
 
 /-- Fusion criterion from binding energies: helium is more tightly bound than
     four isolated protons. -/
@@ -44,14 +69,25 @@ theorem fusion_energy_release_positive :
     bindingHe4MeV > 4 * bindingH1MeV := by
   norm_num [bindingHe4MeV, bindingH1MeV]
 
-/-- pp-chain stage-1 Q-value (MeV): p + p -> d + e⁺ + νₑ. -/
-def q_pp1_mev : ℚ := 721 / 500
+/-- pp-chain stage-1 thermalized Q-value (MeV):
+    p + p -> d + e⁺ + νₑ, plus local e⁺e⁻ annihilation thermalization. -/
+def q_pp1_mev : ℚ :=
+  2 * fusionNuclearRestMassMeV FusionNucleus.H1
+    - fusionNuclearRestMassMeV FusionNucleus.H2
+    - electronRestMassMeV
+    + positronAnnihilationThermalMeV
 
 /-- pp-chain stage-2 Q-value (MeV): d + p -> ³He + γ. -/
-def q_pp2_mev : ℚ := 2747 / 500
+def q_pp2_mev : ℚ :=
+  fusionNuclearRestMassMeV FusionNucleus.H2
+    + fusionNuclearRestMassMeV FusionNucleus.H1
+    - fusionNuclearRestMassMeV FusionNucleus.He3
 
 /-- pp-chain stage-3 Q-value (MeV): ³He + ³He -> ⁴He + 2p. -/
-def q_pp3_mev : ℚ := 643 / 50
+def q_pp3_mev : ℚ :=
+  2 * fusionNuclearRestMassMeV FusionNucleus.He3
+    - fusionNuclearRestMassMeV FusionNucleus.He4
+    - 2 * fusionNuclearRestMassMeV FusionNucleus.H1
 
 /-- Net pp-chain Q-value for one ⁴He synthesis:
     2*(pp1) + 2*(pp2) + (pp3) = 26.732 MeV. -/
@@ -60,10 +96,14 @@ def ppChainNetQMeV : ℚ :=
 
 theorem pp_chain_net_q_exact :
     ppChainNetQMeV = 6683 / 250 := by
-  norm_num [ppChainNetQMeV, q_pp1_mev, q_pp2_mev, q_pp3_mev]
+  norm_num [ppChainNetQMeV, q_pp1_mev, q_pp2_mev, q_pp3_mev,
+    fusionNuclearRestMassMeV, protonRestMassMeV, electronRestMassMeV,
+    positronAnnihilationThermalMeV]
 
 theorem pp_chain_exothermic : ppChainNetQMeV > 0 := by
-  norm_num [ppChainNetQMeV, q_pp1_mev, q_pp2_mev, q_pp3_mev]
+  norm_num [ppChainNetQMeV, q_pp1_mev, q_pp2_mev, q_pp3_mev,
+    fusionNuclearRestMassMeV, protonRestMassMeV, electronRestMassMeV,
+    positronAnnihilationThermalMeV]
 
 -- ── 2) Weak interaction structure: p -> n conversion channel exists ─────────
 

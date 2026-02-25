@@ -118,6 +118,32 @@ pub struct ReactionNetwork {
     pub reactions: Vec<Reaction>,
 }
 
+// Shared rounded mass table (MeV) used for pp-chain Q-value derivations.
+const PROTON_REST_MASS_MEV: f64 = 938.272;
+const ELECTRON_REST_MASS_MEV: f64 = 0.511;
+const H2_NUCLEAR_REST_MASS_MEV: f64 = 1875.613;
+const HE3_NUCLEAR_REST_MASS_MEV: f64 = 2808.391;
+const HE4_NUCLEAR_REST_MASS_MEV: f64 = 3727.378;
+
+#[inline]
+fn q_pp1_thermalized_mev() -> f64 {
+    // p + p -> d + e⁺ + νₑ, with local e⁺e⁻ annihilation thermalization (+2m_e)
+    (2.0 * PROTON_REST_MASS_MEV) - H2_NUCLEAR_REST_MASS_MEV - ELECTRON_REST_MASS_MEV
+        + (2.0 * ELECTRON_REST_MASS_MEV)
+}
+
+#[inline]
+fn q_pp2_mev() -> f64 {
+    // d + p -> ³He + γ
+    H2_NUCLEAR_REST_MASS_MEV + PROTON_REST_MASS_MEV - HE3_NUCLEAR_REST_MASS_MEV
+}
+
+#[inline]
+fn q_pp3_mev() -> f64 {
+    // ³He + ³He -> ⁴He + 2p
+    (2.0 * HE3_NUCLEAR_REST_MASS_MEV) - HE4_NUCLEAR_REST_MASS_MEV - (2.0 * PROTON_REST_MASS_MEV)
+}
+
 impl ReactionNetwork {
     pub fn baseline_p1() -> Self {
         // Minimal physically-grounded anchors for the first network pass:
@@ -134,7 +160,7 @@ impl ReactionNetwork {
                     sto(Species::ElectronNeutrino, 1),
                 ],
                 branching_weight: 1.0,
-                q_mev: 1.442,
+                q_mev: q_pp1_thermalized_mev(),
             },
             Reaction {
                 id: "pp_2",
@@ -142,7 +168,7 @@ impl ReactionNetwork {
                 reactants: vec![sto(Species::H2, 1), sto(Species::P1, 1)],
                 products: vec![sto(Species::He3, 1), sto(Species::Gamma, 1)],
                 branching_weight: 1.0,
-                q_mev: 5.494,
+                q_mev: q_pp2_mev(),
             },
             Reaction {
                 id: "pp_3",
@@ -150,7 +176,7 @@ impl ReactionNetwork {
                 reactants: vec![sto(Species::He3, 2)],
                 products: vec![sto(Species::He4, 1), sto(Species::P1, 2)],
                 branching_weight: 1.0,
-                q_mev: 12.860,
+                q_mev: q_pp3_mev(),
             },
             Reaction {
                 id: "cno_1",
@@ -281,6 +307,15 @@ fn sto(species: Species, coeff: i32) -> Stoich {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pp_q_values_match_baseline() {
+        assert!((q_pp1_thermalized_mev() - 1.442).abs() < 1.0e-12);
+        assert!((q_pp2_mev() - 5.494).abs() < 1.0e-12);
+        assert!((q_pp3_mev() - 12.860).abs() < 1.0e-12);
+        let net = 2.0 * q_pp1_thermalized_mev() + 2.0 * q_pp2_mev() + q_pp3_mev();
+        assert!((net - 26.732).abs() < 1.0e-12);
+    }
 
     #[test]
     fn baseline_network_contains_required_channels() {
