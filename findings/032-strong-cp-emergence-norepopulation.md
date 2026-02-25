@@ -1,6 +1,6 @@
 # 032 — Strong CP Emergence No-Repopulation Bridge (GRAND-267)
 
-Status: theorem-level bridge added; final closure still requires model-complete emergent-SU(3) assumptions.
+Status: route-1 Lean closure complete (concrete `Z₃ → SU(3)` + normalized `Q[const]=0`).
 
 ## New Lean module
 
