@@ -5129,6 +5129,40 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
         }
     }
 
+    let closure_amp_csv = out_dir.join(format!("{}_eht_closure_amp.csv", view.slug));
+    let mut ca = std::fs::File::create(&closure_amp_csv).expect("create eht_closure_amp csv");
+    writeln!(
+        ca,
+        "quad,closure_amplitude,closure_amplitude_corrupted"
+    )
+    .expect("write closure amp header");
+    let amp = |z: (f64, f64)| -> f64 { (z.0 * z.0 + z.1 * z.1).sqrt().max(1e-12) };
+    for i in 0..stations.len() {
+        for j in (i + 1)..stations.len() {
+            for k in (j + 1)..stations.len() {
+                for l in (k + 1)..stations.len() {
+                    let sa = &stations[i];
+                    let sb = &stations[j];
+                    let sc = &stations[k];
+                    let sd = &stations[l];
+                    // A = |Vab||Vcd| / (|Vac||Vbd|)
+                    let Some(vab) = get_pair(sa, sb, &vis_map) else { continue };
+                    let Some(vcd) = get_pair(sc, sd, &vis_map) else { continue };
+                    let Some(vac) = get_pair(sa, sc, &vis_map) else { continue };
+                    let Some(vbd) = get_pair(sb, sd, &vis_map) else { continue };
+                    let Some(vab2) = get_pair(sa, sb, &vis_corrupt_map) else { continue };
+                    let Some(vcd2) = get_pair(sc, sd, &vis_corrupt_map) else { continue };
+                    let Some(vac2) = get_pair(sa, sc, &vis_corrupt_map) else { continue };
+                    let Some(vbd2) = get_pair(sb, sd, &vis_corrupt_map) else { continue };
+                    let a = (amp(vab) * amp(vcd)) / (amp(vac) * amp(vbd));
+                    let a2 = (amp(vab2) * amp(vcd2)) / (amp(vac2) * amp(vbd2));
+                    writeln!(ca, "{sa}-{sb}-{sc}-{sd},{a:.9},{a2:.9}")
+                        .expect("write closure amp row");
+                }
+            }
+        }
+    }
+
     let summary = out_dir.join(format!("{}_eht_uv.json", view.slug));
     let mut s = std::fs::File::create(&summary).expect("create eht_uv json");
     let m_solar = parse_env_f64("BH_MASS_SOLAR").unwrap_or(6.5e9).max(1.0);
@@ -5146,7 +5180,7 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
     let shadow_diam_gr_uas = 2.0 * (27.0_f64).sqrt() * rg_m / (d_mpc * mpc_m) * rad_to_uas;
     writeln!(
         s,
-        "{{\n  \"slug\": \"{}\",\n  \"png\": \"{}\",\n  \"width\": {},\n  \"height\": {},\n  \"fov_rs\": {:.6},\n  \"uv_units\": \"normalized cycles per image FOV\",\n  \"note\": \"Synthetic uv set; replace with 2017 measured tracks in EHT-17\",\n  \"uv_csv\": \"{}\",\n  \"uv_corrupted_csv\": \"{}\",\n  \"closure_csv\": \"{}\",\n  \"noise_sigma\": {:.6},\n  \"gain_amp_sigma\": {:.6},\n  \"gain_phase_sigma_deg\": {:.6},\n  \"bw_hz\": {:.3},\n  \"tint_s\": {:.3},\n  \"sefd_csv\": \"{}\",\n  \"gain_csv\": \"{}\",\n  \"m_solar\": {:.3},\n  \"distance_mpc\": {:.6},\n  \"rs_uas\": {:.6},\n  \"fov_uas\": {:.6},\n  \"pixel_uas\": {:.6},\n  \"shadow_diameter_gr_uas\": {:.6}\n}}",
+        "{{\n  \"slug\": \"{}\",\n  \"png\": \"{}\",\n  \"width\": {},\n  \"height\": {},\n  \"fov_rs\": {:.6},\n  \"uv_units\": \"normalized cycles per image FOV\",\n  \"note\": \"Synthetic uv set; replace with 2017 measured tracks in EHT-17\",\n  \"uv_csv\": \"{}\",\n  \"uv_corrupted_csv\": \"{}\",\n  \"closure_csv\": \"{}\",\n  \"closure_amp_csv\": \"{}\",\n  \"noise_sigma\": {:.6},\n  \"gain_amp_sigma\": {:.6},\n  \"gain_phase_sigma_deg\": {:.6},\n  \"bw_hz\": {:.3},\n  \"tint_s\": {:.3},\n  \"sefd_csv\": \"{}\",\n  \"gain_csv\": \"{}\",\n  \"m_solar\": {:.3},\n  \"distance_mpc\": {:.6},\n  \"rs_uas\": {:.6},\n  \"fov_uas\": {:.6},\n  \"pixel_uas\": {:.6},\n  \"shadow_diameter_gr_uas\": {:.6}\n}}",
         view.slug,
         out_dir.join(format!("{}.png", view.slug)).display(),
         width,
@@ -5154,8 +5188,8 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
         fov_rs,
         uv_csv.display(),
         uv_corrupt_csv.display(),
-        closure_csv.display()
-        ,
+        closure_csv.display(),
+        closure_amp_csv.display(),
         noise_sigma,
         gain_amp_sigma,
         gain_phase_sigma_deg,
@@ -5177,6 +5211,7 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
         eprintln!("eht_uv: wrote {}", uv_corrupt_csv.display());
     }
     eprintln!("eht_uv: wrote {}", closure_csv.display());
+    eprintln!("eht_uv: wrote {}", closure_amp_csv.display());
     eprintln!("eht_uv: wrote {}", summary.display());
 }
 
