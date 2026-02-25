@@ -84,6 +84,9 @@ pub struct ShellParams {
     pub strutinsky_spacing_mev: f64,
     pub strutinsky_spin_orbit_mev: f64,
     pub strutinsky_coulomb_shift_mev: f64,
+    // Blend factor for microscopic Strutinsky residuals on top of baseline shells.
+    // 0.0 = baseline-only (Gaussian attractors), 1.0 = full residual contribution.
+    pub strutinsky_mix: f64,
     pub sigma_z: f64,
     pub sigma_n: f64,
     pub proton_magic_weight_coeff: f64,
@@ -114,6 +117,7 @@ impl Default for ShellParams {
             strutinsky_spacing_mev: 7.0,
             strutinsky_spin_orbit_mev: 2.2,
             strutinsky_coulomb_shift_mev: 0.15,
+            strutinsky_mix: 0.35,
             sigma_z: 4.0,
             sigma_n: 5.0,
             proton_magic_weight_coeff: 2.0 * LAMBDA_QG,
@@ -437,7 +441,7 @@ fn build_strutinsky_shell_table(max_count: u16, is_proton: bool, shell: ShellPar
         .max(1e-9);
     let mut table = vec![0.0; max_count + 1];
     for n in 1..=max_count {
-        table[n] = shell.shell_amp * delta[n] / max_abs;
+        table[n] = delta[n] / max_abs;
     }
     table
 }
@@ -462,6 +466,32 @@ fn semf_binding_mev(
     let asymmetry = semf.a_a * n_asym * n_asym / a;
     let pairing = pairing_term(z, n, a, semf.a_p);
 
+    let gaussian_z = shell_bonus_weighted(
+        z,
+        &PROTON_MAGIC_NUMBERS,
+        shell.amplitude_z,
+        shell.sigma_z,
+        |magic| {
+            proton_magic_weight(
+                magic,
+                shell.proton_magic_weight_coeff,
+                shell.proton_magic_weight_cap,
+            )
+        },
+    );
+    let gaussian_n = shell_bonus_weighted(
+        n,
+        &NEUTRON_MAGIC_NUMBERS,
+        shell.amplitude_n,
+        shell.sigma_n,
+        |magic| {
+            neutron_magic_weight(
+                magic,
+                shell.neutron_magic_weight_coeff,
+                shell.neutron_magic_weight_cap,
+            )
+        },
+    );
     let (shell_z, shell_n) = if shell.use_strutinsky {
         let sz = proton_shell_table
             .and_then(|tab| tab.get(z as usize).copied())
@@ -469,45 +499,18 @@ fn semf_binding_mev(
         let sn = neutron_shell_table
             .and_then(|tab| tab.get(n as usize).copied())
             .unwrap_or(0.0);
-        (sz, sn)
+        (
+            gaussian_z + shell.strutinsky_mix * sz,
+            gaussian_n + shell.strutinsky_mix * sn,
+        )
     } else {
-        let sz = shell_bonus_weighted(
-            z,
-            &PROTON_MAGIC_NUMBERS,
-            shell.amplitude_z,
-            shell.sigma_z,
-            |magic| {
-                proton_magic_weight(
-                    magic,
-                    shell.proton_magic_weight_coeff,
-                    shell.proton_magic_weight_cap,
-                )
-            },
-        );
-        let sn = shell_bonus_weighted(
-            n,
-            &NEUTRON_MAGIC_NUMBERS,
-            shell.amplitude_n,
-            shell.sigma_n,
-            |magic| {
-                neutron_magic_weight(
-                    magic,
-                    shell.neutron_magic_weight_coeff,
-                    shell.neutron_magic_weight_cap,
-                )
-            },
-        );
-        (sz, sn)
+        (gaussian_z, gaussian_n)
     };
     // A-dependent shell leverage: suppress light-nucleus over-bias and let
     // shell structure compete against Coulomb/fission in superheavy region.
     // Keep backward-compatibility with legacy calibration scale (6.5) while
     // moving to physically motivated A^(-shell_scale_exp) attenuation.
-    let shell_scale = if shell.use_strutinsky {
-        (a / 56.0).powf(-shell.shell_scale_exp)
-    } else {
-        (shell.shell_amp / 6.5) * (a / 56.0).powf(-shell.shell_scale_exp)
-    };
+    let shell_scale = (shell.shell_amp / 6.5) * (a / 56.0).powf(-shell.shell_scale_exp);
     let heavy_gate = if z >= shell.heavy_gate_z_min && n >= shell.heavy_gate_n_min {
         1.0
     } else {

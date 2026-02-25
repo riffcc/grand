@@ -269,6 +269,7 @@ fn main() -> anyhow::Result<()> {
                 "GUTOE_NUCLEAR_STRUTINSKY_COULOMB_SHIFT_MEV",
                 default_shell.strutinsky_coulomb_shift_mev,
             ),
+            strutinsky_mix: env_f64("GUTOE_NUCLEAR_STRUTINSKY_MIX", default_shell.strutinsky_mix),
             sigma_z: env_f64("GUTOE_NUCLEAR_SIGMA_Z", default_shell.sigma_z),
             sigma_n: env_f64("GUTOE_NUCLEAR_SIGMA_N", default_shell.sigma_n),
             proton_magic_weight_coeff: env_f64(
