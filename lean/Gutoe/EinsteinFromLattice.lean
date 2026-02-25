@@ -213,6 +213,14 @@ theorem sc_regge_variation_of_schlaefli
     reggeVariation area deficit dArea dDeficit = ∑ e, dArea e * deficit e :=
   regge_variation_of_schlaefli area deficit dArea dDeficit hSch
 
+/-- Flat-space Schläfli base case on the SC edge set:
+    if all deficit-angle variations vanish, Schläfli holds exactly. -/
+theorem sc_schlaefli_flat
+    (area : SimpEdge → ℝ) :
+    scSchlaefliIdentity area (fun _ => 0) := by
+  unfold scSchlaefliIdentity SchlaefliIdentity
+  simp
+
 /-- Endpoint table for the 19 unique edges appearing in `scCubeTetrahedra`. -/
 def simpEdgeEndpoints (e : SimpEdge) : CubeVertex × CubeVertex :=
   match e.1 with
@@ -440,6 +448,35 @@ def ContinuumLimitStatement : Prop :=
 /-- Existing theorem chain discharges `ContinuumLimitStatement`. -/
 theorem continuum_limit_statement_holds : ContinuumLimitStatement :=
   Gutoe.ContinuumLimit.continuum_limit_exists
+
+/-- Coupling identification from lattice-side relations:
+    `κ = v² / G`. -/
+noncomputable def kappaFromLattice (v G : ℝ) : ℝ := v ^ 2 / G
+
+/-- Inverse coupling map:
+    `G = v² / κ`. -/
+noncomputable def newtonFromLattice (v kappa : ℝ) : ℝ := v ^ 2 / kappa
+
+/-- Planck-side relation:
+    `ħ = l_P² κ`. -/
+def hbarFromLattice (lP kappa : ℝ) : ℝ := lP ^ 2 * kappa
+
+/-- The `G = v²/κ` relation is exact from the definition of `kappaFromLattice`. -/
+theorem newton_relation_of_kappa_from_lattice
+    {v G : ℝ} (hG : G ≠ 0) (hv : v ≠ 0) :
+    newtonFromLattice v (kappaFromLattice v G) = G := by
+  unfold newtonFromLattice kappaFromLattice
+  field_simp [hG, hv]
+
+/-- Combining `κ = v²/G` with `ħ = l_P² κ` yields
+    `G = v² l_P² / ħ` (for `ħ ≠ 0`). -/
+theorem newton_from_planck_lattice_relation
+    {v lP hbar : ℝ}
+    (hhbar : hbar ≠ 0)
+    (hlP : lP ≠ 0) :
+    newtonFromLattice v (hbar / (lP ^ 2)) = v ^ 2 * lP ^ 2 / hbar := by
+  unfold newtonFromLattice
+  field_simp [hhbar, hlP]
 
 /-- Structural prerequisites already proven in the Cl(1,3) theorem chain:
     SC coordination (6), continuum-limit existence, and fixed `λ_QG = 1/12`. -/

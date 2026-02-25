@@ -54,6 +54,11 @@ Additional bridge hardening now included:
   - `SchlaefliIdentity` (`Σ_e A_e dδ_e = 0`)
   - `regge_variation_of_schlaefli` (deficit-derivative term cancellation)
   - SC wrapper: `scSchlaefliIdentity`, `sc_regge_variation_of_schlaefli`
+  - flat SC base: `sc_schlaefli_flat`
+- Newton-coupling bridge algebra added:
+  - `kappaFromLattice`, `newtonFromLattice`, `hbarFromLattice`
+  - `newton_relation_of_kappa_from_lattice` (`G = v² / κ` inversion)
+  - `newton_from_planck_lattice_relation` (`G = v² l_P² / ħ` under nondegenerate assumptions)
 
 Core theorems:
 
@@ -71,6 +76,9 @@ Core theorems:
 - `bridge_from_cms_bound_zero_mesh`
 - `regge_variation_of_schlaefli`
 - `sc_regge_variation_of_schlaefli`
+- `sc_schlaefli_flat`
+- `newton_relation_of_kappa_from_lattice`
+- `newton_from_planck_lattice_relation`
 
 ## Verification
 
