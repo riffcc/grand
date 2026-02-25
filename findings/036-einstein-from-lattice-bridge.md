@@ -54,9 +54,12 @@ Additional bridge hardening now included:
     - `basisProjectionWeight`
     - `basisProjectionCoeffs`
     - `basis_projection_surjective`
-  - projected residual machinery + theorem:
-    - `projectedResidual_zero_of_reggeEdgeEquation`
-    - `bridge_from_edge_projection_model`
+- projected residual machinery + theorem:
+  - `projectedResidual_zero_of_reggeEdgeEquation`
+  - `bridge_from_edge_projection_model`
+  - direct continuum endpoint consequences:
+    - `modified_einstein_from_cms_bound_zero_mesh`
+    - `modified_einstein_from_stationary_cms_zero_mesh`
 - CMS-limit closure step for the remaining projection hypothesis:
   - `ProjectionErrorBound` (`|residual - projection| ≤ C h²`)
   - `edge_projection_model_of_zero_mesh` (exact model recovered at `h=0`)
@@ -67,9 +70,15 @@ Additional bridge hardening now included:
   - `regge_variation_of_schlaefli` (deficit-derivative term cancellation)
   - SC wrapper: `scSchlaefliIdentity`, `sc_regge_variation_of_schlaefli`
   - flat SC base: `sc_schlaefli_flat`
+  - finite SC local→global reduction theorem:
+    - `sc_schlaefli_from_local_balances` (diagonal + mixed-term cancellation conditions)
 - Newton-coupling bridge algebra added:
   - `kappaFromLattice`, `newtonFromLattice`, `hbarFromLattice`
+  - Einstein normalization pair:
+    - `kappaEinstein` (`κ = 8πG/c⁴`)
+    - `newtonFromEinsteinKappa` (`G = κ c⁴/(8π)`)
   - `newton_relation_of_kappa_from_lattice` (`G = v² / κ` inversion)
+  - `newton_relation_of_kappa_einstein` (exact inversion of `κ = 8πG/c⁴`)
   - `newton_from_planck_lattice_relation` (`G = v² l_P² / ħ` under nondegenerate assumptions)
 
 Core theorems:
@@ -93,10 +102,14 @@ Core theorems:
 - `bridge_from_edge_projection_model`
 - `edge_projection_model_of_zero_mesh`
 - `bridge_from_cms_bound_zero_mesh`
+- `modified_einstein_from_cms_bound_zero_mesh`
+- `modified_einstein_from_stationary_cms_zero_mesh`
 - `regge_variation_of_schlaefli`
 - `sc_regge_variation_of_schlaefli`
 - `sc_schlaefli_flat`
+- `sc_schlaefli_from_local_balances`
 - `newton_relation_of_kappa_from_lattice`
+- `newton_relation_of_kappa_einstein`
 - `newton_from_planck_lattice_relation`
 
 ## Verification

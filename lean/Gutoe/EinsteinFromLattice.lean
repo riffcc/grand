@@ -579,6 +579,92 @@ theorem bridge_from_cms_bound_zero_mesh
     edge_projection_model_of_zero_mesh hBound hMesh
   exact bridge_from_edge_projection_model hCont hEq hModel
 
+/-- Direct continuum-limit theorem on the spatial block:
+    an `O(h²)` CMS projection bound plus `h = 0` yields modified Einstein
+    dynamics after transport from discrete to continuum Einstein tensor. -/
+theorem modified_einstein_from_cms_bound_zero_mesh
+    {Gdisc Gcont H g T : TensorField (Fin 3)}
+    {dSdl source : SimpEdge → ℝ}
+    {lP Lambda kappa h C : ℝ}
+    {w : Fin 3 → Fin 3 → SimpEdge → ℝ}
+    (hCont : ∀ μ ν, Gcont μ ν = Gdisc μ ν)
+    (hEq : reggeEdgeEquation dSdl source)
+    (hBound : ProjectionErrorBound Gdisc H g T dSdl source lP Lambda kappa h C w)
+    (hMesh : h = 0) :
+    ModifiedEinsteinFieldEquation Gcont H g T lP Lambda kappa := by
+  intro μ ν
+  have hBridge : ReggeToEinsteinBridge Gdisc Gcont H g T lP Lambda kappa :=
+    bridge_from_cms_bound_zero_mesh hCont hEq hBound hMesh
+  have hConv := hBridge.1 μ ν
+  have hDisc := hBridge.2 μ ν
+  calc
+    Gcont μ ν + lambda_qg * lP ^ 2 * H μ ν + Lambda * g μ ν
+        = Gdisc μ ν + lambda_qg * lP ^ 2 * H μ ν + Lambda * g μ ν := by rw [hConv]
+    _ = kappa * T μ ν := hDisc
+
+/-- Stationary Regge dynamics (`δS/δl = 0`) in vacuum source form, combined with
+    CMS `O(h²)` projection control at `h = 0`, yields modified Einstein dynamics. -/
+theorem modified_einstein_from_stationary_cms_zero_mesh
+    {Gdisc Gcont H g T : TensorField (Fin 3)}
+    {dSdl : SimpEdge → ℝ}
+    {lP Lambda kappa h C : ℝ}
+    {w : Fin 3 → Fin 3 → SimpEdge → ℝ}
+    (hCont : ∀ μ ν, Gcont μ ν = Gdisc μ ν)
+    (hStat : reggeStationary dSdl)
+    (hBound : ProjectionErrorBound
+      Gdisc H g T dSdl (fun _ => 0) lP Lambda kappa h C w)
+    (hMesh : h = 0) :
+    ModifiedEinsteinFieldEquation Gcont H g T lP Lambda kappa := by
+  have hEq : reggeEdgeEquation dSdl (fun _ => 0) :=
+    regge_stationary_implies_zero_source hStat
+  exact modified_einstein_from_cms_bound_zero_mesh hCont hEq hBound hMesh
+
+/-- Finite-algebraic reduction for SC Schläfli: if local tetra contributions
+    satisfy diagonal cancellations and mixed cross-terms vanish, then the global
+    19-edge Schläfli identity follows for the assembled SC decomposition. -/
+theorem sc_schlaefli_from_local_balances
+    (A dTheta : Fin 6 → SimpEdge → ℝ)
+    (hDiag : ∀ t, ∑ e, A t e * dTheta t e = 0)
+    (hOff : ∀ t u, t ≠ u → ∑ e, A t e * dTheta u e = 0) :
+    scSchlaefliIdentity
+      (fun e => ∑ t : Fin 6, A t e)
+      (fun e => -∑ t : Fin 6, dTheta t e) := by
+  unfold scSchlaefliIdentity SchlaefliIdentity
+  have hTU : ∀ t u : Fin 6, ∑ e, A t e * dTheta u e = 0 := by
+    intro t u
+    by_cases htu : t = u
+    · subst htu
+      exact hDiag t
+    · exact hOff t u htu
+  have hSwap :
+      ∑ e, ∑ t : Fin 6, ∑ u : Fin 6, A t e * dTheta u e
+        = ∑ t : Fin 6, ∑ u : Fin 6, ∑ e, A t e * dTheta u e := by
+    calc
+      ∑ e, ∑ t : Fin 6, ∑ u : Fin 6, A t e * dTheta u e
+          = ∑ t : Fin 6, ∑ e, ∑ u : Fin 6, A t e * dTheta u e := by
+              rw [Finset.sum_comm]
+      _ = ∑ t : Fin 6, ∑ u : Fin 6, ∑ e, A t e * dTheta u e := by
+            apply Finset.sum_congr rfl
+            intro t ht
+            rw [Finset.sum_comm]
+  calc
+    ∑ e, (∑ t : Fin 6, A t e) * (-(∑ t : Fin 6, dTheta t e))
+        = -∑ e, (∑ t : Fin 6, A t e) * (∑ t : Fin 6, dTheta t e) := by
+            simp [Finset.sum_neg_distrib]
+    _ = -∑ e, ∑ t : Fin 6, ∑ u : Fin 6, A t e * dTheta u e := by
+          apply congrArg Neg.neg
+          apply Finset.sum_congr rfl
+          intro e he
+          rw [Finset.sum_mul]
+          apply Finset.sum_congr rfl
+          intro t ht
+          rw [Finset.mul_sum]
+    _ = -∑ t : Fin 6, ∑ u : Fin 6, ∑ e, A t e * dTheta u e := by
+          simpa [hSwap]
+    _ = -∑ t : Fin 6, ∑ u : Fin 6, 0 := by
+          simp [hTU]
+    _ = 0 := by simp
+
 /-- Proposition form of `ContinuumLimit.continuum_limit_exists` for bridge packaging. -/
 def ContinuumLimitStatement : Prop :=
   (2 : ℕ) ^ 4 = 16 ∧
@@ -602,9 +688,19 @@ theorem continuum_limit_statement_holds : ContinuumLimitStatement :=
     `κ = v² / G`. -/
 noncomputable def kappaFromLattice (v G : ℝ) : ℝ := v ^ 2 / G
 
+/-- Continuum Einstein-Hilbert coupling normalization:
+    `κ = 8πG / c⁴`. -/
+noncomputable def kappaEinstein (G c : ℝ) : ℝ :=
+  8 * Real.pi * G / c ^ 4
+
 /-- Inverse coupling map:
     `G = v² / κ`. -/
 noncomputable def newtonFromLattice (v kappa : ℝ) : ℝ := v ^ 2 / kappa
+
+/-- Inverse of the Einstein normalization map:
+    `G = κ c⁴ / (8π)`. -/
+noncomputable def newtonFromEinsteinKappa (kappa c : ℝ) : ℝ :=
+  kappa * c ^ 4 / (8 * Real.pi)
 
 /-- Planck-side relation:
     `ħ = l_P² κ`. -/
@@ -616,6 +712,13 @@ theorem newton_relation_of_kappa_from_lattice
     newtonFromLattice v (kappaFromLattice v G) = G := by
   unfold newtonFromLattice kappaFromLattice
   field_simp [hG, hv]
+
+/-- Einstein normalization inverts exactly to Newton's constant. -/
+theorem newton_relation_of_kappa_einstein
+    {G c : ℝ} (hc : c ≠ 0) :
+    newtonFromEinsteinKappa (kappaEinstein G c) c = G := by
+  unfold newtonFromEinsteinKappa kappaEinstein
+  field_simp [hc, Real.pi_ne_zero]
 
 /-- Combining `κ = v²/G` with `ħ = l_P² κ` yields
     `G = v² l_P² / ħ` (for `ħ ≠ 0`). -/
