@@ -165,4 +165,74 @@ theorem canonical_hypercharge_unique_under_anomalies
   · simpa [hypercharge, YlL] using hℓ
   · simpa [hypercharge, YeRc] using he
 
+/--
+Full constraints `C` (reps + anomaly equations + Yukawa gauge invariance +
+normalization) fix one-generation charged-sector hypercharges uniquely to the
+canonical registry values.
+
+Yukawa constraints are written for left-chiral fields with charge-conjugated
+singlets and one Higgs doublet of hypercharge `h`:
+`q + h + u = 0`, `q - h + d = 0`, `ℓ - h + e = 0`.
+-/
+theorem canonical_hypercharge_unique_under_constraints_C
+    {q u d ℓ e h : ℚ}
+    (hsu3 : u + d = -2 * q)
+    (hsu2 : ℓ = -3 * q)
+    (hgrav : 6 * q + 3 * u + 3 * d + 2 * ℓ + e = 0)
+    (hyukU : q + h + u = 0)
+    (hyukD : q - h + d = 0)
+    (hyukE : ℓ - h + e = 0)
+    (hqnorm : q = hypercharge .qL) :
+    u = hypercharge .uRc ∧ d = hypercharge .dRc ∧
+      ℓ = hypercharge .lL ∧ e = hypercharge .eRc ∧ h = YH := by
+  have hq : q = 1 / 6 := by
+    simpa [hypercharge, YqL] using hqnorm
+  have hyukD_used : q - h + d = 0 := hyukD
+  have hℓ : ℓ = -3 * q := hsu2
+  have hu : u = -q - h := by linarith [hyukU]
+  have hd : d = -q + h := by linarith [hyukD_used]
+  have he : e = h - ℓ := by linarith [hyukE]
+  have hh : h = 3 * q := by
+    linarith [hgrav, hsu3, he, hℓ]
+  have huq : u = -4 * q := by linarith [hu, hh]
+  have hdq : d = 2 * q := by
+    calc
+      d = -q + h := hd
+      _ = -q + 3 * q := by rw [hh]
+      _ = 2 * q := by ring
+  have heq : e = 6 * q := by linarith [he, hh, hℓ]
+
+  have huCanon : u = -2 / 3 := by
+    calc
+      u = -4 * q := huq
+      _ = -4 * (1 / 6 : ℚ) := by rw [hq]
+      _ = -2 / 3 := by ring
+  have hdCanon : d = 1 / 3 := by
+    calc
+      d = 2 * q := hdq
+      _ = 2 * (1 / 6 : ℚ) := by rw [hq]
+      _ = 1 / 3 := by ring
+  have hℓCanon : ℓ = -1 / 2 := by
+    calc
+      ℓ = -3 * q := hℓ
+      _ = -3 * (1 / 6 : ℚ) := by rw [hq]
+      _ = -1 / 2 := by ring
+  have heCanon : e = 1 := by
+    calc
+      e = 6 * q := heq
+      _ = 6 * (1 / 6 : ℚ) := by rw [hq]
+      _ = 1 := by ring
+  have hhCanon : h = 1 / 2 := by
+    calc
+      h = 3 * q := hh
+      _ = 3 * (1 / 6 : ℚ) := by rw [hq]
+      _ = 1 / 2 := by ring
+
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · simpa [hypercharge, YuRc] using huCanon
+  · simpa [hypercharge, YdRc] using hdCanon
+  · simpa [hypercharge, YlL] using hℓCanon
+  · simpa [hypercharge, YeRc] using heCanon
+  · simpa [YH] using hhCanon
+
 end Gutoe.SM.HyperchargeBridge

@@ -71,6 +71,7 @@ def YdRc : ℚ := 1 / 3
 def YlL : ℚ := -1 / 2
 def YeRc : ℚ := 1
 def YnuRc : ℚ := 0
+def YH : ℚ := 1 / 2
 
 /-- Hypercharge assignment for left-chiral Weyl fields. -/
 def hypercharge : WeylSpecies → ℚ
