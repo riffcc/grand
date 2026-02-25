@@ -588,4 +588,63 @@ theorem lane_emden_n0_solution :
   · intro ξ
     exact lane_emden_residual_nat_n0_zero ξ
 
+/-- Finite sampled average of a Lane-Emden profile over `n+1` points. -/
+noncomputable def laneEmdenAverageTheta
+    (θ : ℝ → ℝ) (ξ0 dξ : ℝ) (n : ℕ) : ℝ :=
+  ((Finset.univ : Finset (Fin (n + 1))).sum
+      (fun i => θ (ξ0 + (i : ℝ) * dξ))) / (n + 1)
+
+/-- Profile-weighted compression witness from a sampled Lane-Emden profile. -/
+noncomputable def laneEmdenProfileCompression
+    (M rhoCentral : ℝ) (θ : ℝ → ℝ) (ξ0 dξ : ℝ) (n : ℕ) : ℝ :=
+  laneEmdenCompressionProxy M rhoCentral * laneEmdenAverageTheta θ ξ0 dξ n
+
+/-- If a sampled Lane-Emden average is bounded by one and the profile-weighted
+    compression already clears ignition threshold, then base proxy compression
+    also clears threshold. -/
+theorem proxy_compression_from_profile_threshold
+    {M rhoCentral G μ ξ TIgn ξ0 dξ : ℝ} {n : ℕ} {θ : ℝ → ℝ}
+    (hProxyNonneg : 0 ≤ laneEmdenCompressionProxy M rhoCentral)
+    (hAvgUpper : laneEmdenAverageTheta θ ξ0 dξ n ≤ 1)
+    (hProfile :
+      laneEmdenProfileCompression M rhoCentral θ ξ0 dξ n ≥
+        minimumPolytropicCompression G μ ξ TIgn) :
+    laneEmdenCompressionProxy M rhoCentral ≥
+      minimumPolytropicCompression G μ ξ TIgn := by
+  unfold laneEmdenProfileCompression at hProfile
+  have hmul :
+      laneEmdenCompressionProxy M rhoCentral * laneEmdenAverageTheta θ ξ0 dξ n ≤
+        laneEmdenCompressionProxy M rhoCentral := by
+    have hright :
+        laneEmdenCompressionProxy M rhoCentral * 1 =
+          laneEmdenCompressionProxy M rhoCentral := by ring
+    have hraw :
+        laneEmdenCompressionProxy M rhoCentral * laneEmdenAverageTheta θ ξ0 dξ n ≤
+          laneEmdenCompressionProxy M rhoCentral * 1 :=
+      mul_le_mul_of_nonneg_left hAvgUpper hProxyNonneg
+    simpa [hright] using hraw
+  linarith [hProfile, hmul]
+
+/-- Lane-Emden sampled-profile ignition bridge:
+    this upgrades ignition from pure proxy compression to profile-weighted
+    compression under the physically standard envelope bound `avg θ ≤ 1`. -/
+theorem polytropic_ignition_from_lane_emden_profile
+    {M rhoCentral G μ ξ TIgn ξ0 dξ : ℝ} {n : ℕ} {θ : ℝ → ℝ}
+    (hG : 0 < G) (hμ : 0 < μ) (hξ : 0 < ξ) (hTIgn : 0 < TIgn)
+    (hProxyNonneg : 0 ≤ laneEmdenCompressionProxy M rhoCentral)
+    (hAvgUpper : laneEmdenAverageTheta θ ξ0 dξ n ≤ 1)
+    (hProfile :
+      laneEmdenProfileCompression M rhoCentral θ ξ0 dξ n ≥
+        minimumPolytropicCompression G μ ξ TIgn) :
+    coreTemperaturePolytropic G μ ξ M rhoCentral ≥ TIgn := by
+  have hComp :
+      laneEmdenCompressionProxy M rhoCentral ≥
+        minimumPolytropicCompression G μ ξ TIgn :=
+    proxy_compression_from_profile_threshold
+      (hProxyNonneg := hProxyNonneg)
+      (hAvgUpper := hAvgUpper)
+      (hProfile := hProfile)
+  exact polytropic_ignition_from_compression
+    (hG := hG) (hμ := hμ) (hξ := hξ) (hTIgn := hTIgn) hComp
+
 end Gutoe.StellarFusion

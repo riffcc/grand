@@ -424,6 +424,48 @@ pub fn lane_emden_integrate_rk4_nat(n: u32, xi_max: f64, step: f64) -> Option<Ve
     Some(out)
 }
 
+/// Mean theta over a sampled Lane-Emden trajectory.
+pub fn lane_emden_average_theta_from_profile(profile: &[(f64, f64, f64)]) -> Option<f64> {
+    if profile.is_empty() {
+        return None;
+    }
+    let sum: f64 = profile.iter().map(|(_, theta, _)| *theta).sum();
+    Some(sum / profile.len() as f64)
+}
+
+/// Profile-weighted compression from a sampled Lane-Emden trajectory.
+pub fn lane_emden_profile_weighted_compression(
+    mass: f64,
+    rho_c: f64,
+    profile: &[(f64, f64, f64)],
+) -> Option<f64> {
+    let avg_theta = lane_emden_average_theta_from_profile(profile)?;
+    Some(lane_emden_compression_proxy(mass, rho_c) * avg_theta)
+}
+
+/// Ignition condition using sampled Lane-Emden profile weighting.
+///
+/// Mirrors the Lean bridge theorem assumption pattern:
+/// if profile-average theta is bounded by 1 and profile-weighted compression
+/// clears threshold, then ignition is admitted.
+pub fn polytropic_ignition_condition_from_lane_emden_profile(
+    g: f64,
+    mu: f64,
+    xi: f64,
+    t_ign: f64,
+    mass: f64,
+    rho_c: f64,
+    profile: &[(f64, f64, f64)],
+) -> Option<bool> {
+    let avg_theta = lane_emden_average_theta_from_profile(profile)?;
+    if avg_theta > 1.0 {
+        return None;
+    }
+    let profile_comp = lane_emden_profile_weighted_compression(mass, rho_c, profile)?;
+    let threshold = minimum_polytropic_compression(g, mu, xi, t_ign);
+    Some(profile_comp >= threshold)
+}
+
 /// Polytropic core-temperature proxy:
 /// T_c ∝ ξ G μ √(M ρ_c)
 ///
@@ -592,6 +634,31 @@ mod tests {
         let (_xi, theta, _z) = sol.last().copied().expect("last");
         let expected = 1.0f64.sin() / 1.0;
         assert!((theta - expected).abs() < 1.0e-2, "theta={theta}, expected={expected}");
+    }
+
+    #[test]
+    fn lane_emden_profile_weighted_ignition_condition_tracks_threshold() {
+        let profile = lane_emden_integrate_rk4_nat(1, 1.0, 1.0e-3).expect("profile");
+        let on = polytropic_ignition_condition_from_lane_emden_profile(
+            2.0, 3.0, 4.0, 5.0, 1.0, 1.0, &profile,
+        )
+        .expect("on");
+        assert!(on);
+
+        let off = polytropic_ignition_condition_from_lane_emden_profile(
+            2.0, 3.0, 4.0, 5.0, 0.01, 0.01, &profile,
+        )
+        .expect("off");
+        assert!(!off);
+    }
+
+    #[test]
+    fn lane_emden_profile_ignition_rejects_avg_theta_above_one() {
+        let fake = vec![(0.0, 1.2, 0.0), (0.1, 1.1, -0.1)];
+        let cond = polytropic_ignition_condition_from_lane_emden_profile(
+            2.0, 3.0, 4.0, 5.0, 1.0, 1.0, &fake,
+        );
+        assert!(cond.is_none());
     }
 
     #[test]
