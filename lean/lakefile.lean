@@ -30,6 +30,7 @@ lean_lib Gutoe where
              `Gutoe.SynchrotronTransfer,
              `Gutoe.StrongCP,
              `Gutoe.StrongCPPathIntegral,
+             `Gutoe.StrongCPVacuum,
              `Gutoe.FalsifiabilityCatalog,
              `Gutoe.AsymptoticFreedomEntropy,
              `Gutoe.SM.Rep,
