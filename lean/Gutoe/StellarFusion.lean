@@ -259,6 +259,69 @@ theorem pp_weak_rate_positive_from_su2_and_gamow
   rw [hfermiEq]
   exact mul_pos (mul_pos hfermiPos hρp2) hgamPos
 
+/-- Maxwell-Boltzmann thermal weight for collision energy `E` at temperature scale `T`. -/
+noncomputable def maxwellBoltzmannWeight (T E : ℝ) : ℝ :=
+  Real.exp (-E / T)
+
+theorem maxwell_boltzmann_weight_positive (T E : ℝ) :
+    0 < maxwellBoltzmannWeight T E := by
+  unfold maxwellBoltzmannWeight
+  exact Real.exp_pos _
+
+/-- Pointwise thermal pp kernel: weak-rate kernel times Maxwell-Boltzmann weight. -/
+noncomputable def ppThermalKernel
+    (g f0 protonDensity mReduced T E : ℝ) : ℝ :=
+  ppWeakRateFromSU2 g f0 protonDensity mReduced E * maxwellBoltzmannWeight T E
+
+theorem pp_thermal_kernel_positive
+    (g f0 protonDensity mReduced T E : ℝ)
+    (hg : g ≠ 0)
+    (hf0 : f0 ≠ 0)
+    (hρp : 0 < protonDensity)
+    (hm : 0 < mReduced)
+    (hE : 0 < E) :
+    0 < ppThermalKernel g f0 protonDensity mReduced T E := by
+  unfold ppThermalKernel
+  have hrate :
+      0 < ppWeakRateFromSU2 g f0 protonDensity mReduced E :=
+    (pp_weak_rate_positive_from_su2_and_gamow g f0 protonDensity mReduced E
+      hg hf0 hρp hm hE).2
+  have hmb : 0 < maxwellBoltzmannWeight T E :=
+    maxwell_boltzmann_weight_positive T E
+  exact mul_pos hrate hmb
+
+/-- 3-point positive quadrature witness for Maxwell-Boltzmann thermal averaging. -/
+noncomputable def ppThermalAverage3
+    (g f0 protonDensity mReduced T E1 E2 E3 : ℝ) : ℝ :=
+  (ppThermalKernel g f0 protonDensity mReduced T E1 +
+   ppThermalKernel g f0 protonDensity mReduced T E2 +
+   ppThermalKernel g f0 protonDensity mReduced T E3) / 3
+
+theorem pp_thermal_average3_positive
+    (g f0 protonDensity mReduced T E1 E2 E3 : ℝ)
+    (hg : g ≠ 0)
+    (hf0 : f0 ≠ 0)
+    (hρp : 0 < protonDensity)
+    (hm : 0 < mReduced)
+    (hE1 : 0 < E1)
+    (hE2 : 0 < E2)
+    (hE3 : 0 < E3) :
+    0 < ppThermalAverage3 g f0 protonDensity mReduced T E1 E2 E3 := by
+  unfold ppThermalAverage3
+  have hk1 : 0 < ppThermalKernel g f0 protonDensity mReduced T E1 :=
+    pp_thermal_kernel_positive g f0 protonDensity mReduced T E1 hg hf0 hρp hm hE1
+  have hk2 : 0 < ppThermalKernel g f0 protonDensity mReduced T E2 :=
+    pp_thermal_kernel_positive g f0 protonDensity mReduced T E2 hg hf0 hρp hm hE2
+  have hk3 : 0 < ppThermalKernel g f0 protonDensity mReduced T E3 :=
+    pp_thermal_kernel_positive g f0 protonDensity mReduced T E3 hg hf0 hρp hm hE3
+  have hsum : 0 <
+      ppThermalKernel g f0 protonDensity mReduced T E1 +
+      ppThermalKernel g f0 protonDensity mReduced T E2 +
+      ppThermalKernel g f0 protonDensity mReduced T E3 := by
+    nlinarith
+  have hthree : (0 : ℝ) < 3 := by norm_num
+  exact div_pos hsum hthree
+
 -- ── 4) Ignition threshold + hydrostatic balance witness ─────────────────────
 
 /-- Minimal linearized core-temperature compression model:

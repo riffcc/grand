@@ -251,6 +251,45 @@ pub fn pp_weak_rate_from_su2_and_gamow(
     Some(weak * proton_density.powi(2) * gamow)
 }
 
+/// Maxwell-Boltzmann thermal weight exp(-E/T).
+pub fn maxwell_boltzmann_weight(temperature_scale: f64, collision_energy: f64) -> Option<f64> {
+    if temperature_scale <= 0.0 {
+        return None;
+    }
+    Some((-collision_energy / temperature_scale).exp())
+}
+
+/// Pointwise thermal pp kernel = weak-rate kernel * MB thermal weight.
+pub fn pp_thermal_kernel(
+    g: f64,
+    f0: f64,
+    proton_density: f64,
+    m_reduced: f64,
+    temperature_scale: f64,
+    collision_energy: f64,
+) -> Option<f64> {
+    let rate = pp_weak_rate_from_su2_and_gamow(g, f0, proton_density, m_reduced, collision_energy)?;
+    let w = maxwell_boltzmann_weight(temperature_scale, collision_energy)?;
+    Some(rate * w)
+}
+
+/// Positive 3-point quadrature proxy for a thermally averaged pp rate.
+pub fn pp_thermal_average3(
+    g: f64,
+    f0: f64,
+    proton_density: f64,
+    m_reduced: f64,
+    temperature_scale: f64,
+    e1: f64,
+    e2: f64,
+    e3: f64,
+) -> Option<f64> {
+    let k1 = pp_thermal_kernel(g, f0, proton_density, m_reduced, temperature_scale, e1)?;
+    let k2 = pp_thermal_kernel(g, f0, proton_density, m_reduced, temperature_scale, e2)?;
+    let k3 = pp_thermal_kernel(g, f0, proton_density, m_reduced, temperature_scale, e3)?;
+    Some((k1 + k2 + k3) / 3.0)
+}
+
 /// Lane-Emden-style compression proxy used by the Lean stellar-fusion bridge.
 #[inline]
 pub fn lane_emden_compression_proxy(mass: f64, rho_c: f64) -> f64 {
@@ -400,6 +439,25 @@ mod tests {
         let rate =
             pp_weak_rate_from_su2_and_gamow(0.65, 246.0, 1.0e30, 469.136, 0.002).expect("rate");
         assert!(rate > 0.0);
+    }
+
+    #[test]
+    fn maxwell_boltzmann_weight_is_positive_for_positive_temperature() {
+        let w = maxwell_boltzmann_weight(0.002, 0.001).expect("w");
+        assert!(w > 0.0 && w <= 1.0);
+    }
+
+    #[test]
+    fn pp_thermal_kernel_is_strictly_positive_under_physical_inputs() {
+        let k = pp_thermal_kernel(0.65, 246.0, 1.0e30, 469.136, 0.002, 0.001).expect("k");
+        assert!(k > 0.0);
+    }
+
+    #[test]
+    fn pp_thermal_average3_is_strictly_positive_under_physical_inputs() {
+        let avg = pp_thermal_average3(0.65, 246.0, 1.0e30, 469.136, 0.002, 0.0008, 0.001, 0.0012)
+            .expect("avg");
+        assert!(avg > 0.0);
     }
 
     // ── Black-hole entropy ───────────────────────────────────────────────────
