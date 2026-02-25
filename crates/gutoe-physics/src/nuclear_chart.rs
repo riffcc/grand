@@ -369,6 +369,15 @@ fn proton_magic_weight(magic_z: u16, coeff: f64, cap: f64) -> f64 {
     (1.0 + coeff * x * x).clamp(1.0, cap)
 }
 
+fn neutron_strutinsky_mass_weight(a: f64, shell: ShellParams) -> f64 {
+    // Mild A-dependent tilt for microscopic neutron shell residuals:
+    // - boosts mid-mass closures (N~50) slightly
+    // - damps very heavy closures (N~126) to avoid overbinding drift.
+    // Uses harmonic-oscillator scaling spirit (~A^(-1/3)).
+    let a_ref = shell.strutinsky_ws_a_ref.max(1.0);
+    (a / a_ref).powf(-1.0 / 3.0).clamp(0.70, 1.30)
+}
+
 #[derive(Clone, Copy)]
 struct Orbital {
     n: u8,
@@ -729,9 +738,10 @@ fn semf_binding_mev(
         let sn = neutron_shell_table
             .and_then(|tab| tab.get(n as usize).copied())
             .unwrap_or(0.0);
+        let sn_weight = neutron_strutinsky_mass_weight(a, shell);
         (
             gaussian_z + shell.strutinsky_mix * sz,
-            gaussian_n + shell.strutinsky_mix * sn,
+            gaussian_n + shell.strutinsky_mix * sn * sn_weight,
         )
     } else {
         (gaussian_z, gaussian_n)
