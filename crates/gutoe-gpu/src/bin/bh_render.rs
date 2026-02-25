@@ -4008,6 +4008,12 @@ fn run_kerr_metrics_report(view: &View, width: usize, height: usize, out_dir: &P
     let disk_model = DiskModel::from_env();
     let plasma_model = PlasmaModel::from_env();
     let spins = parse_csv_f64_env("BH_KERR_SWEEP", &[0.0, 0.3, 0.6, 0.9]);
+    let inclinations = parse_csv_f64_env("BH_INC_SWEEP", &[view.inc]);
+    let default_rhigh = std::env::var("BH_R_HIGH")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(40.0);
+    let r_highs = parse_csv_f64_env("BH_RHIGH_SWEEP", &[default_rhigh]);
 
     let cfg = RenderConfig {
         width,
@@ -4029,60 +4035,75 @@ fn run_kerr_metrics_report(view: &View, width: usize, height: usize, out_dir: &P
     let mut f = std::fs::File::create(&csv_path).expect("create kerr metrics csv");
     writeln!(
         f,
-        "a_star,shadow_cx_px,shadow_cy_px,shadow_radius_px,shadow_diameter_px,ring_thickness_px,flux_left,flux_right,flux_asymmetry,closure_phase_deg"
+        "a_star,inc_deg,r_high,shadow_cx_px,shadow_cy_px,shadow_radius_px,shadow_diameter_px,ring_thickness_px,flux_left,flux_right,flux_asymmetry,closure_phase_deg"
     )
     .expect("write csv header");
 
     eprintln!("\nKerr metrics sweep: {} @ {}x{}", view.slug, width, height);
-    for a in spins {
-        let kerr = KerrMetric::new(metric.r_s, a).expect("invalid sweep a*");
-        let img = render_with_options(
-            &metric,
-            Some(&kerr),
-            view.disk_inner,
-            view.disk_outer,
-            &cfg,
-            view.az,
-            view.doppler,
-            view.ring_mode,
-            view.interior_mode,
-            view.core_look_mode,
-            spectral_band,
-            disk_model,
-            plasma_model,
-            use_transfer,
-            tau_scale,
-            true,
-            r_cam_rs,
-            0.5,
-            0.5,
-        );
-        let m = compute_kerr_image_metrics(&img, width, height);
-        writeln!(
-            f,
-            "{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.9},{:.9},{:.9},{:.6}",
-            a,
-            m.shadow_cx,
-            m.shadow_cy,
-            m.shadow_radius,
-            m.shadow_diameter,
-            m.ring_thickness,
-            m.flux_left,
-            m.flux_right,
-            m.flux_asymmetry,
-            m.closure_phase_deg,
-        )
-        .expect("write csv row");
-        eprintln!(
-            "  a*={:.2}  cx={:.2} cy={:.2}  D_sh={:.2}  ring_w={:.2}  A_LR={:+.4}  CP={:+.2}°",
-            a,
-            m.shadow_cx,
-            m.shadow_cy,
-            m.shadow_diameter,
-            m.ring_thickness,
-            m.flux_asymmetry,
-            m.closure_phase_deg
-        );
+    let prev_r_high = std::env::var("BH_R_HIGH").ok();
+    for inc in &inclinations {
+        let mut cfg_inc = cfg.clone();
+        cfg_inc.inclination_deg = *inc;
+        for rh in &r_highs {
+            std::env::set_var("BH_R_HIGH", format!("{rh:.9}"));
+            for a in &spins {
+                let kerr = KerrMetric::new(metric.r_s, *a).expect("invalid sweep a*");
+                let img = render_with_options(
+                    &metric,
+                    Some(&kerr),
+                    view.disk_inner,
+                    view.disk_outer,
+                    &cfg_inc,
+                    view.az,
+                    view.doppler,
+                    view.ring_mode,
+                    view.interior_mode,
+                    view.core_look_mode,
+                    spectral_band,
+                    disk_model,
+                    plasma_model,
+                    use_transfer,
+                    tau_scale,
+                    true,
+                    r_cam_rs,
+                    0.5,
+                    0.5,
+                );
+                let m = compute_kerr_image_metrics(&img, width, height);
+                writeln!(
+                    f,
+                    "{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.9},{:.9},{:.9},{:.6}",
+                    *a,
+                    *inc,
+                    *rh,
+                    m.shadow_cx,
+                    m.shadow_cy,
+                    m.shadow_radius,
+                    m.shadow_diameter,
+                    m.ring_thickness,
+                    m.flux_left,
+                    m.flux_right,
+                    m.flux_asymmetry,
+                    m.closure_phase_deg,
+                )
+                .expect("write csv row");
+                eprintln!(
+                    "  a*={:.2} inc={:.1} R_high={:.1}  D_sh={:.2}  ring_w={:.2}  A_LR={:+.4}  CP={:+.2}°",
+                    *a,
+                    *inc,
+                    *rh,
+                    m.shadow_diameter,
+                    m.ring_thickness,
+                    m.flux_asymmetry,
+                    m.closure_phase_deg
+                );
+            }
+        }
+    }
+    if let Some(v) = prev_r_high {
+        std::env::set_var("BH_R_HIGH", v);
+    } else {
+        std::env::remove_var("BH_R_HIGH");
     }
     eprintln!("  wrote {}", csv_path.display());
 }
