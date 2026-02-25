@@ -167,6 +167,122 @@ theorem regge_edge_projection_to_bridge
   intro μ ν
   exact hProject μ ν (hEdgeEq (embed μ ν))
 
+/-- Edge labels for the 6-tetra SC cube decomposition (19 unique edges). -/
+abbrev SimpEdge := Fin 19
+
+/-- Endpoint table for the 19 unique edges appearing in `scCubeTetrahedra`. -/
+def simpEdgeEndpoints (e : SimpEdge) : CubeVertex × CubeVertex :=
+  match e.1 with
+  | 0 => ((0 : CubeVertex), (1 : CubeVertex))
+  | 1 => ((0 : CubeVertex), (2 : CubeVertex))
+  | 2 => ((0 : CubeVertex), (3 : CubeVertex))
+  | 3 => ((0 : CubeVertex), (4 : CubeVertex))
+  | 4 => ((0 : CubeVertex), (5 : CubeVertex))
+  | 5 => ((0 : CubeVertex), (6 : CubeVertex))
+  | 6 => ((0 : CubeVertex), (7 : CubeVertex))
+  | 7 => ((1 : CubeVertex), (3 : CubeVertex))
+  | 8 => ((1 : CubeVertex), (5 : CubeVertex))
+  | 9 => ((1 : CubeVertex), (7 : CubeVertex))
+  | 10 => ((2 : CubeVertex), (3 : CubeVertex))
+  | 11 => ((2 : CubeVertex), (6 : CubeVertex))
+  | 12 => ((2 : CubeVertex), (7 : CubeVertex))
+  | 13 => ((3 : CubeVertex), (7 : CubeVertex))
+  | 14 => ((4 : CubeVertex), (5 : CubeVertex))
+  | 15 => ((4 : CubeVertex), (6 : CubeVertex))
+  | 16 => ((4 : CubeVertex), (7 : CubeVertex))
+  | 17 => ((5 : CubeVertex), (7 : CubeVertex))
+  | 18 => ((6 : CubeVertex), (7 : CubeVertex))
+  | _ => ((0 : CubeVertex), (1 : CubeVertex))
+
+/-- Every edge in the endpoint table has distinct endpoints. -/
+theorem simp_edge_endpoints_distinct :
+    ∀ e : SimpEdge, (simpEdgeEndpoints e).1 ≠ (simpEdgeEndpoints e).2 := by
+  intro e
+  fin_cases e <;> decide
+
+/-- Cartesian coordinates for unit-cube vertices used for edge-to-tensor projection. -/
+def cubeCoord : CubeVertex → Fin 3 → ℝ
+  | 0 => ![0, 0, 0]
+  | 1 => ![1, 0, 0]
+  | 2 => ![0, 1, 0]
+  | 3 => ![1, 1, 0]
+  | 4 => ![0, 0, 1]
+  | 5 => ![1, 0, 1]
+  | 6 => ![0, 1, 1]
+  | 7 => ![1, 1, 1]
+
+/-- Oriented edge vector in the unit-cube chart. -/
+def simpEdgeVector (e : SimpEdge) : Fin 3 → ℝ :=
+  let a := (simpEdgeEndpoints e).1
+  let b := (simpEdgeEndpoints e).2
+  fun i => cubeCoord b i - cubeCoord a i
+
+/-- Canonical projection weight from edge vectors to spatial tensor components. -/
+def edgeProjectionWeight (μ ν : Fin 3) (e : SimpEdge) : ℝ :=
+  simpEdgeVector e μ * simpEdgeVector e ν
+
+/-- Residual on edge equations (`δS/δl - source`). -/
+def edgeResidual {Edge : Type} (dSdl source : Edge → ℝ) : Edge → ℝ :=
+  fun e => dSdl e - source e
+
+/-- Generic weighted projection of edge residuals to spatial tensor components. -/
+def projectedResidual
+    (w : Fin 3 → Fin 3 → SimpEdge → ℝ)
+    (res : SimpEdge → ℝ) (μ ν : Fin 3) : ℝ :=
+  ∑ e, w μ ν e * res e
+
+/-- If edge equations are satisfied pointwise, every projected residual vanishes. -/
+theorem projectedResidual_zero_of_reggeEdgeEquation
+    (w : Fin 3 → Fin 3 → SimpEdge → ℝ)
+    {dSdl source : SimpEdge → ℝ}
+    (hEq : reggeEdgeEquation dSdl source) :
+    ∀ μ ν, projectedResidual w (edgeResidual dSdl source) μ ν = 0 := by
+  intro μ ν
+  unfold projectedResidual
+  apply Finset.sum_eq_zero
+  intro e he
+  have hz : edgeResidual dSdl source e = 0 := by
+    unfold edgeResidual
+    linarith [hEq e]
+  simp [hz]
+
+/-- Spatial Einstein residual used in the SC edge→tensor bridge. -/
+noncomputable def spatialEinsteinResidual
+    (G H g T : TensorField (Fin 3))
+    (lP Lambda kappa : ℝ) (μ ν : Fin 3) : ℝ :=
+  G μ ν + lambda_qg * lP ^ 2 * H μ ν + Lambda * g μ ν - kappa * T μ ν
+
+/-- Concrete edge→tensor bridge model for the SC simplicialization. -/
+def EdgeToTensorProjectionModel
+    (G H g T : TensorField (Fin 3))
+    (dSdl source : SimpEdge → ℝ)
+    (lP Lambda kappa : ℝ)
+    (w : Fin 3 → Fin 3 → SimpEdge → ℝ) : Prop :=
+  ∀ μ ν,
+    spatialEinsteinResidual G H g T lP Lambda kappa μ ν =
+      projectedResidual w (edgeResidual dSdl source) μ ν
+
+/-- Discharging the projection model + edge equations yields a concrete
+    `ReggeToEinsteinBridge` on the spatial tensor block. -/
+theorem bridge_from_edge_projection_model
+    {Gdisc Gcont H g T : TensorField (Fin 3)}
+    {dSdl source : SimpEdge → ℝ}
+    {lP Lambda kappa : ℝ}
+    {w : Fin 3 → Fin 3 → SimpEdge → ℝ}
+    (hCont : ∀ μ ν, Gcont μ ν = Gdisc μ ν)
+    (hEq : reggeEdgeEquation dSdl source)
+    (hModel : EdgeToTensorProjectionModel Gdisc H g T dSdl source lP Lambda kappa w) :
+    ReggeToEinsteinBridge Gdisc Gcont H g T lP Lambda kappa := by
+  refine ⟨hCont, ?_⟩
+  intro μ ν
+  have hProjZero : projectedResidual w (edgeResidual dSdl source) μ ν = 0 :=
+    projectedResidual_zero_of_reggeEdgeEquation w hEq μ ν
+  have hModelμν := hModel μ ν
+  let lhs := Gdisc μ ν + lambda_qg * lP ^ 2 * H μ ν + Lambda * g μ ν
+  have hEq0 : lhs - kappa * T μ ν = 0 := by
+    simpa [lhs, spatialEinsteinResidual, hProjZero] using hModelμν
+  exact sub_eq_zero.mp hEq0
+
 /-- Proposition form of `ContinuumLimit.continuum_limit_exists` for bridge packaging. -/
 def ContinuumLimitStatement : Prop :=
   (2 : ℕ) ^ 4 = 16 ∧

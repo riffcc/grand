@@ -38,6 +38,13 @@ Additional bridge hardening now included:
 - edge-equation layer:
   - `reggeEdgeEquation` and stationarity-to-zero-source theorem
   - projection theorem from edge-level equations into tensor-level `ReggeToEinsteinBridge`
+- explicit SC edge→tensor projection scaffold:
+  - `SimpEdge` with 19 unique edges from the 6-tetra decomposition
+  - endpoint table `simpEdgeEndpoints`, cube coordinates `cubeCoord`, and vectors `simpEdgeVector`
+  - canonical weights `edgeProjectionWeight(μ,ν,e) = v_e^μ v_e^ν`
+  - projected residual machinery + theorem:
+    - `projectedResidual_zero_of_reggeEdgeEquation`
+    - `bridge_from_edge_projection_model`
 
 Core theorems:
 
@@ -49,6 +56,8 @@ Core theorems:
 - `deficitAngle_zero_of_full_angle`
 - `regge_stationary_implies_zero_source`
 - `regge_edge_projection_to_bridge`
+- `projectedResidual_zero_of_reggeEdgeEquation`
+- `bridge_from_edge_projection_model`
 
 ## Verification
 
