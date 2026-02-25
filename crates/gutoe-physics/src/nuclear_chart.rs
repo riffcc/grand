@@ -128,6 +128,13 @@ pub struct ShellParams {
     pub strutinsky_spacing_mev: f64,
     pub strutinsky_spin_orbit_mev: f64,
     pub strutinsky_coulomb_shift_mev: f64,
+    // Woods-Saxon surrogate controls (microscopic shell lane).
+    pub strutinsky_ws_depth_mev: f64,
+    pub strutinsky_ws_r0_fm: f64,
+    pub strutinsky_ws_diffuseness_fm: f64,
+    pub strutinsky_ws_a_ref: f64,
+    pub strutinsky_ws_ref_nosc: f64,
+    pub strutinsky_ws_coulomb_z_ref: f64,
     // Blend factor for microscopic Strutinsky residuals on top of baseline shells.
     // 0.0 = baseline-only (Gaussian attractors), 1.0 = full residual contribution.
     pub strutinsky_mix: f64,
@@ -157,10 +164,16 @@ impl Default for ShellParams {
             shell_amp: 12.0,
             shell_scale_exp: 0.25,
             use_strutinsky: true,
-            strutinsky_gamma: 6.0,
-            strutinsky_spacing_mev: 7.0,
-            strutinsky_spin_orbit_mev: 2.2,
+            strutinsky_gamma: 0.8,
+            strutinsky_spacing_mev: 8.0,
+            strutinsky_spin_orbit_mev: 4.0,
             strutinsky_coulomb_shift_mev: 0.15,
+            strutinsky_ws_depth_mev: 55.0,
+            strutinsky_ws_r0_fm: 1.25,
+            strutinsky_ws_diffuseness_fm: 0.67,
+            strutinsky_ws_a_ref: 132.0,
+            strutinsky_ws_ref_nosc: 4.0,
+            strutinsky_ws_coulomb_z_ref: 50.0,
             strutinsky_mix: 1.0,
             sigma_z: 2.5,
             sigma_n: 2.5,
@@ -404,16 +417,87 @@ fn orbital_ldot_s(orb: Orbital) -> f64 {
     }
 }
 
+fn woods_saxon_surface_radius_fm(shell: ShellParams) -> f64 {
+    shell.strutinsky_ws_r0_fm * shell.strutinsky_ws_a_ref.max(1.0).powf(1.0 / 3.0)
+}
+
+fn orbital_radius_fm(orb: Orbital, shell: ShellParams) -> f64 {
+    let n_osc = 2.0 * (orb.n as f64 - 1.0) + orb.l as f64;
+    let r_surface = woods_saxon_surface_radius_fm(shell);
+    let ref_n = shell.strutinsky_ws_ref_nosc.max(0.0);
+    let ratio = ((n_osc + 1.5) / (ref_n + 1.5)).sqrt();
+    (r_surface * ratio).max(0.25)
+}
+
+fn woods_saxon_central_mev(r_fm: f64, shell: ShellParams) -> f64 {
+    let r_surface = woods_saxon_surface_radius_fm(shell);
+    let a = shell.strutinsky_ws_diffuseness_fm.max(1e-3);
+    let x = (r_fm - r_surface) / a;
+    let f = 1.0 / (1.0 + x.exp());
+    -shell.strutinsky_ws_depth_mev * f
+}
+
+fn woods_saxon_derivative_mev_per_fm(r_fm: f64, shell: ShellParams) -> f64 {
+    let r_surface = woods_saxon_surface_radius_fm(shell);
+    let a = shell.strutinsky_ws_diffuseness_fm.max(1e-3);
+    let x = (r_fm - r_surface) / a;
+    let ex = x.exp();
+    shell.strutinsky_ws_depth_mev * ex / (a * (1.0 + ex).powi(2))
+}
+
+fn proton_coulomb_mev(r_fm: f64, shell: ShellParams) -> f64 {
+    let r_surface = woods_saxon_surface_radius_fm(shell);
+    let z_ref = shell.strutinsky_ws_coulomb_z_ref.max(1.0);
+    let e2 = 1.439_976_4_f64; // MeV·fm
+    if r_fm <= r_surface {
+        e2 * z_ref * (3.0 - (r_fm / r_surface).powi(2)) / (2.0 * r_surface)
+    } else {
+        e2 * z_ref / r_fm
+    }
+}
+
 fn orbital_energy_mev(orb: Orbital, is_proton: bool, shell: ShellParams) -> f64 {
     let n_osc = 2.0 * (orb.n as f64 - 1.0) + orb.l as f64;
-    let base = shell.strutinsky_spacing_mev * (n_osc + 1.5);
-    let spin_orbit = -shell.strutinsky_spin_orbit_mev * orbital_ldot_s(orb) / (n_osc + 1.0);
+    let hw = if shell.strutinsky_spacing_mev > 0.0 {
+        shell.strutinsky_spacing_mev
+    } else {
+        41.0 * shell.strutinsky_ws_a_ref.max(1.0).powf(-1.0 / 3.0)
+    };
+    let r_fm = orbital_radius_fm(orb, shell);
+    let v_ws = woods_saxon_central_mev(r_fm, shell);
+    let d_v_dr = woods_saxon_derivative_mev_per_fm(r_fm, shell);
+    let r_surface = woods_saxon_surface_radius_fm(shell).max(1e-3);
+    let peak_shape = (1.0 / r_surface) * (shell.strutinsky_ws_depth_mev / (4.0 * shell.strutinsky_ws_diffuseness_fm.max(1e-3)));
+    let shape = ((1.0 / r_fm.max(1e-3)) * d_v_dr) / peak_shape.max(1e-6);
+    let spin_orbit = -shell.strutinsky_spin_orbit_mev * shape * orbital_ldot_s(orb);
     let coulomb = if is_proton {
-        shell.strutinsky_coulomb_shift_mev * (orb.l as f64 + 0.5)
+        proton_coulomb_mev(r_fm, shell) + shell.strutinsky_coulomb_shift_mev * (orb.l as f64 + 0.5)
     } else {
         0.0
     };
-    base + spin_orbit + coulomb
+    hw * (n_osc + 1.5) + v_ws + spin_orbit + coulomb
+}
+
+fn solve_chemical_potential(levels: &[f64], target_particles: usize, gamma: f64) -> f64 {
+    if levels.is_empty() || target_particles == 0 {
+        return 0.0;
+    }
+    let g = gamma.max(1e-6);
+    let mut lo = levels[0] - 40.0 * g;
+    let mut hi = levels[levels.len() - 1] + 40.0 * g;
+    for _ in 0..96 {
+        let mid = 0.5 * (lo + hi);
+        let occ_sum: f64 = levels
+            .iter()
+            .map(|&e| 1.0 / (1.0 + ((e - mid) / g).exp()))
+            .sum();
+        if occ_sum > target_particles as f64 {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    0.5 * (lo + hi)
 }
 
 fn build_strutinsky_shell_table(max_count: u16, is_proton: bool, shell: ShellParams) -> Vec<f64> {
@@ -441,22 +525,19 @@ fn build_strutinsky_shell_table(max_count: u16, is_proton: bool, shell: ShellPar
         e_disc[n] = e_disc[n - 1] + levels[n - 1];
     }
 
-    let gamma = shell.strutinsky_gamma.max(1.0);
-    let radius = (4.0 * gamma).ceil() as isize;
     let mut delta = vec![0.0; max_count + 1];
     for n in 1..=max_count {
-        let ni = n as isize;
-        let lo = (ni - radius).max(1) as usize;
-        let hi = (ni + radius).min(max_count as isize) as usize;
-        let mut wsum = 0.0;
-        let mut esum = 0.0;
-        for k in lo..=hi {
-            let x = (n as f64 - k as f64) / gamma;
-            let w = (-0.5 * x * x).exp();
-            wsum += w;
-            esum += w * e_disc[k];
-        }
-        let e_smooth = if wsum > 0.0 { esum / wsum } else { e_disc[n] };
+        // Finite-temperature Strutinsky surrogate:
+        // smooth occupations via Fermi-Dirac around chemical potential mu(N).
+        let mu = solve_chemical_potential(&levels, n, shell.strutinsky_gamma);
+        let g = shell.strutinsky_gamma.max(1e-6);
+        let e_smooth: f64 = levels
+            .iter()
+            .map(|&e| {
+                let f = 1.0 / (1.0 + ((e - mu) / g).exp());
+                e * f
+            })
+            .sum();
         delta[n] = e_smooth - e_disc[n];
     }
 

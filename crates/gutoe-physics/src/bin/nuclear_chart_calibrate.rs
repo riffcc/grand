@@ -99,6 +99,18 @@ fn main() -> anyhow::Result<()> {
         "GUTOE_NUCLEAR_STRUTINSKY_COULOMB_SHIFT_GRID",
         &[default_shell.strutinsky_coulomb_shift_mev],
     );
+    let strutinsky_ws_depth_grid = parse_list(
+        "GUTOE_NUCLEAR_STRUTINSKY_WS_DEPTH_GRID",
+        &[default_shell.strutinsky_ws_depth_mev],
+    );
+    let strutinsky_ws_diffuseness_grid = parse_list(
+        "GUTOE_NUCLEAR_STRUTINSKY_WS_DIFFUSENESS_GRID",
+        &[default_shell.strutinsky_ws_diffuseness_fm],
+    );
+    let strutinsky_ws_a_ref_grid = parse_list(
+        "GUTOE_NUCLEAR_STRUTINSKY_WS_A_REF_GRID",
+        &[default_shell.strutinsky_ws_a_ref],
+    );
     let sigma_z_grid = parse_list("GUTOE_NUCLEAR_SIGMA_Z_GRID", &[3.0, 4.0, 5.0, 6.0]);
     let sigma_n_grid = parse_list("GUTOE_NUCLEAR_SIGMA_N_GRID", &[4.0, 5.0, 6.0, 7.0]);
     let sigma_pairs: Vec<(f64, f64)> = if shell_sigma_grid.is_empty() {
@@ -136,6 +148,9 @@ fn main() -> anyhow::Result<()> {
         strutinsky_spacing_mev: f64,
         strutinsky_spin_orbit_mev: f64,
         strutinsky_coulomb_shift_mev: f64,
+        strutinsky_ws_depth_mev: f64,
+        strutinsky_ws_diffuseness_fm: f64,
+        strutinsky_ws_a_ref: f64,
         sigma_z: f64,
         sigma_n: f64,
         superheavy_proton_amp: f64,
@@ -161,7 +176,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut leaderboard = String::from(
-        "rank,score,amp_z,amp_n,shell_amp,shell_scale_exp,use_strutinsky,strutinsky_mix,strutinsky_gamma,strutinsky_spacing_mev,strutinsky_spin_orbit_mev,strutinsky_coulomb_shift_mev,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,proton_avg_delta_s2p,proton_min_delta_s2p,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
+        "rank,score,amp_z,amp_n,shell_amp,shell_scale_exp,use_strutinsky,strutinsky_mix,strutinsky_gamma,strutinsky_spacing_mev,strutinsky_spin_orbit_mev,strutinsky_coulomb_shift_mev,strutinsky_ws_depth_mev,strutinsky_ws_diffuseness_fm,strutinsky_ws_a_ref,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,proton_avg_delta_s2p,proton_min_delta_s2p,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
     );
     let mut rows: Vec<Row> = Vec::new();
     let mut best_score = f64::NEG_INFINITY;
@@ -180,6 +195,9 @@ fn main() -> anyhow::Result<()> {
                                 for &strutinsky_spacing_mev in &strutinsky_spacing_grid {
                                     for &strutinsky_spin_orbit_mev in &strutinsky_spin_orbit_grid {
                                         for &strutinsky_coulomb_shift_mev in &strutinsky_coulomb_shift_grid {
+                                            for &strutinsky_ws_depth_mev in &strutinsky_ws_depth_grid {
+                                                for &strutinsky_ws_diffuseness_fm in &strutinsky_ws_diffuseness_grid {
+                                                    for &strutinsky_ws_a_ref in &strutinsky_ws_a_ref_grid {
                                             for &(sigma_z, sigma_n) in &sigma_pairs {
                                                 for &superheavy_proton_amp in &superheavy_proton_amp_grid {
                                                     for &superheavy_proton_sigma in &superheavy_proton_sigma_grid {
@@ -204,6 +222,9 @@ fn main() -> anyhow::Result<()> {
                                                                                     strutinsky_spacing_mev,
                                                                                     strutinsky_spin_orbit_mev,
                                                                                     strutinsky_coulomb_shift_mev,
+                                                                                    strutinsky_ws_depth_mev,
+                                                                                    strutinsky_ws_diffuseness_fm,
+                                                                                    strutinsky_ws_a_ref,
                                                                                     sigma_z,
                                                                                     sigma_n,
                                                                                     superheavy_proton_amplitude: superheavy_proton_amp,
@@ -271,6 +292,9 @@ fn main() -> anyhow::Result<()> {
                                                                                 strutinsky_spacing_mev,
                                                                                 strutinsky_spin_orbit_mev,
                                                                                 strutinsky_coulomb_shift_mev,
+                                                                                strutinsky_ws_depth_mev,
+                                                                                strutinsky_ws_diffuseness_fm,
+                                                                                strutinsky_ws_a_ref,
                                                                                 sigma_z,
                                                                                 sigma_n,
                                                                                 superheavy_proton_amp,
@@ -310,6 +334,9 @@ fn main() -> anyhow::Result<()> {
                                                     }
                                                 }
                                             }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -325,7 +352,7 @@ fn main() -> anyhow::Result<()> {
 
     for (idx, row) in rows.iter().enumerate() {
         leaderboard.push_str(&format!(
-            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
+            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6},{:.6}\n",
             idx + 1,
             row.score,
             row.amp_z,
@@ -338,6 +365,9 @@ fn main() -> anyhow::Result<()> {
             row.strutinsky_spacing_mev,
             row.strutinsky_spin_orbit_mev,
             row.strutinsky_coulomb_shift_mev,
+            row.strutinsky_ws_depth_mev,
+            row.strutinsky_ws_diffuseness_fm,
+            row.strutinsky_ws_a_ref,
             row.sigma_z,
             row.sigma_n,
             row.superheavy_proton_amp,
@@ -374,7 +404,7 @@ fn main() -> anyhow::Result<()> {
         min_superheavy_proton_delta_s2p_mev: 0.0,
     });
     let best_desc = format!(
-        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},shell_amp:{:.3},shell_scale_exp:{:.3},use_strutinsky:{},strutinsky_mix:{:.3},strutinsky_gamma:{:.3},strutinsky_spacing:{:.3},strutinsky_spin_orbit:{:.3},strutinsky_coulomb_shift:{:.3},sigma_z:{:.3},sigma_n:{:.3},superheavy_proton_amp:{:.3},superheavy_proton_sigma:{:.3},heavy_amp:{:.3},heavy_sigma_z:{:.3},heavy_sigma_n:{:.3},heavy_target_z:{:.3},heavy_target_n:{:.3}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\nproton_avg_delta_s2p={:.6}\nproton_min_delta_s2p={:.6}\n",
+        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},shell_amp:{:.3},shell_scale_exp:{:.3},use_strutinsky:{},strutinsky_mix:{:.3},strutinsky_gamma:{:.3},strutinsky_spacing:{:.3},strutinsky_spin_orbit:{:.3},strutinsky_coulomb_shift:{:.3},strutinsky_ws_depth:{:.3},strutinsky_ws_diffuseness:{:.3},strutinsky_ws_a_ref:{:.3},sigma_z:{:.3},sigma_n:{:.3},superheavy_proton_amp:{:.3},superheavy_proton_sigma:{:.3},heavy_amp:{:.3},heavy_sigma_z:{:.3},heavy_sigma_n:{:.3},heavy_target_z:{:.3},heavy_target_n:{:.3}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\nproton_avg_delta_s2p={:.6}\nproton_min_delta_s2p={:.6}\n",
         best_score,
         best_shell.amplitude_z,
         best_shell.amplitude_n,
@@ -386,6 +416,9 @@ fn main() -> anyhow::Result<()> {
         best_shell.strutinsky_spacing_mev,
         best_shell.strutinsky_spin_orbit_mev,
         best_shell.strutinsky_coulomb_shift_mev,
+        best_shell.strutinsky_ws_depth_mev,
+        best_shell.strutinsky_ws_diffuseness_fm,
+        best_shell.strutinsky_ws_a_ref,
         best_shell.sigma_z,
         best_shell.sigma_n,
         best_shell.superheavy_proton_amplitude,

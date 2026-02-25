@@ -89,6 +89,30 @@ fn main() -> anyhow::Result<()> {
                 "GUTOE_NUCLEAR_STRUTINSKY_COULOMB_SHIFT_MEV",
                 default_shell.strutinsky_coulomb_shift_mev,
             ),
+            strutinsky_ws_depth_mev: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_WS_DEPTH_MEV",
+                default_shell.strutinsky_ws_depth_mev,
+            ),
+            strutinsky_ws_r0_fm: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_WS_R0_FM",
+                default_shell.strutinsky_ws_r0_fm,
+            ),
+            strutinsky_ws_diffuseness_fm: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_WS_DIFFUSENESS_FM",
+                default_shell.strutinsky_ws_diffuseness_fm,
+            ),
+            strutinsky_ws_a_ref: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_WS_A_REF",
+                default_shell.strutinsky_ws_a_ref,
+            ),
+            strutinsky_ws_ref_nosc: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_WS_REF_NOSC",
+                default_shell.strutinsky_ws_ref_nosc,
+            ),
+            strutinsky_ws_coulomb_z_ref: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_WS_COULOMB_Z_REF",
+                default_shell.strutinsky_ws_coulomb_z_ref,
+            ),
             strutinsky_mix: env_f64("GUTOE_NUCLEAR_STRUTINSKY_MIX", default_shell.strutinsky_mix),
             sigma_z: env_f64("GUTOE_NUCLEAR_SIGMA_Z", default_shell.sigma_z),
             sigma_n: env_f64("GUTOE_NUCLEAR_SIGMA_N", default_shell.sigma_n),
