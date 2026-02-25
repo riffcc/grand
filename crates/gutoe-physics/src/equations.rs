@@ -466,6 +466,28 @@ pub fn polytropic_ignition_condition_from_lane_emden_profile(
     Some(profile_comp >= threshold)
 }
 
+/// Specialized n=0 profile ignition condition.
+///
+/// This is the executable counterpart of the Lean theorem where the
+/// envelope bound `avg(theta) <= 1` is discharged for the exact n=0 profile.
+pub fn polytropic_ignition_condition_from_lane_emden_n0_profile(
+    g: f64,
+    mu: f64,
+    xi: f64,
+    t_ign: f64,
+    mass: f64,
+    rho_c: f64,
+    profile: &[(f64, f64, f64)],
+) -> Option<bool> {
+    let avg_theta = lane_emden_average_theta_from_profile(profile)?;
+    if avg_theta > 1.0 + 1e-9 {
+        return None;
+    }
+    let profile_comp = lane_emden_profile_weighted_compression(mass, rho_c, profile)?;
+    let threshold = minimum_polytropic_compression(g, mu, xi, t_ign);
+    Some(profile_comp >= threshold)
+}
+
 /// Polytropic core-temperature proxy:
 /// T_c ∝ ξ G μ √(M ρ_c)
 ///
@@ -659,6 +681,23 @@ mod tests {
             2.0, 3.0, 4.0, 5.0, 1.0, 1.0, &fake,
         );
         assert!(cond.is_none());
+    }
+
+    #[test]
+    fn lane_emden_n0_profile_average_theta_is_bounded_by_one() {
+        let profile = lane_emden_integrate_rk4_nat(0, 2.0, 1.0e-3).expect("profile");
+        let avg = lane_emden_average_theta_from_profile(&profile).expect("avg");
+        assert!(avg <= 1.0 + 1.0e-9, "avg_theta={avg}");
+    }
+
+    #[test]
+    fn lane_emden_n0_profile_specialized_ignition_bridge_is_usable() {
+        let profile = lane_emden_integrate_rk4_nat(0, 1.0, 1.0e-3).expect("profile");
+        let cond = polytropic_ignition_condition_from_lane_emden_n0_profile(
+            2.0, 3.0, 4.0, 5.0, 1.0, 1.0, &profile,
+        )
+        .expect("condition");
+        assert!(cond);
     }
 
     #[test]

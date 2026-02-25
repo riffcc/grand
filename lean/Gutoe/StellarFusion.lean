@@ -647,4 +647,49 @@ theorem polytropic_ignition_from_lane_emden_profile
   exact polytropic_ignition_from_compression
     (hG := hG) (hμ := hμ) (hξ := hξ) (hTIgn := hTIgn) hComp
 
+/-- Pointwise `n = 0` Lane-Emden profile never exceeds 1. -/
+theorem lane_emden_theta_n0_le_one (ξ : ℝ) :
+    laneEmdenThetaN0 ξ ≤ 1 := by
+  unfold laneEmdenThetaN0
+  nlinarith [sq_nonneg ξ]
+
+/-- The finite sampled average of the exact `n = 0` profile is bounded by 1. -/
+theorem lane_emden_average_theta_n0_le_one
+    (ξ0 dξ : ℝ) (n : ℕ) :
+    laneEmdenAverageTheta laneEmdenThetaN0 ξ0 dξ n ≤ 1 := by
+  unfold laneEmdenAverageTheta
+  let s : Finset (Fin (n + 1)) := Finset.univ
+  have hsum_le : s.sum (fun i => laneEmdenThetaN0 (ξ0 + (i : ℝ) * dξ)) ≤
+      s.sum (fun _ => (1 : ℝ)) := by
+    refine Finset.sum_le_sum ?_
+    intro i _hi
+    exact lane_emden_theta_n0_le_one (ξ0 + (i : ℝ) * dξ)
+  have hs_card : s.sum (fun _ => (1 : ℝ)) = (n + 1 : ℝ) := by
+    simp [s]
+  have hpos_den : (0 : ℝ) < (n + 1 : ℝ) := by
+    exact_mod_cast Nat.succ_pos n
+  have hdiv :
+      s.sum (fun i => laneEmdenThetaN0 (ξ0 + (i : ℝ) * dξ)) / (n + 1 : ℝ) ≤
+      (n + 1 : ℝ) / (n + 1 : ℝ) := by
+    exact div_le_div_of_nonneg_right
+      (by simpa [hs_card] using hsum_le) (le_of_lt hpos_den)
+  have hone : (n + 1 : ℝ) / (n + 1 : ℝ) = 1 := by
+    field_simp [show (n + 1 : ℝ) ≠ 0 by exact ne_of_gt hpos_den]
+  simpa [s, hone] using hdiv
+
+/-- `n = 0` profile ignition bridge with the envelope bound discharged. -/
+theorem polytropic_ignition_from_lane_emden_n0_profile
+    {M rhoCentral G μ ξ TIgn ξ0 dξ : ℝ} {n : ℕ}
+    (hG : 0 < G) (hμ : 0 < μ) (hξ : 0 < ξ) (hTIgn : 0 < TIgn)
+    (hProxyNonneg : 0 ≤ laneEmdenCompressionProxy M rhoCentral)
+    (hProfile :
+      laneEmdenProfileCompression M rhoCentral laneEmdenThetaN0 ξ0 dξ n ≥
+        minimumPolytropicCompression G μ ξ TIgn) :
+    coreTemperaturePolytropic G μ ξ M rhoCentral ≥ TIgn := by
+  exact polytropic_ignition_from_lane_emden_profile
+    (hG := hG) (hμ := hμ) (hξ := hξ) (hTIgn := hTIgn)
+    (hProxyNonneg := hProxyNonneg)
+    (hAvgUpper := lane_emden_average_theta_n0_le_one ξ0 dξ n)
+    (hProfile := hProfile)
+
 end Gutoe.StellarFusion
