@@ -663,6 +663,95 @@ theorem lane_emden_average_theta_le_one_of_deriv_nonpos_on_nonneg
       hcont hdiff hderiv_nonpos hθ0)
     (hξ0 := hξ0) (hdξ := hdξ)
 
+/-- ODE-driven sampled envelope bound on a finite window:
+    if `flux(ξ)=ξ²θ'(ξ)` has strictly negative derivative in `(0,a)`,
+    then sampled averages over points constrained to `[0,a]` are bounded by `1`.
+
+    This is the finite-window version of the Lane-Emden monotonic-envelope route
+    for general `n` (while the solution remains positive). -/
+theorem lane_emden_average_theta_le_one_of_flux_deriv_negative_on_window
+    {θ θ' : ℝ → ℝ} {n a ξ0 dξ : ℝ} {k : ℕ}
+    (ha : 0 < a)
+    (hθ_pos : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, 0 < θ ξ)
+    (hθ_cont : ContinuousOn θ (Set.Icc (0 : ℝ) a))
+    (hθ_diff : DifferentiableOn ℝ θ (Set.Ioo (0 : ℝ) a))
+    (hθ_deriv : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, deriv θ ξ = θ' ξ)
+    (hθ0 : θ 0 = 1)
+    (hθ'0 : θ' 0 = 0)
+    (hflux_cont : ContinuousOn (fun ξ => ξ ^ 2 * θ' ξ) (Set.Icc (0 : ℝ) a))
+    (hflux_deriv :
+      ∀ ξ ∈ Set.Ioo (0 : ℝ) a,
+        deriv (fun t => t ^ 2 * θ' t) ξ = -(ξ ^ 2) * Real.rpow (θ ξ) n)
+    (hsample : ∀ i : Fin (k + 1), ξ0 + (i : ℝ) * dξ ∈ Set.Icc (0 : ℝ) a) :
+    laneEmdenAverageTheta θ ξ0 dξ k ≤ 1 := by
+  let flux : ℝ → ℝ := fun ξ => ξ ^ 2 * θ' ξ
+  have hflux_deriv_neg : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, deriv flux ξ < 0 := by
+    intro ξ hξ
+    have hξ2_pos : 0 < ξ ^ 2 := by
+      nlinarith [hξ.1]
+    have hpow_pos : 0 < Real.rpow (θ ξ) n := by
+      exact Real.rpow_pos_of_pos (hθ_pos ξ hξ) n
+    have hneg_rhs : (-(ξ ^ 2) * Real.rpow (θ ξ) n) < 0 := by
+      nlinarith [mul_pos hξ2_pos hpow_pos]
+    have hEq : deriv flux ξ = (-(ξ ^ 2) * Real.rpow (θ ξ) n) := by
+      simpa [flux] using hflux_deriv ξ hξ
+    simpa [hEq] using hneg_rhs
+  have hflux_strict_anti : StrictAntiOn flux (Set.Icc (0 : ℝ) a) := by
+    exact strictAntiOn_of_deriv_neg
+      (convex_Icc (0 : ℝ) a)
+      hflux_cont
+      (by simpa [interior_Icc] using hflux_deriv_neg)
+  have hθ_deriv_nonpos : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, deriv θ ξ ≤ 0 := by
+    intro ξ hξ
+    have h0mem : (0 : ℝ) ∈ Set.Icc (0 : ℝ) a := by
+      exact ⟨le_rfl, le_of_lt ha⟩
+    have hξmem : ξ ∈ Set.Icc (0 : ℝ) a := by
+      exact ⟨le_of_lt hξ.1, le_of_lt hξ.2⟩
+    have hflux_lt : flux ξ < flux 0 := hflux_strict_anti h0mem hξmem hξ.1
+    have hflux0 : flux 0 = 0 := by
+      simp [flux, hθ'0]
+    have hflux_neg : flux ξ < 0 := by
+      simpa [hflux0] using hflux_lt
+    have hξ2_pos : 0 < ξ ^ 2 := by
+      nlinarith [hξ.1]
+    have hθ'_neg : θ' ξ < 0 := by
+      have hdiv : θ' ξ = flux ξ / (ξ ^ 2) := by
+        unfold flux
+        field_simp [show ξ ≠ 0 by exact ne_of_gt hξ.1]
+      have hdiv_neg : flux ξ / (ξ ^ 2) < 0 := by
+        exact div_neg_of_neg_of_pos hflux_neg hξ2_pos
+      simpa [hdiv] using hdiv_neg
+    have hderiv_eq : deriv θ ξ = θ' ξ := hθ_deriv ξ hξ
+    linarith [hθ'_neg, hderiv_eq]
+  have hθ_anti : AntitoneOn θ (Set.Icc (0 : ℝ) a) := by
+    exact antitoneOn_of_deriv_nonpos
+      (convex_Icc (0 : ℝ) a)
+      hθ_cont
+      (by simpa [interior_Icc] using hθ_diff)
+      (by simpa [interior_Icc] using hθ_deriv_nonpos)
+  unfold laneEmdenAverageTheta
+  let s : Finset (Fin (k + 1)) := Finset.univ
+  have hsum_le : s.sum (fun i => θ (ξ0 + (i : ℝ) * dξ)) ≤
+      s.sum (fun _ => (1 : ℝ)) := by
+    refine Finset.sum_le_sum ?_
+    intro i _hi
+    have hsi : ξ0 + (i : ℝ) * dξ ∈ Set.Icc (0 : ℝ) a := hsample i
+    have h0mem : (0 : ℝ) ∈ Set.Icc (0 : ℝ) a := by exact ⟨le_rfl, le_of_lt ha⟩
+    have hθ_le0 : θ (ξ0 + (i : ℝ) * dξ) ≤ θ 0 := hθ_anti h0mem hsi hsi.1
+    simpa [hθ0] using hθ_le0
+  have hs_card : s.sum (fun _ => (1 : ℝ)) = (k + 1 : ℝ) := by
+    simp [s]
+  have hpos_den : (0 : ℝ) < (k + 1 : ℝ) := by
+    exact_mod_cast Nat.succ_pos k
+  have hdiv :
+      s.sum (fun i => θ (ξ0 + (i : ℝ) * dξ)) / (k + 1 : ℝ) ≤
+      (k + 1 : ℝ) / (k + 1 : ℝ) := by
+    exact div_le_div_of_nonneg_right
+      (by simpa [hs_card] using hsum_le) (le_of_lt hpos_den)
+  have hone : (k + 1 : ℝ) / (k + 1 : ℝ) = 1 := by
+    field_simp [show (k + 1 : ℝ) ≠ 0 by exact ne_of_gt hpos_den]
+  simpa [s, hone] using hdiv
+
 /-- Profile-weighted compression witness from a sampled Lane-Emden profile. -/
 noncomputable def laneEmdenProfileCompression
     (M rhoCentral : ℝ) (θ : ℝ → ℝ) (ξ0 dξ : ℝ) (n : ℕ) : ℝ :=
