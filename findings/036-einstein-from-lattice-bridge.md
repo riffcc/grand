@@ -49,6 +49,11 @@ Additional bridge hardening now included:
   - `ProjectionErrorBound` (`|residual - projection| ≤ C h²`)
   - `edge_projection_model_of_zero_mesh` (exact model recovered at `h=0`)
   - `bridge_from_cms_bound_zero_mesh` (constructs `ReggeToEinsteinBridge` using CMS-style bound + continuum endpoint)
+- Schläfli kill-path formalized at theorem level:
+  - `reggeVariation` (first variation object)
+  - `SchlaefliIdentity` (`Σ_e A_e dδ_e = 0`)
+  - `regge_variation_of_schlaefli` (deficit-derivative term cancellation)
+  - SC wrapper: `scSchlaefliIdentity`, `sc_regge_variation_of_schlaefli`
 
 Core theorems:
 
@@ -64,6 +69,8 @@ Core theorems:
 - `bridge_from_edge_projection_model`
 - `edge_projection_model_of_zero_mesh`
 - `bridge_from_cms_bound_zero_mesh`
+- `regge_variation_of_schlaefli`
+- `sc_regge_variation_of_schlaefli`
 
 ## Verification
 
@@ -76,3 +83,4 @@ Core theorems:
 - `GRAND-269`: variational Regge equations on that decomposition
 - `GRAND-270`: convergence of Regge action to Einstein-Hilbert on refinement
 - `GRAND-271`: deriving Newton coupling from lattice parameters (links to `GRAND-90`)
+- `GRAND-272`: proving Schläfli identity from concrete SC 19-edge geometry

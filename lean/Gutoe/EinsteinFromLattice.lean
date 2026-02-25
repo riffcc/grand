@@ -62,6 +62,37 @@ def reggeStationary
     (dSdl : Edge → ℝ) : Prop :=
   ∀ e, dSdl e = 0
 
+/-- First variation of Regge action in edge variables:
+    `δS = Σ_e (δA_e · δ_e + A_e · δδ_e)`. -/
+def reggeVariation
+    {Edge : Type}
+    [Fintype Edge]
+    (area deficit dArea dDeficit : Edge → ℝ) : ℝ :=
+  ∑ e, (dArea e * deficit e + area e * dDeficit e)
+
+/-- Schläfli identity in finite-edge form:
+    `Σ_e A_e · dδ_e = 0`. -/
+def SchlaefliIdentity
+    {Edge : Type}
+    [Fintype Edge]
+    (area dDeficit : Edge → ℝ) : Prop :=
+  ∑ e, area e * dDeficit e = 0
+
+/-- With Schläfli identity, the deficit-angle variation term cancels and
+    Regge variation reduces to `Σ_e δA_e · δ_e`. -/
+theorem regge_variation_of_schlaefli
+    {Edge : Type}
+    [Fintype Edge]
+    (area deficit dArea dDeficit : Edge → ℝ)
+    (hSch : SchlaefliIdentity area dDeficit) :
+    reggeVariation area deficit dArea dDeficit = ∑ e, dArea e * deficit e := by
+  unfold reggeVariation SchlaefliIdentity at *
+  calc
+    ∑ e, (dArea e * deficit e + area e * dDeficit e)
+        = (∑ e, dArea e * deficit e) + (∑ e, area e * dDeficit e) := by
+            simp [Finset.sum_add_distrib]
+    _ = ∑ e, dArea e * deficit e := by simpa [hSch]
+
 /-- Regge deficit angle around an edge:
     `δ_e = 2π - Σ_t θ_{e,t}`. -/
 noncomputable def deficitAngle (sumDihedral : ℝ) : ℝ :=
@@ -170,6 +201,18 @@ theorem regge_edge_projection_to_bridge
 /-- Edge labels for the 6-tetra SC cube decomposition (19 unique edges). -/
 abbrev SimpEdge := Fin 19
 
+/-- SC-specialized Schläfli identity over the 19-edge decomposition. -/
+def scSchlaefliIdentity (area dDeficit : SimpEdge → ℝ) : Prop :=
+  SchlaefliIdentity area dDeficit
+
+/-- SC-specialized cancellation theorem: once Schläfli is established on the
+    19-edge geometry, the Regge variation drops the `A_e dδ_e` term. -/
+theorem sc_regge_variation_of_schlaefli
+    (area deficit dArea dDeficit : SimpEdge → ℝ)
+    (hSch : scSchlaefliIdentity area dDeficit) :
+    reggeVariation area deficit dArea dDeficit = ∑ e, dArea e * deficit e :=
+  regge_variation_of_schlaefli area deficit dArea dDeficit hSch
+
 /-- Endpoint table for the 19 unique edges appearing in `scCubeTetrahedra`. -/
 def simpEdgeEndpoints (e : SimpEdge) : CubeVertex × CubeVertex :=
   match e.1 with
@@ -221,6 +264,20 @@ def simpEdgeVector (e : SimpEdge) : Fin 3 → ℝ :=
 def edgeProjectionWeight (μ ν : Fin 3) (e : SimpEdge) : ℝ :=
   simpEdgeVector e μ * simpEdgeVector e ν
 
+/-- Canonical coefficient map on the 19-edge set.
+    Nonzero support is on edges 0..5, giving a 6-edge generating family
+    for symmetric `3×3` tensors. -/
+def scProjectionCoeffs (S : TensorField (Fin 3)) : SimpEdge → ℝ :=
+  fun e =>
+    match e.1 with
+    | 0 => S 0 0 - S 0 1 - S 0 2
+    | 1 => S 1 1 - S 0 1 - S 1 2
+    | 2 => S 0 1
+    | 3 => S 2 2 - S 0 2 - S 1 2
+    | 4 => S 0 2
+    | 5 => S 1 2
+    | _ => 0
+
 /-- Residual on edge equations (`δS/δl - source`). -/
 def edgeResidual {Edge : Type} (dSdl source : Edge → ℝ) : Edge → ℝ :=
   fun e => dSdl e - source e
@@ -246,6 +303,16 @@ theorem projectedResidual_zero_of_reggeEdgeEquation
     linarith [hEq e]
   simp [hz]
 
+/-- Flat-space base case: zero edge residuals imply zero projected tensor residual. -/
+theorem projectedResidual_zero_of_zero_residual
+    (w : Fin 3 → Fin 3 → SimpEdge → ℝ) :
+    ∀ μ ν, projectedResidual w (fun _ => 0) μ ν = 0 := by
+  intro μ ν
+  unfold projectedResidual
+  apply Finset.sum_eq_zero
+  intro e he
+  simp
+
 /-- Spatial Einstein residual used in the SC edge→tensor bridge. -/
 noncomputable def spatialEinsteinResidual
     (G H g T : TensorField (Fin 3))
@@ -261,6 +328,25 @@ def EdgeToTensorProjectionModel
   ∀ μ ν,
     spatialEinsteinResidual G H g T lP Lambda kappa μ ν =
       projectedResidual w (edgeResidual dSdl source) μ ν
+
+/-- Zero tensor field on the spatial block. -/
+def zeroTensor3 : TensorField (Fin 3) := fun _ _ => 0
+
+/-- Flat-space base case: both Einstein residual and edge residual are zero,
+    so the projection model holds unconditionally. -/
+theorem flat_space_projection_model
+    (lP Lambda kappa : ℝ)
+    (w : Fin 3 → Fin 3 → SimpEdge → ℝ) :
+    EdgeToTensorProjectionModel zeroTensor3 zeroTensor3 zeroTensor3 zeroTensor3
+      (fun _ => 0) (fun _ => 0) lP Lambda kappa w := by
+  intro μ ν
+  have hProj : projectedResidual w (edgeResidual (fun _ => 0) (fun _ => 0)) μ ν = 0 := by
+    unfold edgeResidual
+    simpa using projectedResidual_zero_of_zero_residual w μ ν
+  have hEin : spatialEinsteinResidual zeroTensor3 zeroTensor3 zeroTensor3 zeroTensor3
+      lP Lambda kappa μ ν = 0 := by
+    simp [spatialEinsteinResidual, zeroTensor3, lambda_qg]
+  simpa [hProj, hEin]
 
 /-- CMS-style quantitative projection consistency:
     the edge-projected residual approximates the spatial Einstein residual with
