@@ -65,13 +65,21 @@ def weakRep : WeylSpecies → WeakRep
   | .nuRc => .singlet
 
 /-- Hypercharge assignment for left-chiral Weyl fields. -/
+def YqL : ℚ := 1 / 6
+def YuRc : ℚ := -2 / 3
+def YdRc : ℚ := 1 / 3
+def YlL : ℚ := -1 / 2
+def YeRc : ℚ := 1
+def YnuRc : ℚ := 0
+
+/-- Hypercharge assignment for left-chiral Weyl fields. -/
 def hypercharge : WeylSpecies → ℚ
-  | .qL => 1 / 6
-  | .uRc => -2 / 3
-  | .dRc => 1 / 3
-  | .lL => -1 / 2
-  | .eRc => 1
-  | .nuRc => 0
+  | .qL => YqL
+  | .uRc => YuRc
+  | .dRc => YdRc
+  | .lL => YlL
+  | .eRc => YeRc
+  | .nuRc => YnuRc
 
 /-- Color multiplicity from Cl(1,3) Z₃ orbit structure. -/
 def colorMultiplicity : ColorRep → ℕ
