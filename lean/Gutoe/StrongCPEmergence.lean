@@ -19,6 +19,78 @@ namespace Gutoe.StrongCPEmergence
 
 open Gutoe.StrongCPVacuum
 
+/-- Setoid of continuous maps modulo homotopy equivalence. -/
+def homotopySetoid (X Y : Type) [TopologicalSpace X] [TopologicalSpace Y] :
+    Setoid C(X, Y) where
+  r f g := f.Homotopic g
+  iseqv := ContinuousMap.Homotopic.equivalence
+
+/-- Homotopy classes of continuous maps. -/
+def HomotopyClass (X Y : Type) [TopologicalSpace X] [TopologicalSpace Y] : Type :=
+  Quotient (homotopySetoid X Y)
+
+/-- Charge functional induced from homotopy classes. -/
+noncomputable def qEffFromClass
+    {X Eff : Type}
+    [TopologicalSpace X] [TopologicalSpace Eff]
+    (qClass : HomotopyClass X Eff → ℤ) :
+    C(X, Eff) → ℤ :=
+  fun F => qClass (Quotient.mk (s := homotopySetoid X Eff) F)
+
+/-- Charges induced from homotopy classes are automatically homotopy-invariant. -/
+theorem qEffFromClass_homotopy_invariant
+    {X Eff : Type}
+    [TopologicalSpace X] [TopologicalSpace Eff]
+    (qClass : HomotopyClass X Eff → ℤ)
+    {F G : C(X, Eff)}
+    (hFG : F.Homotopic G) :
+    qEffFromClass qClass F = qEffFromClass qClass G := by
+  unfold qEffFromClass
+  exact congrArg qClass (Quotient.sound hFG)
+
+/-- Pointwise coarse-graining (`CG f = φ ∘ f`) preserves homotopy classes. -/
+theorem pointwise_coarse_grain_preserves_homotopy
+    {X Eff : Type}
+    [TopologicalSpace X] [TopologicalSpace Eff]
+    (phi : C(FundamentalGaugeGroup, Eff))
+    {f g : C(X, FundamentalGaugeGroup)}
+    (hfg : f.Homotopic g) :
+    (phi.comp f).Homotopic (phi.comp g) := by
+  exact ContinuousMap.Homotopic.comp (ContinuousMap.Homotopic.refl phi) hfg
+
+/-- Simultaneous discharge of the two hard assumptions:
+    (A) homotopy-preservation of emergence map (for pointwise coarse-graining),
+    (B) homotopy-invariance of effective charge (for class-induced charges). -/
+theorem no_repopulation_pointwise_class_charge
+    {X Eff : Type}
+    [TopologicalSpace X] [PreconnectedSpace X] [Nonempty X]
+    [TopologicalSpace Eff]
+    (phi : C(FundamentalGaugeGroup, Eff))
+    (qClass : HomotopyClass X Eff → ℤ)
+    (hConstClassZero :
+      ∀ e0 : Eff, qClass (Quotient.mk (s := homotopySetoid X Eff) (ContinuousMap.const X e0)) = 0) :
+    ∀ f : C(X, FundamentalGaugeGroup),
+      qEffFromClass qClass (phi.comp f) = 0 := by
+  intro f
+  rcases continuous_to_fundamental_group_constant f with ⟨g0, hg0⟩
+  have hconst : f = ContinuousMap.const X g0 := by
+    ext x
+    simpa using congrArg (fun y : FundamentalGaugeGroup => (y : ℕ)) (hg0 x)
+  have hhomFund : f.Homotopic (ContinuousMap.const X g0) := by
+    simpa [hconst] using (ContinuousMap.Homotopic.refl (ContinuousMap.const X g0))
+  have hhomEff :
+      (phi.comp f).Homotopic (phi.comp (ContinuousMap.const X g0)) :=
+    pointwise_coarse_grain_preserves_homotopy phi hhomFund
+  have hqEq :
+      qEffFromClass qClass (phi.comp f) =
+        qEffFromClass qClass (phi.comp (ContinuousMap.const X g0)) :=
+    qEffFromClass_homotopy_invariant qClass hhomEff
+  calc
+    qEffFromClass qClass (phi.comp f) =
+        qEffFromClass qClass (phi.comp (ContinuousMap.const X g0)) := hqEq
+    _ = 0 := by
+      simpa [qEffFromClass] using hConstClassZero (phi g0)
+
 /-- A charge functional on the emergent image cannot repopulate nonzero sectors
     when its source space is subsingleton and a single base state is normalized
     to zero charge. This captures the "no topology created from nothing" step
@@ -120,6 +192,24 @@ theorem theta_phase_unity_of_zero_charge (theta : ℝ) :
     thetaPhase theta 0 = 1 := by
   unfold thetaPhase
   norm_num
+
+/-- Theta-phase collapse for pointwise coarse-graining plus class-induced charge. -/
+theorem theta_phase_unity_pointwise_class_charge
+    {X Eff : Type}
+    [TopologicalSpace X] [PreconnectedSpace X] [Nonempty X]
+    [TopologicalSpace Eff]
+    (phi : C(FundamentalGaugeGroup, Eff))
+    (qClass : HomotopyClass X Eff → ℤ)
+    (hConstClassZero :
+      ∀ e0 : Eff, qClass (Quotient.mk (s := homotopySetoid X Eff) (ContinuousMap.const X e0)) = 0) :
+    ∀ (f : C(X, FundamentalGaugeGroup)) (theta : ℝ),
+      thetaPhase theta (qEffFromClass qClass (phi.comp f)) = 1 := by
+  intro f theta
+  have hq0 :
+      qEffFromClass qClass (phi.comp f) = 0 :=
+    no_repopulation_pointwise_class_charge phi qClass hConstClassZero f
+  rw [hq0]
+  exact theta_phase_unity_of_zero_charge theta
 
 /-- Emergent-image theta phases are unity under the no-repopulation hypotheses. -/
 theorem theta_phase_unity_on_emergent_image

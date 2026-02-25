@@ -10,6 +10,10 @@ Status: in progress; structural skeleton formalized, full nonperturbative closur
   - `N₋ = |emTriplet| = 3`
   - `Z_im(θ) = (N₊ - N₋) sin θ`
   - therefore `Z_im(θ)=0` for all `θ` in this skeleton.
+- Strengthened route-2 reflection channel:
+  - `zRe_even_theta_reflection`: real channel is even under `θ ↦ -θ`
+  - `zIm_odd_theta_reflection`: imaginary channel is odd under `θ ↦ -θ`
+  - `zComplex_even_theta_reflection`: complex partition coefficient is reflection-even in the balanced Cl(1,3) skeleton
 - Added route-2 exclusion lemma in the principal branch:
   - if candidates are constrained to `{0, π}` and vacuum weight is positive,
     then `θ = 0` (since `Z_re(π) = -6`).

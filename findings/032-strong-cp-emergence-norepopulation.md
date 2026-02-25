@@ -8,6 +8,11 @@ Status: theorem-level bridge added; final closure still requires model-complete 
 
 Key theorems:
 
+- `qEffFromClass`
+- `qEffFromClass_homotopy_invariant`
+- `pointwise_coarse_grain_preserves_homotopy`
+- `no_repopulation_pointwise_class_charge`
+- `theta_phase_unity_pointwise_class_charge`
 - `no_repopulation_from_subsingleton_source`
 - `no_repopulation_from_based_route1`
 - `no_repopulation_of_homotopy_invariance`
@@ -44,6 +49,11 @@ Z3-carrier field space.
 It also includes a stronger abstract bridge:
 once the based fundamental source space is subsingleton (route-1 vacuum result),
 any emergent charge functional is globally pinned by one normalized base state.
+
+And it now discharges the two key step-6 assumptions simultaneously for the
+pointwise emergence case (`CG f = φ ∘ f`) with class-induced charge:
+homotopy preservation is proved by composition, and charge homotopy-invariance
+is proved by quotient construction.
 
 ## Remaining gap
 

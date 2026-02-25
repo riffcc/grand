@@ -76,6 +76,27 @@ theorem zIm_zero_all_theta (theta : ℝ) : zIm theta = 0 := by
   rw [cp_odd_sector_imbalance_zero]
   norm_num
 
+/-- Real channel is even under `θ ↦ -θ`. -/
+theorem zRe_even_theta_reflection (theta : ℝ) : zRe (-theta) = zRe theta := by
+  unfold zRe
+  simp [Real.cos_neg]
+
+/-- Imaginary channel is odd under `θ ↦ -θ`. -/
+theorem zIm_odd_theta_reflection (theta : ℝ) : zIm (-theta) = -zIm theta := by
+  rw [zIm_factorized, zIm_factorized, Real.sin_neg]
+  ring
+
+/-- Complex skeleton partition coefficient. -/
+noncomputable def zComplex (theta : ℝ) : ℂ :=
+  ((zRe theta : ℝ) : ℂ) + (((zIm theta : ℝ) : ℂ) * Complex.I)
+
+/-- In the Cl(1,3) balanced skeleton, the complex coefficient is `θ`-reflection even. -/
+theorem zComplex_even_theta_reflection (theta : ℝ) :
+    zComplex (-theta) = zComplex theta := by
+  unfold zComplex
+  rw [zRe_even_theta_reflection theta]
+  rw [zIm_zero_all_theta (-theta), zIm_zero_all_theta theta]
+
 /-- Equivalent expression using the structural θ proxy from StrongCP. -/
 theorem zIm_as_structural_theta (theta : ℝ) :
     zIm theta = thetaQcdStructural * Real.sin theta := by
