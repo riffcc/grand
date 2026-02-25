@@ -594,6 +594,75 @@ noncomputable def laneEmdenAverageTheta
   ((Finset.univ : Finset (Fin (n + 1))).sum
       (fun i => θ (ξ0 + (i : ℝ) * dξ))) / (n + 1)
 
+/-- A sampled Lane-Emden average is bounded by 1 when all sampled points are
+    nonnegative and the profile is pointwise bounded by 1 on `ξ ≥ 0`. -/
+theorem lane_emden_average_theta_le_one_of_sample_bound
+    {θ : ℝ → ℝ} {ξ0 dξ : ℝ} {n : ℕ}
+    (hBound : ∀ ξ : ℝ, 0 ≤ ξ → θ ξ ≤ 1)
+    (hξ0 : 0 ≤ ξ0)
+    (hdξ : 0 ≤ dξ) :
+    laneEmdenAverageTheta θ ξ0 dξ n ≤ 1 := by
+  unfold laneEmdenAverageTheta
+  let s : Finset (Fin (n + 1)) := Finset.univ
+  have hsum_le : s.sum (fun i => θ (ξ0 + (i : ℝ) * dξ)) ≤
+      s.sum (fun _ => (1 : ℝ)) := by
+    refine Finset.sum_le_sum ?_
+    intro i _hi
+    have hi_nonneg : 0 ≤ (i : ℝ) := by
+      exact_mod_cast (Nat.zero_le i.1)
+    have hsample_nonneg : 0 ≤ ξ0 + (i : ℝ) * dξ := by
+      exact add_nonneg hξ0 (mul_nonneg hi_nonneg hdξ)
+    exact hBound (ξ0 + (i : ℝ) * dξ) hsample_nonneg
+  have hs_card : s.sum (fun _ => (1 : ℝ)) = (n + 1 : ℝ) := by
+    simp [s]
+  have hpos_den : (0 : ℝ) < (n + 1 : ℝ) := by
+    exact_mod_cast Nat.succ_pos n
+  have hdiv :
+      s.sum (fun i => θ (ξ0 + (i : ℝ) * dξ)) / (n + 1 : ℝ) ≤
+      (n + 1 : ℝ) / (n + 1 : ℝ) := by
+    exact div_le_div_of_nonneg_right
+      (by simpa [hs_card] using hsum_le) (le_of_lt hpos_den)
+  have hone : (n + 1 : ℝ) / (n + 1 : ℝ) = 1 := by
+    field_simp [show (n + 1 : ℝ) ≠ 0 by exact ne_of_gt hpos_den]
+  simpa [s, hone] using hdiv
+
+/-- Envelope from ODE regularity assumptions:
+    if `θ` is antitone on `ξ ≥ 0` via nonpositive derivative and `θ(0)=1`,
+    then `θ(ξ) ≤ 1` for all `ξ ≥ 0`. -/
+theorem lane_emden_theta_le_one_of_deriv_nonpos_on_nonneg
+    {θ : ℝ → ℝ}
+    (hcont : ContinuousOn θ (Set.Ici (0 : ℝ)))
+    (hdiff : DifferentiableOn ℝ θ (Set.Ioi (0 : ℝ)))
+    (hderiv_nonpos : ∀ ξ ∈ Set.Ioi (0 : ℝ), deriv θ ξ ≤ 0)
+    (hθ0 : θ 0 = 1) :
+    ∀ ξ : ℝ, 0 ≤ ξ → θ ξ ≤ 1 := by
+  have hanti : AntitoneOn θ (Set.Ici (0 : ℝ)) := by
+    exact antitoneOn_of_deriv_nonpos
+      (convex_Ici (0 : ℝ))
+      hcont
+      (by simpa [interior_Ici] using hdiff)
+      (by simpa [interior_Ici] using hderiv_nonpos)
+  intro ξ hξ
+  have h0mem : (0 : ℝ) ∈ Set.Ici (0 : ℝ) := by simp
+  have hξmem : ξ ∈ Set.Ici (0 : ℝ) := hξ
+  have hle : θ ξ ≤ θ 0 := hanti h0mem hξmem hξ
+  simpa [hθ0] using hle
+
+/-- Averaged envelope bound from derivative-sign ODE regularity assumptions. -/
+theorem lane_emden_average_theta_le_one_of_deriv_nonpos_on_nonneg
+    {θ : ℝ → ℝ} {ξ0 dξ : ℝ} {n : ℕ}
+    (hcont : ContinuousOn θ (Set.Ici (0 : ℝ)))
+    (hdiff : DifferentiableOn ℝ θ (Set.Ioi (0 : ℝ)))
+    (hderiv_nonpos : ∀ ξ ∈ Set.Ioi (0 : ℝ), deriv θ ξ ≤ 0)
+    (hθ0 : θ 0 = 1)
+    (hξ0 : 0 ≤ ξ0)
+    (hdξ : 0 ≤ dξ) :
+    laneEmdenAverageTheta θ ξ0 dξ n ≤ 1 := by
+  exact lane_emden_average_theta_le_one_of_sample_bound
+    (hBound := lane_emden_theta_le_one_of_deriv_nonpos_on_nonneg
+      hcont hdiff hderiv_nonpos hθ0)
+    (hξ0 := hξ0) (hdξ := hdξ)
+
 /-- Profile-weighted compression witness from a sampled Lane-Emden profile. -/
 noncomputable def laneEmdenProfileCompression
     (M rhoCentral : ℝ) (θ : ℝ → ℝ) (ξ0 dξ : ℝ) (n : ℕ) : ℝ :=
@@ -646,6 +715,30 @@ theorem polytropic_ignition_from_lane_emden_profile
       (hProfile := hProfile)
   exact polytropic_ignition_from_compression
     (hG := hG) (hμ := hμ) (hξ := hξ) (hTIgn := hTIgn) hComp
+
+/-- Ignition bridge where profile envelope is discharged from derivative-sign
+    regularity assumptions on `ξ ≥ 0`. -/
+theorem polytropic_ignition_from_lane_emden_profile_deriv_nonpos
+    {M rhoCentral G μ ξ TIgn ξ0 dξ : ℝ} {n : ℕ} {θ : ℝ → ℝ}
+    (hG : 0 < G) (hμ : 0 < μ) (hξ : 0 < ξ) (hTIgn : 0 < TIgn)
+    (hProxyNonneg : 0 ≤ laneEmdenCompressionProxy M rhoCentral)
+    (hcont : ContinuousOn θ (Set.Ici (0 : ℝ)))
+    (hdiff : DifferentiableOn ℝ θ (Set.Ioi (0 : ℝ)))
+    (hderiv_nonpos : ∀ ξ ∈ Set.Ioi (0 : ℝ), deriv θ ξ ≤ 0)
+    (hθ0 : θ 0 = 1)
+    (hξ0 : 0 ≤ ξ0)
+    (hdξ : 0 ≤ dξ)
+    (hProfile :
+      laneEmdenProfileCompression M rhoCentral θ ξ0 dξ n ≥
+        minimumPolytropicCompression G μ ξ TIgn) :
+    coreTemperaturePolytropic G μ ξ M rhoCentral ≥ TIgn := by
+  exact polytropic_ignition_from_lane_emden_profile
+    (hG := hG) (hμ := hμ) (hξ := hξ) (hTIgn := hTIgn)
+    (hProxyNonneg := hProxyNonneg)
+    (hAvgUpper := lane_emden_average_theta_le_one_of_deriv_nonpos_on_nonneg
+      (hcont := hcont) (hdiff := hdiff) (hderiv_nonpos := hderiv_nonpos)
+      (hθ0 := hθ0) (hξ0 := hξ0) (hdξ := hdξ))
+    (hProfile := hProfile)
 
 /-- Pointwise `n = 0` Lane-Emden profile never exceeds 1. -/
 theorem lane_emden_theta_n0_le_one (ξ : ℝ) :

@@ -488,6 +488,36 @@ pub fn polytropic_ignition_condition_from_lane_emden_n0_profile(
     Some(profile_comp >= threshold)
 }
 
+/// True iff all profile sample coordinates satisfy ξ >= 0.
+pub fn lane_emden_profile_all_nonnegative_xi(profile: &[(f64, f64, f64)]) -> bool {
+    profile.iter().all(|(xi, _, _)| *xi >= 0.0)
+}
+
+/// Monotonicity checker for sampled Lane-Emden profiles.
+///
+/// Returns true if theta is nonincreasing up to `tol`.
+pub fn lane_emden_profile_is_nonincreasing(profile: &[(f64, f64, f64)], tol: f64) -> bool {
+    profile.windows(2).all(|w| w[1].1 <= w[0].1 + tol)
+}
+
+/// Envelope witness from sampled monotonicity:
+/// if profile starts at theta(0)=1 (within tolerance), uses ξ>=0 samples,
+/// and is nonincreasing, then sampled theta never exceeds 1.
+pub fn lane_emden_envelope_le_one_from_monotone_profile(
+    profile: &[(f64, f64, f64)],
+    tol: f64,
+) -> bool {
+    let Some((xi0, theta0, _)) = profile.first().copied() else {
+        return false;
+    };
+    if xi0 < -tol || (theta0 - 1.0).abs() > tol {
+        return false;
+    }
+    lane_emden_profile_all_nonnegative_xi(profile)
+        && lane_emden_profile_is_nonincreasing(profile, tol)
+        && profile.iter().all(|(_, theta, _)| *theta <= 1.0 + tol)
+}
+
 /// Polytropic core-temperature proxy:
 /// T_c ∝ ξ G μ √(M ρ_c)
 ///
@@ -698,6 +728,20 @@ mod tests {
         )
         .expect("condition");
         assert!(cond);
+    }
+
+    #[test]
+    fn lane_emden_n1_profile_is_nonincreasing_on_nonnegative_window() {
+        let profile = lane_emden_integrate_rk4_nat(1, 2.5, 1.0e-3).expect("profile");
+        assert!(lane_emden_profile_is_nonincreasing(&profile, 1e-6));
+        assert!(lane_emden_envelope_le_one_from_monotone_profile(&profile, 1e-6));
+    }
+
+    #[test]
+    fn lane_emden_n3_profile_is_nonincreasing_on_nonnegative_window() {
+        let profile = lane_emden_integrate_rk4_nat(3, 2.0, 1.0e-3).expect("profile");
+        assert!(lane_emden_profile_is_nonincreasing(&profile, 1e-6));
+        assert!(lane_emden_envelope_le_one_from_monotone_profile(&profile, 1e-6));
     }
 
     #[test]
