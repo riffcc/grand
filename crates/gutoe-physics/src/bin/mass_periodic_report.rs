@@ -1,7 +1,7 @@
 use gutoe_physics::{
     closest_to_target_island, derived_superheavy_proton_candidates, magic_s2n_summary, proton_s2p_summary,
     rank_island_candidates_with_config, scan_nuclear_chart, IslandRankingConfig, NucleusRecord, ScanConfig,
-    StandardModelDynamicsMap,
+    ShellParams, StandardModelDynamicsMap,
 };
 use std::collections::BTreeMap;
 use std::env;
@@ -206,6 +206,20 @@ fn now_unix_seconds() -> u64 {
         .unwrap_or(0)
 }
 
+fn env_f64(name: &str, default: f64) -> f64 {
+    env::var(name)
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(default)
+}
+
+fn env_u16(name: &str, default: u16) -> u16 {
+    env::var(name)
+        .ok()
+        .and_then(|v| v.parse::<u16>().ok())
+        .unwrap_or(default)
+}
+
 fn main() -> anyhow::Result<()> {
     let out_dir = env::var("GUTOE_MASS_PERIODIC_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart".to_string());
     fs::create_dir_all(&out_dir)?;
@@ -219,7 +233,57 @@ fn main() -> anyhow::Result<()> {
     let neutron_minus_proton_struct = sm.lambda_qg * sm.total_gauge_generators as f64;
     let neutron_pred = proton_pred_from_e + neutron_minus_proton_struct;
 
-    let cfg = ScanConfig::default();
+    let default_shell = ShellParams::default();
+    let cfg = ScanConfig {
+        z_min: env_u16("GUTOE_NUCLEAR_Z_MIN", 1),
+        z_max: env_u16("GUTOE_NUCLEAR_Z_MAX", 140),
+        n_min: env_u16("GUTOE_NUCLEAR_N_MIN", 1),
+        n_max: env_u16("GUTOE_NUCLEAR_N_MAX", 260),
+        shell: ShellParams {
+            amplitude_z: env_f64("GUTOE_NUCLEAR_AMP_Z", default_shell.amplitude_z),
+            amplitude_n: env_f64("GUTOE_NUCLEAR_AMP_N", default_shell.amplitude_n),
+            shell_amp: env_f64("GUTOE_NUCLEAR_SHELL_AMP", default_shell.shell_amp),
+            shell_scale_exp: env_f64("GUTOE_NUCLEAR_SHELL_SCALE_EXP", default_shell.shell_scale_exp),
+            sigma_z: env_f64("GUTOE_NUCLEAR_SIGMA_Z", default_shell.sigma_z),
+            sigma_n: env_f64("GUTOE_NUCLEAR_SIGMA_N", default_shell.sigma_n),
+            proton_magic_weight_coeff: env_f64(
+                "GUTOE_NUCLEAR_PROTON_MAGIC_WEIGHT_COEFF",
+                default_shell.proton_magic_weight_coeff,
+            ),
+            proton_magic_weight_cap: env_f64(
+                "GUTOE_NUCLEAR_PROTON_MAGIC_WEIGHT_CAP",
+                default_shell.proton_magic_weight_cap,
+            ),
+            neutron_magic_weight_coeff: env_f64(
+                "GUTOE_NUCLEAR_NEUTRON_MAGIC_WEIGHT_COEFF",
+                default_shell.neutron_magic_weight_coeff,
+            ),
+            neutron_magic_weight_cap: env_f64(
+                "GUTOE_NUCLEAR_NEUTRON_MAGIC_WEIGHT_CAP",
+                default_shell.neutron_magic_weight_cap,
+            ),
+            superheavy_proton_amplitude: env_f64(
+                "GUTOE_NUCLEAR_SUPERHEAVY_PROTON_AMP",
+                default_shell.superheavy_proton_amplitude,
+            ),
+            superheavy_proton_sigma: env_f64(
+                "GUTOE_NUCLEAR_SUPERHEAVY_PROTON_SIGMA",
+                default_shell.superheavy_proton_sigma,
+            ),
+            superheavy_proton_gate_n_sigma: env_f64(
+                "GUTOE_NUCLEAR_SUPERHEAVY_PROTON_GATE_N_SIGMA",
+                default_shell.superheavy_proton_gate_n_sigma,
+            ),
+            heavy_target_z: env_f64("GUTOE_NUCLEAR_HEAVY_TARGET_Z", default_shell.heavy_target_z),
+            heavy_target_n: env_f64("GUTOE_NUCLEAR_HEAVY_TARGET_N", default_shell.heavy_target_n),
+            heavy_sigma_z: env_f64("GUTOE_NUCLEAR_HEAVY_SIGMA_Z", default_shell.heavy_sigma_z),
+            heavy_sigma_n: env_f64("GUTOE_NUCLEAR_HEAVY_SIGMA_N", default_shell.heavy_sigma_n),
+            heavy_amplitude: env_f64("GUTOE_NUCLEAR_HEAVY_AMP", default_shell.heavy_amplitude),
+            heavy_gate_z_min: env_u16("GUTOE_NUCLEAR_HEAVY_GATE_Z_MIN", default_shell.heavy_gate_z_min),
+            heavy_gate_n_min: env_u16("GUTOE_NUCLEAR_HEAVY_GATE_N_MIN", default_shell.heavy_gate_n_min),
+        },
+        ..ScanConfig::default()
+    };
     let records = scan_nuclear_chart(cfg);
     let ranked = rank_island_candidates_with_config(
         &records,

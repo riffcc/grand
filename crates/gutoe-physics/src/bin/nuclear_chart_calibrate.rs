@@ -55,6 +55,8 @@ fn main() -> anyhow::Result<()> {
 
     let amp_z_grid = parse_list("GUTOE_NUCLEAR_AMP_Z_GRID", &[1.8, 2.2, 2.8, 3.4]);
     let amp_n_grid = parse_list("GUTOE_NUCLEAR_AMP_N_GRID", &[2.2, 2.8, 3.4, 4.2]);
+    let shell_amp_grid = parse_list("GUTOE_NUCLEAR_SHELL_AMP_GRID", &[12.0]);
+    let shell_scale_exp_grid = parse_list("GUTOE_NUCLEAR_SHELL_SCALE_EXP_GRID", &[0.33]);
     let sigma_z_grid = parse_list("GUTOE_NUCLEAR_SIGMA_Z_GRID", &[3.0, 4.0, 5.0, 6.0]);
     let sigma_n_grid = parse_list("GUTOE_NUCLEAR_SIGMA_N_GRID", &[4.0, 5.0, 6.0, 7.0]);
     let superheavy_proton_amp_grid = parse_list("GUTOE_NUCLEAR_SUPERHEAVY_PROTON_AMP_GRID", &[2.0]);
@@ -76,6 +78,8 @@ fn main() -> anyhow::Result<()> {
         score: f64,
         amp_z: f64,
         amp_n: f64,
+        shell_amp: f64,
+        shell_scale_exp: f64,
         sigma_z: f64,
         sigma_n: f64,
         superheavy_proton_amp: f64,
@@ -101,47 +105,51 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut leaderboard = String::from(
-        "rank,score,amp_z,amp_n,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,proton_avg_delta_s2p,proton_min_delta_s2p,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
+        "rank,score,amp_z,amp_n,shell_amp,shell_scale_exp,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,proton_avg_delta_s2p,proton_min_delta_s2p,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
     );
     let mut rows: Vec<Row> = Vec::new();
     let mut best_score = f64::NEG_INFINITY;
     let mut best_records = Vec::new();
     let mut best_ranked = Vec::new();
     let mut best_metrics = None;
-    let mut best_params = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    let mut best_params = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 
     for &amp_z in &amp_z_grid {
         for &amp_n in &amp_n_grid {
-            for &sigma_z in &sigma_z_grid {
-                for &sigma_n in &sigma_n_grid {
-                    for &superheavy_proton_amp in &superheavy_proton_amp_grid {
-                        for &superheavy_proton_sigma in &superheavy_proton_sigma_grid {
-                            for &heavy_amp in &heavy_amp_grid {
-                                for &heavy_sigma_z in &heavy_sigma_z_grid {
-                                    for &heavy_sigma_n in &heavy_sigma_n_grid {
-                                        for &heavy_target_z_f in &heavy_target_z_grid {
-                                            for &heavy_target_n_f in &heavy_target_n_grid {
-                                                let cfg = ScanConfig {
-                                                    z_min,
-                                                    z_max,
-                                                    n_min,
-                                                    n_max,
-                                                    shell: ShellParams {
-                                                        amplitude_z: amp_z,
-                                                        amplitude_n: amp_n,
-                                                        sigma_z,
-                                                        sigma_n,
-                                                        superheavy_proton_amplitude: superheavy_proton_amp,
-                                                        superheavy_proton_sigma,
-                                                        heavy_target_z: heavy_target_z_f,
-                                                        heavy_target_n: heavy_target_n_f,
-                                                        heavy_sigma_z,
-                                                        heavy_sigma_n,
-                                                        heavy_amplitude: heavy_amp,
-                                                        ..ShellParams::default()
-                                                    },
-                                                    ..ScanConfig::default()
-                                                };
+            for &shell_amp in &shell_amp_grid {
+                for &shell_scale_exp in &shell_scale_exp_grid {
+                    for &sigma_z in &sigma_z_grid {
+                        for &sigma_n in &sigma_n_grid {
+                            for &superheavy_proton_amp in &superheavy_proton_amp_grid {
+                                for &superheavy_proton_sigma in &superheavy_proton_sigma_grid {
+                                    for &heavy_amp in &heavy_amp_grid {
+                                        for &heavy_sigma_z in &heavy_sigma_z_grid {
+                                            for &heavy_sigma_n in &heavy_sigma_n_grid {
+                                                for &heavy_target_z_f in &heavy_target_z_grid {
+                                                    for &heavy_target_n_f in &heavy_target_n_grid {
+                                                        let cfg = ScanConfig {
+                                                            z_min,
+                                                            z_max,
+                                                            n_min,
+                                                            n_max,
+                                                            shell: ShellParams {
+                                                                amplitude_z: amp_z,
+                                                                amplitude_n: amp_n,
+                                                                shell_amp,
+                                                                shell_scale_exp,
+                                                                sigma_z,
+                                                                sigma_n,
+                                                                superheavy_proton_amplitude: superheavy_proton_amp,
+                                                                superheavy_proton_sigma,
+                                                                heavy_target_z: heavy_target_z_f,
+                                                                heavy_target_n: heavy_target_n_f,
+                                                                heavy_sigma_z,
+                                                                heavy_sigma_n,
+                                                                heavy_amplitude: heavy_amp,
+                                                                ..ShellParams::default()
+                                                            },
+                                                            ..ScanConfig::default()
+                                                        };
                                                 let records = scan_nuclear_chart(cfg);
                                                 let metrics = shell_gate_metrics(&records);
                                                 let ranking_cfg = IslandRankingConfig {
@@ -175,52 +183,58 @@ fn main() -> anyhow::Result<()> {
                                                     top.map(|r| r.sf_log10_half_life_s).unwrap_or(-1.0e9);
                                                 let (closest_z, closest_n) =
                                                     closest.map(|r| (r.z, r.n)).unwrap_or((0, 0));
-                                                rows.push(Row {
-                                                    score: objective,
-                                                    amp_z,
-                                                    amp_n,
-                                                    sigma_z,
-                                                    sigma_n,
-                                                    superheavy_proton_amp,
-                                                    superheavy_proton_sigma,
-                                                    heavy_amp,
-                                                    heavy_sigma_z,
-                                                    heavy_sigma_n,
-                                                    heavy_target_z: heavy_target_z_f,
-                                                    heavy_target_n: heavy_target_n_f,
-                                                    top_delta_s2n: metrics.top_delta_s2n_mev,
-                                                    avg_top5_delta_s2n: metrics.avg_top5_delta_s2n_mev,
-                                                    n184_delta: metrics.strongest_n184_delta_s2n_mev,
-                                                    proton_avg_delta_s2p: metrics.avg_superheavy_proton_delta_s2p_mev,
-                                                    proton_min_delta_s2p: metrics.min_superheavy_proton_delta_s2p_mev,
-                                                    closest_z,
-                                                    closest_n,
-                                                    closest_score,
-                                                    top_candidate_z,
-                                                    top_candidate_n,
-                                                    top_candidate_score: top_score,
-                                                    top_candidate_barrier,
-                                                    top_candidate_sf_log10,
-                                                });
+                                                        rows.push(Row {
+                                                            score: objective,
+                                                            amp_z,
+                                                            amp_n,
+                                                            shell_amp,
+                                                            shell_scale_exp,
+                                                            sigma_z,
+                                                            sigma_n,
+                                                            superheavy_proton_amp,
+                                                            superheavy_proton_sigma,
+                                                            heavy_amp,
+                                                            heavy_sigma_z,
+                                                            heavy_sigma_n,
+                                                            heavy_target_z: heavy_target_z_f,
+                                                            heavy_target_n: heavy_target_n_f,
+                                                            top_delta_s2n: metrics.top_delta_s2n_mev,
+                                                            avg_top5_delta_s2n: metrics.avg_top5_delta_s2n_mev,
+                                                            n184_delta: metrics.strongest_n184_delta_s2n_mev,
+                                                            proton_avg_delta_s2p: metrics.avg_superheavy_proton_delta_s2p_mev,
+                                                            proton_min_delta_s2p: metrics.min_superheavy_proton_delta_s2p_mev,
+                                                            closest_z,
+                                                            closest_n,
+                                                            closest_score,
+                                                            top_candidate_z,
+                                                            top_candidate_n,
+                                                            top_candidate_score: top_score,
+                                                            top_candidate_barrier,
+                                                            top_candidate_sf_log10,
+                                                        });
 
-                                                if objective > best_score {
-                                                    best_score = objective;
-                                                    best_records = records;
-                                                    best_ranked = ranked;
-                                                    best_metrics = Some(metrics);
-                                                    best_params = (
-                                                        amp_z,
-                                                        amp_n,
-                                                        sigma_z,
-                                                        sigma_n,
-                                                        superheavy_proton_amp,
-                                                        superheavy_proton_sigma,
-                                                        heavy_amp,
-                                                        heavy_sigma_z,
-                                                        heavy_sigma_n,
-                                                        heavy_target_z_f,
-                                                        heavy_target_n_f,
-                                                    );
+                                                        if objective > best_score {
+                                                            best_score = objective;
+                                                            best_records = records;
+                                                            best_ranked = ranked;
+                                                            best_metrics = Some(metrics);
+                                                            best_params = (
+                                                                amp_z,
+                                                                amp_n,
+                                                                shell_amp,
+                                                                shell_scale_exp,
+                                                                sigma_z,
+                                                                sigma_n,
+                                                                superheavy_proton_amp,
+                                                                superheavy_proton_sigma,
+                                                                heavy_amp,
+                                                                heavy_sigma_z,
+                                                                heavy_sigma_n,
+                                                                heavy_target_z_f,
+                                                                heavy_target_n_f,
+                                                            );
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -238,11 +252,13 @@ fn main() -> anyhow::Result<()> {
 
     for (idx, row) in rows.iter().enumerate() {
         leaderboard.push_str(&format!(
-            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
+            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
             idx + 1,
             row.score,
             row.amp_z,
             row.amp_n,
+            row.shell_amp,
+            row.shell_scale_exp,
             row.sigma_z,
             row.sigma_n,
             row.superheavy_proton_amp,
@@ -273,6 +289,8 @@ fn main() -> anyhow::Result<()> {
     let (
         amp_z,
         amp_n,
+        shell_amp,
+        shell_scale_exp,
         sigma_z,
         sigma_n,
         superheavy_proton_amp,
@@ -293,10 +311,12 @@ fn main() -> anyhow::Result<()> {
         min_superheavy_proton_delta_s2p_mev: 0.0,
     });
     let best_desc = format!(
-        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},sigma_z:{:.3},sigma_n:{:.3},superheavy_proton_amp:{:.3},superheavy_proton_sigma:{:.3},heavy_amp:{:.3},heavy_sigma_z:{:.3},heavy_sigma_n:{:.3},heavy_target_z:{:.3},heavy_target_n:{:.3}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\nproton_avg_delta_s2p={:.6}\nproton_min_delta_s2p={:.6}\n",
+        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},shell_amp:{:.3},shell_scale_exp:{:.3},sigma_z:{:.3},sigma_n:{:.3},superheavy_proton_amp:{:.3},superheavy_proton_sigma:{:.3},heavy_amp:{:.3},heavy_sigma_z:{:.3},heavy_sigma_n:{:.3},heavy_target_z:{:.3},heavy_target_n:{:.3}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\nproton_avg_delta_s2p={:.6}\nproton_min_delta_s2p={:.6}\n",
         best_score,
         amp_z,
         amp_n,
+        shell_amp,
+        shell_scale_exp,
         sigma_z,
         sigma_n,
         superheavy_proton_amp,

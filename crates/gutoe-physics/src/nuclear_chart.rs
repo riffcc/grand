@@ -74,6 +74,10 @@ impl Default for SemfParams {
 pub struct ShellParams {
     pub amplitude_z: f64,
     pub amplitude_n: f64,
+    // Global shell leverage (legacy reference amplitude was 6.5).
+    pub shell_amp: f64,
+    // A-scaling exponent for shell leverage; textbook guidance is A^(-1/3).
+    pub shell_scale_exp: f64,
     pub sigma_z: f64,
     pub sigma_n: f64,
     pub proton_magic_weight_coeff: f64,
@@ -97,6 +101,8 @@ impl Default for ShellParams {
         Self {
             amplitude_z: 2.2,
             amplitude_n: 2.8,
+            shell_amp: 12.0,
+            shell_scale_exp: 0.33,
             sigma_z: 4.0,
             sigma_n: 5.0,
             proton_magic_weight_coeff: 2.0 * LAMBDA_QG,
@@ -335,7 +341,9 @@ fn semf_binding_mev(
     );
     // A-dependent shell leverage: suppress light-nucleus over-bias and let
     // shell structure compete against Coulomb/fission in superheavy region.
-    let shell_scale = (a / 56.0).powf(0.32).clamp(0.45, 1.50);
+    // Keep backward-compatibility with legacy calibration scale (6.5) while
+    // moving to physically motivated A^(-shell_scale_exp) attenuation.
+    let shell_scale = (shell.shell_amp / 6.5) * (a / 56.0).powf(-shell.shell_scale_exp);
     let heavy_gate = if z >= shell.heavy_gate_z_min && n >= shell.heavy_gate_n_min {
         1.0
     } else {
