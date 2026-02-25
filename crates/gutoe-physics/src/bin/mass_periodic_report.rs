@@ -13,6 +13,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const ELECTRON_MASS_MEV_OBS: f64 = 0.510_998_950;
 const PROTON_MASS_MEV_OBS: f64 = 938.272_088_16;
 const NEUTRON_MASS_MEV_OBS: f64 = 939.565_420_52;
+const BETA_MASS_COEFF_Z_MEV: f64 = (PROTON_MASS_MEV_OBS + ELECTRON_MASS_MEV_OBS) - NEUTRON_MASS_MEV_OBS;
 
 fn triangular(n: u32) -> u32 {
     n * (n + 1) / 2
@@ -119,32 +120,69 @@ fn observed_stable_isotope_count(z: u16) -> Option<u16> {
     }
 }
 
-fn predicted_long_lived_isotope(r: &NucleusRecord) -> bool {
-    if !r.beta_optimal_for_a {
-        return false;
+fn observed_stable_mass_numbers_for_z(z: u16) -> Option<&'static [u16]> {
+    match z {
+        // Tin has the most stable isotopes; strict reference set.
+        50 => Some(&[112, 114, 115, 116, 117, 118, 119, 120, 122, 124]),
+        _ => None,
     }
-    if r.fissility > 1.0 {
-        return false;
-    }
-    // Explicit beta-competition proxy: stay near valley and require positive separation.
-    let ok_s2n = if r.n <= 2 {
-        true
+}
+
+fn classify_long_lived(r: &NucleusRecord, beta_stable_local_min: bool) -> (bool, bool, bool, bool, bool, bool) {
+    let fail_beta_optimal = !beta_stable_local_min;
+    let fail_fissility = r.fissility > 1.0;
+    let fail_s2n = if r.n <= 2 {
+        false
     } else {
-        r.s2n_mev.map(|v| v > 0.0).unwrap_or(false)
+        !r.s2n_mev.map(|v| v > 0.0).unwrap_or(false)
     };
-    let ok_s2p = if r.z <= 2 {
-        true
+    let fail_s2p = if r.z <= 2 {
+        false
     } else {
-        r.s2p_mev.map(|v| v > 0.0).unwrap_or(false)
+        !r.s2p_mev.map(|v| v > 0.0).unwrap_or(false)
     };
-    if !(ok_s2n && ok_s2p) {
-        return false;
+    let fail_sf = r.z > 82 && r.sf_log10_half_life_s < 20.0;
+    let predicted = !(fail_beta_optimal || fail_fissility || fail_s2n || fail_s2p || fail_sf);
+    (
+        predicted,
+        fail_beta_optimal,
+        fail_fissility,
+        fail_s2n,
+        fail_s2p,
+        fail_sf,
+    )
+}
+
+fn build_beta_local_min_map(records: &[NucleusRecord]) -> BTreeMap<(u16, u16), bool> {
+    let mut mass_proxy_by_az: BTreeMap<(u16, u16), f64> = BTreeMap::new();
+    for r in records {
+        // Atomic mass at fixed A differs by Z * ((m_p + m_e) - m_n) - B(Z,N).
+        // Local minima of this proxy correspond to beta-stable isobars.
+        let mass_proxy = BETA_MASS_COEFF_Z_MEV * r.z as f64 - r.binding_mev;
+        mass_proxy_by_az.insert((r.a, r.z), mass_proxy);
     }
-    // High-Z stability requires long half-life in this classifier.
-    if r.z > 82 && r.sf_log10_half_life_s < 20.0 {
-        return false;
+
+    let mut out: BTreeMap<(u16, u16), bool> = BTreeMap::new();
+    for r in records {
+        let Some(&m0) = mass_proxy_by_az.get(&(r.a, r.z)) else {
+            out.insert((r.z, r.n), false);
+            continue;
+        };
+        let left_ok = if r.z > 1 {
+            mass_proxy_by_az
+                .get(&(r.a, r.z - 1))
+                .map(|&ml| m0 <= ml + 1e-9)
+                .unwrap_or(true)
+        } else {
+            true
+        };
+        let right_ok = mass_proxy_by_az
+            .get(&(r.a, r.z + 1))
+            .map(|&mr| m0 <= mr + 1e-9)
+            .unwrap_or(true);
+        out.insert((r.z, r.n), left_ok && right_ok);
     }
-    true
+    out
 }
 
 fn now_unix_seconds() -> u64 {
@@ -178,7 +216,14 @@ fn main() -> anyhow::Result<()> {
         },
         40,
     );
-    let stable_like: Vec<_> = records.iter().filter(|r| predicted_long_lived_isotope(r)).collect();
+    let beta_local_min = build_beta_local_min_map(&records);
+    let stable_like: Vec<_> = records
+        .iter()
+        .filter(|r| {
+            let beta_ok = beta_local_min.get(&(r.z, r.n)).copied().unwrap_or(false);
+            classify_long_lived(r, beta_ok).0
+        })
+        .collect();
     let valley: Vec<_> = records.iter().filter(|r| r.beta_optimal_for_a).collect();
     let closest_target = closest_to_target_island(&records, 114, 184);
     let top = ranked.first().copied();
@@ -187,6 +232,55 @@ fn main() -> anyhow::Result<()> {
     for r in &stable_like {
         *isotopes_per_z.entry(r.z).or_insert(0) += 1;
     }
+
+    // Tin diagnostics (magic-proton showcase): compare exact stable A-set.
+    let mut tin_predicted_a: Vec<u16> = stable_like
+        .iter()
+        .filter(|r| r.z == 50)
+        .map(|r| r.a)
+        .collect();
+    tin_predicted_a.sort_unstable();
+    let tin_observed_a: Vec<u16> = observed_stable_mass_numbers_for_z(50)
+        .unwrap_or(&[])
+        .iter()
+        .copied()
+        .collect();
+    let tin_missing: Vec<u16> = tin_observed_a
+        .iter()
+        .copied()
+        .filter(|a| !tin_predicted_a.contains(a))
+        .collect();
+    let tin_extra: Vec<u16> = tin_predicted_a
+        .iter()
+        .copied()
+        .filter(|a| !tin_observed_a.contains(a))
+        .collect();
+    let mut tin_csv = String::from(
+        "A,N,predicted_long_lived,observed_stable,fail_beta_optimal,fail_fissility,fail_s2n,fail_s2p,fail_sf,stability_score,s2n_mev,s2p_mev,fissility,sf_log10_half_life_s\n",
+    );
+    for r in records.iter().filter(|r| r.z == 50 && (100..=130).contains(&r.a)) {
+        let beta_ok = beta_local_min.get(&(r.z, r.n)).copied().unwrap_or(false);
+        let (pred, fail_beta, fail_fiss, fail_s2n, fail_s2p, fail_sf) = classify_long_lived(r, beta_ok);
+        let observed = tin_observed_a.contains(&r.a);
+        tin_csv.push_str(&format!(
+            "{},{},{},{},{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
+            r.a,
+            r.n,
+            pred,
+            observed,
+            fail_beta,
+            fail_fiss,
+            fail_s2n,
+            fail_s2p,
+            fail_sf,
+            r.stability_score,
+            r.s2n_mev.unwrap_or(f64::NAN),
+            r.s2p_mev.unwrap_or(f64::NAN),
+            r.fissility,
+            r.sf_log10_half_life_s
+        ));
+    }
+    fs::write(out.join("tin_isotope_diagnostics.csv"), tin_csv)?;
 
     let elements_with_stable_like = isotopes_per_z.len();
     let max_z_with_stable_like = isotopes_per_z.keys().max().copied().unwrap_or(0);
@@ -294,6 +388,14 @@ fn main() -> anyhow::Result<()> {
             "    \"proton_closure_hit_rate\": {:.6}\n",
             "  }},\n",
             "  \"derived_superheavy_proton_candidates\": [{}]\n",
+            "  ,\"tin_diagnostics\": {{\n",
+            "    \"observed_stable_a\": [{}],\n",
+            "    \"predicted_stable_like_a\": [{}],\n",
+            "    \"missing_from_prediction\": [{}],\n",
+            "    \"extra_in_prediction\": [{}],\n",
+            "    \"observed_count\": {},\n",
+            "    \"predicted_count\": {}\n",
+            "  }}\n",
             "}}\n"
         ),
         alpha_inv_struct,
@@ -328,7 +430,29 @@ fn main() -> anyhow::Result<()> {
             .iter()
             .map(|z| z.to_string())
             .collect::<Vec<_>>()
-            .join(", ")
+            .join(", "),
+        tin_observed_a
+            .iter()
+            .map(|a| a.to_string())
+            .collect::<Vec<_>>()
+            .join(", "),
+        tin_predicted_a
+            .iter()
+            .map(|a| a.to_string())
+            .collect::<Vec<_>>()
+            .join(", "),
+        tin_missing
+            .iter()
+            .map(|a| a.to_string())
+            .collect::<Vec<_>>()
+            .join(", "),
+        tin_extra
+            .iter()
+            .map(|a| a.to_string())
+            .collect::<Vec<_>>()
+            .join(", "),
+        tin_observed_a.len(),
+        tin_predicted_a.len()
     );
     fs::write(out.join("mass_periodic_report.json"), json)?;
 
@@ -365,6 +489,7 @@ fn main() -> anyhow::Result<()> {
 
     println!("Wrote {}", out.join("mass_periodic_report.json").display());
     println!("Wrote {}", out.join("periodic_table_scoreboard.csv").display());
+    println!("Wrote {}", out.join("tin_isotope_diagnostics.csv").display());
     println!("Appended {}", trend_path.display());
     Ok(())
 }
