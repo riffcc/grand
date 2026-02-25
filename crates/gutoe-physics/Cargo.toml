@@ -12,3 +12,4 @@ rust_decimal.workspace = true
 num-complex.workspace = true
 num-traits.workspace = true
 thiserror.workspace = true
+anyhow = "1"
