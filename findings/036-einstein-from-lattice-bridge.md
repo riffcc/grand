@@ -72,6 +72,12 @@ Additional bridge hardening now included:
   - flat SC base: `sc_schlaefli_flat`
   - finite SC local→global reduction theorem:
     - `sc_schlaefli_from_local_balances` (diagonal + mixed-term cancellation conditions)
+  - concrete finite Schläfli instance on canonical geometry:
+    - indexed tetra model `scTetrahedron`
+    - computable edge-incidence checker `scEdgeInTetraB`
+    - explicit local variation model `scLocalDThetaQ`
+    - finite per-tetra balance proof `sc_local_balance_q`
+    - unconditional global identity `sc_schlaefli_concrete_model`
 - Newton-coupling bridge algebra added:
   - `kappaFromLattice`, `newtonFromLattice`, `hbarFromLattice`
   - Einstein normalization pair:
@@ -108,6 +114,9 @@ Core theorems:
 - `sc_regge_variation_of_schlaefli`
 - `sc_schlaefli_flat`
 - `sc_schlaefli_from_local_balances`
+- `sc_local_balance_q`
+- `sc_schlaefli_from_tetra_local`
+- `sc_schlaefli_concrete_model`
 - `newton_relation_of_kappa_from_lattice`
 - `newton_relation_of_kappa_einstein`
 - `newton_from_planck_lattice_relation`

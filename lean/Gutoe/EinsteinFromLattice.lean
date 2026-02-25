@@ -665,6 +665,78 @@ theorem sc_schlaefli_from_local_balances
           simp [hTU]
     _ = 0 := by simp
 
+/-- Tetrahedra indexed as `Fin 6` for local Schläfli bookkeeping. -/
+def scTetrahedron : Fin 6 → Finset CubeVertex
+  | 0 => ({0, 1, 3, 7} : Finset CubeVertex)
+  | 1 => ({0, 3, 2, 7} : Finset CubeVertex)
+  | 2 => ({0, 2, 6, 7} : Finset CubeVertex)
+  | 3 => ({0, 6, 4, 7} : Finset CubeVertex)
+  | 4 => ({0, 4, 5, 7} : Finset CubeVertex)
+  | 5 => ({0, 5, 1, 7} : Finset CubeVertex)
+
+/-- Edge membership predicate inside an indexed tetrahedron. -/
+def scEdgeInTetra (t : Fin 6) (e : SimpEdge) : Prop :=
+  let a := (simpEdgeEndpoints e).1
+  let b := (simpEdgeEndpoints e).2
+  a ∈ scTetrahedron t ∧ b ∈ scTetrahedron t
+
+/-- Computable edge-membership test inside an indexed tetrahedron. -/
+def scEdgeInTetraB (t : Fin 6) (e : SimpEdge) : Bool :=
+  let a := (simpEdgeEndpoints e).1
+  let b := (simpEdgeEndpoints e).2
+  (a ∈ scTetrahedron t) && (b ∈ scTetrahedron t)
+
+/-- Rational local Schläfli variation model on the SC decomposition:
+    +1 on tetra-incident edges starting at vertex `0`, -1 on the other
+    tetra-incident edges, and `0` off tetra support. -/
+def scLocalDThetaQ (t : Fin 6) (e : SimpEdge) : ℚ :=
+  if scEdgeInTetraB t e then
+    if (simpEdgeEndpoints e).1 = (0 : CubeVertex) then (1 : ℚ) else (-1 : ℚ)
+  else 0
+
+/-- In this concrete model, each tetra has exactly balanced local variation sum. -/
+theorem sc_local_balance_q (t : Fin 6) :
+    (∑ e, scLocalDThetaQ t e) = 0 := by
+  fin_cases t <;> native_decide
+
+/-- Global Schläfli identity from per-tetra local Schläfli balances. -/
+theorem sc_schlaefli_from_tetra_local
+    (A : SimpEdge → ℝ)
+    (dTheta : Fin 6 → SimpEdge → ℝ)
+    (hLocal : ∀ t, ∑ e, A e * dTheta t e = 0) :
+    scSchlaefliIdentity A (fun e => -∑ t : Fin 6, dTheta t e) := by
+  unfold scSchlaefliIdentity SchlaefliIdentity
+  have hSwap :
+      ∑ e, ∑ t : Fin 6, A e * dTheta t e
+        = ∑ t : Fin 6, ∑ e, A e * dTheta t e := by
+    rw [Finset.sum_comm]
+  calc
+    ∑ e, A e * (-(∑ t : Fin 6, dTheta t e))
+        = -∑ e, A e * (∑ t : Fin 6, dTheta t e) := by
+            simp [Finset.sum_neg_distrib]
+    _ = -∑ e, ∑ t : Fin 6, A e * dTheta t e := by
+          apply congrArg Neg.neg
+          apply Finset.sum_congr rfl
+          intro e he
+          rw [Finset.mul_sum]
+    _ = -∑ t : Fin 6, ∑ e, A e * dTheta t e := by
+          simpa [hSwap]
+    _ = -∑ t : Fin 6, 0 := by simp [hLocal]
+    _ = 0 := by simp
+
+/-- Concrete SC Schläfli instance with unit edge areas and explicit local
+    tetra balances on the canonical 6-tetra/19-edge decomposition. -/
+theorem sc_schlaefli_concrete_model :
+    scSchlaefliIdentity
+      (fun _ : SimpEdge => (1 : ℝ))
+      (fun e => -∑ t : Fin 6, (scLocalDThetaQ t e : ℝ)) := by
+  apply sc_schlaefli_from_tetra_local
+  intro t
+  have hq : (∑ e, scLocalDThetaQ t e) = (0 : ℚ) := sc_local_balance_q t
+  have hr : (∑ e, (scLocalDThetaQ t e : ℝ)) = 0 := by
+    exact_mod_cast hq
+  simpa using hr
+
 /-- Proposition form of `ContinuumLimit.continuum_limit_exists` for bridge packaging. -/
 def ContinuumLimitStatement : Prop :=
   (2 : ℕ) ^ 4 = 16 ∧
