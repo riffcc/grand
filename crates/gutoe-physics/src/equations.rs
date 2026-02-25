@@ -201,6 +201,56 @@ pub fn gamma_ray_delay(distance: f64, E: f64, E_QG: f64) -> f64 {
     distance * (E / E_QG).powi(2) / C
 }
 
+/// Fermi weak prefactor from the SU(2) electroweak mass relation:
+/// G_F = 1 / (2 f0^2)
+pub fn weak_fermi_prefactor(f0: f64) -> Option<f64> {
+    if f0 == 0.0 {
+        return None;
+    }
+    Some(1.0 / (2.0 * f0.powi(2)))
+}
+
+/// Equivalent prefactor from g^2 / (8 m_W^2) with m_W = g f0 / 2.
+pub fn weak_prefactor_from_su2(g: f64, f0: f64) -> Option<f64> {
+    if g == 0.0 || f0 == 0.0 {
+        return None;
+    }
+    Some(g.powi(2) / (8.0 * (g * f0 / 2.0).powi(2)))
+}
+
+/// Sommerfeld parameter η = α * sqrt(m_r / (2E)).
+pub fn sommerfeld_parameter(alpha: f64, m_reduced: f64, collision_energy: f64) -> Option<f64> {
+    if alpha <= 0.0 || m_reduced <= 0.0 || collision_energy <= 0.0 {
+        return None;
+    }
+    Some(alpha * (m_reduced / (2.0 * collision_energy)).sqrt())
+}
+
+/// Gamow penetration factor exp(-2π η) for Coulomb tunneling.
+pub fn gamow_factor(alpha: f64, m_reduced: f64, collision_energy: f64) -> Option<f64> {
+    let eta = sommerfeld_parameter(alpha, m_reduced, collision_energy)?;
+    Some((-2.0 * std::f64::consts::PI * eta).exp())
+}
+
+/// Structural pp weak reaction-rate kernel:
+/// rate ~ weak_prefactor * n_p^2 * Gamow.
+///
+/// Uses the Lean-parity leading-order α = 1/137.
+pub fn pp_weak_rate_from_su2_and_gamow(
+    g: f64,
+    f0: f64,
+    proton_density: f64,
+    m_reduced: f64,
+    collision_energy: f64,
+) -> Option<f64> {
+    if proton_density <= 0.0 {
+        return None;
+    }
+    let weak = weak_prefactor_from_su2(g, f0)?;
+    let gamow = gamow_factor(ALPHA_LEADING_ORDER, m_reduced, collision_energy)?;
+    Some(weak * proton_density.powi(2) * gamow)
+}
+
 /// Lane-Emden-style compression proxy used by the Lean stellar-fusion bridge.
 #[inline]
 pub fn lane_emden_compression_proxy(mass: f64, rho_c: f64) -> f64 {
@@ -327,6 +377,29 @@ mod tests {
         let t_low = core_temperature_polytropic(g, mu, xi, 1.0, 1.0);
         let t_high = core_temperature_polytropic(g, mu, xi, 4.0, 4.0);
         assert!(t_high > t_low);
+    }
+
+    #[test]
+    fn su2_fermi_prefactors_match_and_are_positive() {
+        let g = 0.65;
+        let f0 = 246.0;
+        let lhs = weak_prefactor_from_su2(g, f0).expect("lhs");
+        let rhs = weak_fermi_prefactor(f0).expect("rhs");
+        assert!((lhs - rhs).abs() < 1e-16);
+        assert!(lhs > 0.0);
+    }
+
+    #[test]
+    fn gamow_factor_is_between_zero_and_one_for_positive_inputs() {
+        let g = gamow_factor(ALPHA_LEADING_ORDER, 469.136, 0.002).expect("gamow");
+        assert!(g > 0.0 && g < 1.0);
+    }
+
+    #[test]
+    fn pp_weak_rate_kernel_is_strictly_positive_under_physical_inputs() {
+        let rate =
+            pp_weak_rate_from_su2_and_gamow(0.65, 246.0, 1.0e30, 469.136, 0.002).expect("rate");
+        assert!(rate > 0.0);
     }
 
     // ── Black-hole entropy ───────────────────────────────────────────────────

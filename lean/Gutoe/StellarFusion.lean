@@ -19,6 +19,7 @@ import Mathlib
 import Gutoe.ParticleFormation
 import Gutoe.BaryonPhysics
 import Gutoe.GaugeGroupSU2
+import Gutoe.GaugeConstants
 import Gutoe.EinsteinFromLattice
 import Gutoe.FineStructure
 
@@ -27,6 +28,7 @@ namespace Gutoe.StellarFusion
 open Gutoe
 open Gutoe.BaryonPhysics
 open Gutoe.GaugeGroupSU2
+open Gutoe.GaugeConstants
 open Gutoe.EinsteinFromLattice
 open Gutoe.FineStructure
 
@@ -203,6 +205,59 @@ theorem gamow_penetration_positive
   constructor
   · exact gamow_factor_positive alphaEM mReduced E
   · exact gamow_factor_lt_one_of_positive_params alpha_em_positive hm hE
+
+/-- Fermi-scale weak prefactor from the SU(2) mass relation:
+    `G_F = 1 / (2 f₀²)`. -/
+noncomputable def weakFermiPrefactor (f0 : ℝ) : ℝ := 1 / (2 * f0 ^ 2)
+
+theorem weak_fermi_prefactor_from_su2_relation
+    (g f0 : ℝ) (hg : g ≠ 0) (hf0 : f0 ≠ 0) :
+    g ^ 2 / (8 * (g * f0 / 2) ^ 2) = weakFermiPrefactor f0 := by
+  unfold weakFermiPrefactor
+  simpa using fermi_constant_from_mw_relation g f0 hg hf0
+
+theorem weak_fermi_prefactor_positive
+    (f0 : ℝ) (hf0 : f0 ≠ 0) :
+    0 < weakFermiPrefactor f0 := by
+  unfold weakFermiPrefactor
+  have hf0sq : 0 < f0 ^ 2 := by
+    nlinarith [sq_pos_of_ne_zero hf0]
+  have hden : 0 < 2 * f0 ^ 2 := by nlinarith
+  exact one_div_pos.mpr hden
+
+/-- Structural pp weak reaction-rate kernel from SU(2) coupling and Gamow tunneling. -/
+noncomputable def ppWeakRateFromSU2
+    (g f0 protonDensity mReduced E : ℝ) : ℝ :=
+  (g ^ 2 / (8 * (g * f0 / 2) ^ 2)) * protonDensity ^ 2 *
+    gamowFactor alphaEM mReduced E
+
+/-- Under finite SU(2) coupling scale and positive thermodynamic conditions,
+    the pp weak reaction-rate kernel is strictly positive. -/
+theorem pp_weak_rate_positive_from_su2_and_gamow
+    (g f0 protonDensity mReduced E : ℝ)
+    (hg : g ≠ 0)
+    (hf0 : f0 ≠ 0)
+    (hρp : 0 < protonDensity)
+    (hm : 0 < mReduced)
+    (hE : 0 < E) :
+    (∃ J : QuarkType → QuarkType,
+      J QuarkType.UP = QuarkType.DOWN ∧
+      quarkCharge QuarkType.UP =
+        quarkCharge (J QuarkType.UP) + positronCharge + electronNeutrinoCharge) ∧
+    0 < ppWeakRateFromSU2 g f0 protonDensity mReduced E := by
+  refine ⟨weak_vertex_exists, ?_⟩
+  unfold ppWeakRateFromSU2
+  have hfermiEq :
+      g ^ 2 / (8 * (g * f0 / 2) ^ 2) = weakFermiPrefactor f0 :=
+    weak_fermi_prefactor_from_su2_relation g f0 hg hf0
+  have hfermiPos : 0 < weakFermiPrefactor f0 :=
+    weak_fermi_prefactor_positive f0 hf0
+  have hρp2 : 0 < protonDensity ^ 2 := by
+    nlinarith [sq_pos_of_ne_zero (show protonDensity ≠ 0 from ne_of_gt hρp)]
+  have hgamPos : 0 < gamowFactor alphaEM mReduced E :=
+    (gamow_penetration_positive mReduced E hm hE).1
+  rw [hfermiEq]
+  exact mul_pos (mul_pos hfermiPos hρp2) hgamPos
 
 -- ── 4) Ignition threshold + hydrostatic balance witness ─────────────────────
 
