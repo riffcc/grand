@@ -28,6 +28,7 @@
 pub mod equations;
 pub mod constants;
 pub mod dynamics_map;
+pub mod falsifiability;
 pub mod runtime_emulator;
 pub mod stellar_reactions;
 pub mod reaction_rates;
@@ -41,6 +42,7 @@ pub mod star_catalog;
 pub use equations::*;
 pub use constants::*;
 pub use dynamics_map::*;
+pub use falsifiability::*;
 pub use runtime_emulator::*;
 pub use stellar_reactions::*;
 pub use reaction_rates::*;

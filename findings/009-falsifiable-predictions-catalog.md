@@ -59,4 +59,10 @@ All criteria below are intentionally binary: pass window or dead.
 ## Acceptance Artifacts
 
 - This file now defines numeric fail windows.
-- Next step is wiring each criterion to automated checks and emitting a pass/fail dashboard.
+- Runtime gates are now wired in Rust:
+  - `crates/gutoe-physics/src/falsifiability.rs`
+  - `evaluate_structural()` enforces structural/gauge/`lambda_qg` checks.
+  - `evaluate_with_corrected(...)` enforces numeric EW-scale windows.
+- Current status is explicit and honest:
+  - Structural gates pass in tests.
+  - Corrected EW gates are still marked as a bridge gap until the full no-free-parameter correction chain is fully wired.
