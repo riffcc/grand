@@ -349,6 +349,81 @@ pub fn lane_emden_residual_n0(xi: f64) -> f64 {
         + xi * xi
 }
 
+/// Integer-index multiplied Lane-Emden residual:
+/// ξ² θ'' + 2 ξ θ' + ξ² θ^n.
+#[inline]
+pub fn lane_emden_residual_nat(n: u32, xi: f64, theta: f64, theta_prime: f64, theta_double_prime: f64) -> f64 {
+    xi * xi * theta_double_prime + 2.0 * xi * theta_prime + xi * xi * theta.powi(n as i32)
+}
+
+/// Origin regularity check for Lane-Emden profiles.
+#[inline]
+pub fn lane_emden_regular_origin(theta0: f64, theta_prime0: f64, tol: f64) -> bool {
+    (theta0 - 1.0).abs() <= tol && theta_prime0.abs() <= tol
+}
+
+/// Integrate the integer-index Lane-Emden ODE with RK4 using the
+/// regular center expansion for initialization:
+/// θ(ξ) ≈ 1 - ξ²/6, θ'(ξ) ≈ -ξ/3.
+pub fn lane_emden_integrate_rk4_nat(n: u32, xi_max: f64, step: f64) -> Option<Vec<(f64, f64, f64)>> {
+    if xi_max <= 0.0 || step <= 0.0 || !xi_max.is_finite() || !step.is_finite() {
+        return None;
+    }
+
+    // Seed from the regular-center expansion at ξ = step to avoid ξ=0 singularity.
+    let mut xi = step;
+    let mut theta = lane_emden_theta_n0(xi);
+    let mut z = lane_emden_theta_n0_prime(xi); // z = θ'
+
+    let mut out = Vec::new();
+    out.push((0.0, 1.0, 0.0));
+    out.push((xi, theta, z));
+
+    while xi < xi_max {
+        let h = (xi_max - xi).min(step);
+
+        let f_theta = |zz: f64| zz;
+        let f_z = |x: f64, th: f64, zz: f64| -> f64 {
+            if x <= 0.0 {
+                0.0
+            } else {
+                -2.0 * zz / x - th.powi(n as i32)
+            }
+        };
+
+        let k1_t = f_theta(z);
+        let k1_z = f_z(xi, theta, z);
+
+        let t2 = theta + 0.5 * h * k1_t;
+        let z2 = z + 0.5 * h * k1_z;
+        let x2 = xi + 0.5 * h;
+        let k2_t = f_theta(z2);
+        let k2_z = f_z(x2, t2, z2);
+
+        let t3 = theta + 0.5 * h * k2_t;
+        let z3 = z + 0.5 * h * k2_z;
+        let k3_t = f_theta(z3);
+        let k3_z = f_z(x2, t3, z3);
+
+        let t4 = theta + h * k3_t;
+        let z4 = z + h * k3_z;
+        let x4 = xi + h;
+        let k4_t = f_theta(z4);
+        let k4_z = f_z(x4, t4, z4);
+
+        theta += h * (k1_t + 2.0 * k2_t + 2.0 * k3_t + k4_t) / 6.0;
+        z += h * (k1_z + 2.0 * k2_z + 2.0 * k3_z + k4_z) / 6.0;
+        xi += h;
+
+        if !theta.is_finite() || !z.is_finite() {
+            return None;
+        }
+        out.push((xi, theta, z));
+    }
+
+    Some(out)
+}
+
 /// Polytropic core-temperature proxy:
 /// T_c ∝ ξ G μ √(M ρ_c)
 ///
@@ -483,6 +558,40 @@ mod tests {
             let r = lane_emden_residual_n0(xi);
             assert!(r.abs() < 1e-12, "residual={r} at xi={xi}");
         }
+    }
+
+    #[test]
+    fn lane_emden_residual_nat_reduces_to_n0_residual() {
+        for &xi in &[0.0, 0.5, 1.0, 2.0] {
+            let theta = lane_emden_theta_n0(xi);
+            let theta_p = lane_emden_theta_n0_prime(xi);
+            let theta_pp = lane_emden_theta_n0_prime_prime(xi);
+            let r_nat = lane_emden_residual_nat(0, xi, theta, theta_p, theta_pp);
+            let r_n0 = lane_emden_residual_n0(xi);
+            assert!((r_nat - r_n0).abs() < 1e-12, "xi={xi}: r_nat={r_nat}, r_n0={r_n0}");
+        }
+    }
+
+    #[test]
+    fn lane_emden_regular_origin_accepts_exact_center() {
+        assert!(lane_emden_regular_origin(1.0, 0.0, 1e-12));
+        assert!(!lane_emden_regular_origin(0.99, 0.0, 1e-12));
+    }
+
+    #[test]
+    fn lane_emden_rk4_n0_matches_closed_form_near_xi1() {
+        let sol = lane_emden_integrate_rk4_nat(0, 1.0, 1.0e-3).expect("solution");
+        let (_xi, theta, _z) = sol.last().copied().expect("last");
+        let expected = lane_emden_theta_n0(1.0);
+        assert!((theta - expected).abs() < 2.0e-3, "theta={theta}, expected={expected}");
+    }
+
+    #[test]
+    fn lane_emden_rk4_n1_matches_sinxi_over_xi_near_xi1() {
+        let sol = lane_emden_integrate_rk4_nat(1, 1.0, 1.0e-3).expect("solution");
+        let (_xi, theta, _z) = sol.last().copied().expect("last");
+        let expected = 1.0f64.sin() / 1.0;
+        assert!((theta - expected).abs() < 1.0e-2, "theta={theta}, expected={expected}");
     }
 
     #[test]

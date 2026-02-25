@@ -544,10 +544,48 @@ noncomputable def laneEmdenResidualN0 (ξ : ℝ) : ℝ :=
     + 2 * ξ * laneEmdenThetaN0Prime ξ
     + ξ ^ 2
 
+/-- Integer-index multiplied Lane-Emden residual:
+    `ξ² θ'' + 2ξ θ' + ξ² θ^n`. -/
+noncomputable def laneEmdenResidualNat
+    (n : ℕ) (ξ θ θ' θ'' : ℝ) : ℝ :=
+  ξ ^ 2 * θ'' + 2 * ξ * θ' + ξ ^ 2 * θ ^ n
+
+/-- Origin regularity constraints for Lane-Emden profiles. -/
+def laneEmdenRegularOrigin (θ θ' : ℝ → ℝ) : Prop :=
+  θ 0 = 1 ∧ θ' 0 = 0
+
+/-- Integer-index Lane-Emden solution schema with origin regularity. -/
+def LaneEmdenSolutionNat
+    (n : ℕ) (θ θ' θ'' : ℝ → ℝ) : Prop :=
+  laneEmdenRegularOrigin θ θ' ∧
+  ∀ ξ : ℝ, laneEmdenResidualNat n ξ (θ ξ) (θ' ξ) (θ'' ξ) = 0
+
+/-- The exact `n = 0` profile satisfies origin regularity. -/
+theorem lane_emden_n0_regular_origin :
+    laneEmdenRegularOrigin laneEmdenThetaN0 laneEmdenThetaN0Prime := by
+  unfold laneEmdenRegularOrigin laneEmdenThetaN0 laneEmdenThetaN0Prime
+  constructor <;> norm_num
+
+/-- The exact `n = 0` profile satisfies the generalized residual form. -/
+theorem lane_emden_residual_nat_n0_zero (ξ : ℝ) :
+    laneEmdenResidualNat 0 ξ (laneEmdenThetaN0 ξ)
+      (laneEmdenThetaN0Prime ξ) (laneEmdenThetaN0PrimePrime ξ) = 0 := by
+  unfold laneEmdenResidualNat laneEmdenThetaN0PrimePrime laneEmdenThetaN0Prime laneEmdenThetaN0
+  ring_nf
+
 /-- The exact `n = 0` profile solves the multiplied Lane-Emden equation exactly. -/
 theorem lane_emden_residual_n0_zero (ξ : ℝ) :
     laneEmdenResidualN0 ξ = 0 := by
   unfold laneEmdenResidualN0 laneEmdenThetaN0PrimePrime laneEmdenThetaN0Prime
   ring
+
+/-- The exact `n = 0` profile is a full integer-index Lane-Emden solution witness. -/
+theorem lane_emden_n0_solution :
+    LaneEmdenSolutionNat 0 laneEmdenThetaN0 laneEmdenThetaN0Prime
+      laneEmdenThetaN0PrimePrime := by
+  constructor
+  · exact lane_emden_n0_regular_origin
+  · intro ξ
+    exact lane_emden_residual_nat_n0_zero ξ
 
 end Gutoe.StellarFusion
