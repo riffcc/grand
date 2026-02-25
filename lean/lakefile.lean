@@ -21,6 +21,7 @@ lean_lib Gutoe where
              `Gutoe.GaugeConstants, `Gutoe.Chirality, `Gutoe.ContinuumLimit,
              `Gutoe.LorentzInvariance, `Gutoe.GrandMasterTheorem,
              `Gutoe.GravityMetric,
+             `Gutoe.EinsteinFromLattice,
              `Gutoe.KerrGeometry,
              `Gutoe.KerrCameraStability,
              `Gutoe.KerrTracerEquations,
