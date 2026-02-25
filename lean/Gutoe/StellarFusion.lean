@@ -525,4 +525,29 @@ theorem stellar_ignition_equilibrium_exists_polytropic_from_lattice_params
       (hG := newton_from_lattice_positive hv hκ)
       (hμ := hμ) (hξ := hξ) (hTIgn := hTIgn) hComp
 
+/-- Exact `n = 0` Lane-Emden profile used as a baseline validation case. -/
+noncomputable def laneEmdenThetaN0 (ξ : ℝ) : ℝ :=
+  1 - ξ ^ 2 / 6
+
+/-- First derivative of the exact `n = 0` Lane-Emden profile. -/
+noncomputable def laneEmdenThetaN0Prime (ξ : ℝ) : ℝ :=
+  -ξ / 3
+
+/-- Second derivative of the exact `n = 0` Lane-Emden profile. -/
+noncomputable def laneEmdenThetaN0PrimePrime (_ξ : ℝ) : ℝ :=
+  -(1 / 3 : ℝ)
+
+/-- Multiplied-form `n = 0` Lane-Emden residual:
+    `ξ² θ'' + 2ξ θ' + ξ²`. -/
+noncomputable def laneEmdenResidualN0 (ξ : ℝ) : ℝ :=
+  ξ ^ 2 * laneEmdenThetaN0PrimePrime ξ
+    + 2 * ξ * laneEmdenThetaN0Prime ξ
+    + ξ ^ 2
+
+/-- The exact `n = 0` profile solves the multiplied Lane-Emden equation exactly. -/
+theorem lane_emden_residual_n0_zero (ξ : ℝ) :
+    laneEmdenResidualN0 ξ = 0 := by
+  unfold laneEmdenResidualN0 laneEmdenThetaN0PrimePrime laneEmdenThetaN0Prime
+  ring
+
 end Gutoe.StellarFusion

@@ -322,6 +322,33 @@ pub fn lane_emden_compression_proxy(mass: f64, rho_c: f64) -> f64 {
     mass * rho_c
 }
 
+/// Exact n=0 Lane-Emden profile θ(ξ) = 1 - ξ²/6.
+#[inline]
+pub fn lane_emden_theta_n0(xi: f64) -> f64 {
+    1.0 - xi * xi / 6.0
+}
+
+/// First derivative of the exact n=0 Lane-Emden profile.
+#[inline]
+pub fn lane_emden_theta_n0_prime(xi: f64) -> f64 {
+    -xi / 3.0
+}
+
+/// Second derivative of the exact n=0 Lane-Emden profile.
+#[inline]
+pub fn lane_emden_theta_n0_prime_prime(_xi: f64) -> f64 {
+    -1.0 / 3.0
+}
+
+/// Multiplied-form n=0 Lane-Emden residual:
+/// ξ² θ'' + 2 ξ θ' + ξ².
+#[inline]
+pub fn lane_emden_residual_n0(xi: f64) -> f64 {
+    xi * xi * lane_emden_theta_n0_prime_prime(xi)
+        + 2.0 * xi * lane_emden_theta_n0_prime(xi)
+        + xi * xi
+}
+
 /// Polytropic core-temperature proxy:
 /// T_c ∝ ξ G μ √(M ρ_c)
 ///
@@ -442,6 +469,20 @@ mod tests {
         let t_low = core_temperature_polytropic(g, mu, xi, 1.0, 1.0);
         let t_high = core_temperature_polytropic(g, mu, xi, 4.0, 4.0);
         assert!(t_high > t_low);
+    }
+
+    #[test]
+    fn lane_emden_n0_profile_matches_closed_form_values() {
+        assert!((lane_emden_theta_n0(0.0) - 1.0).abs() < 1e-12);
+        assert!((lane_emden_theta_n0(1.0) - (5.0 / 6.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn lane_emden_n0_residual_is_numerically_zero() {
+        for &xi in &[0.0, 0.5, 1.0, 2.0, 3.0] {
+            let r = lane_emden_residual_n0(xi);
+            assert!(r.abs() < 1e-12, "residual={r} at xi={xi}");
+        }
     }
 
     #[test]
