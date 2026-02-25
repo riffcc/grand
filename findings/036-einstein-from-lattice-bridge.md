@@ -26,6 +26,19 @@ The module now proves an end-to-end bridge theorem shape:
 - and at `l_P = 0`, this collapses to classical Einstein:
   - `G_{μν} + Λ g_{μν} = κ T_{μν}`
 
+Additional bridge hardening now included:
+
+- canonical SC cube body-diagonal simplicialization (`scCubeTetrahedra`) with:
+  - exact tetra count (`= 6`)
+  - each listed tetra has 4 vertices
+  - coverage of all cube vertices `0..7`
+- deficit-angle normalization:
+  - `δ = 2π - Σθ`
+  - proof that flat full-angle sum implies `δ = 0`
+- edge-equation layer:
+  - `reggeEdgeEquation` and stationarity-to-zero-source theorem
+  - projection theorem from edge-level equations into tensor-level `ReggeToEinsteinBridge`
+
 Core theorems:
 
 - `clifford_gravity_prerequisites`
@@ -33,6 +46,9 @@ Core theorems:
 - `modified_einstein_planck_zero`
 - `einstein_from_clifford_lattice`
 - `einstein_from_clifford_lattice_gr_limit`
+- `deficitAngle_zero_of_full_angle`
+- `regge_stationary_implies_zero_source`
+- `regge_edge_projection_to_bridge`
 
 ## Verification
 
