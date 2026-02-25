@@ -28,6 +28,7 @@ lean_lib Gutoe where
              `Gutoe.Geodesic3DProjection,
              `Gutoe.SynchrotronGRMHD,
              `Gutoe.SynchrotronTransfer,
+             `Gutoe.StrongCP,
              `Gutoe.FalsifiabilityCatalog,
              `Gutoe.AsymptoticFreedomEntropy,
              `Gutoe.SM.Rep,

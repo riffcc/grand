@@ -6,6 +6,7 @@
  */
 
 use gutoe_physics::constants::{ALPHA, ALPHA_LEADING_ORDER, LAMBDA_QG};
+use gutoe_physics::dynamics_map::StandardModelDynamicsMap;
 use gutoe_core::constants as core_constants;
 use std::fs::{self, File};
 use std::io::Write;
@@ -29,6 +30,7 @@ impl ParityRow {
 }
 
 fn main() {
+    let sm = StandardModelDynamicsMap::from_clifford_z3();
     let rows = vec![
         ParityRow {
             term: "lambda_qg",
@@ -67,6 +69,18 @@ fn main() {
             // Derived from sin²(theta_W)=3/13 in the Lean gauge constants chain.
             runtime: 1.0 / (1.0 - (3.0 / 13.0)),
             tol: 1e-15,
+        },
+        ParityRow {
+            term: "theta_qcd_structural",
+            expected: 0.0,
+            runtime: sm.theta_qcd,
+            tol: 1e-15,
+        },
+        ParityRow {
+            term: "neutron_edm_from_theta_structural",
+            expected: 0.0,
+            runtime: sm.neutron_edm_e_cm_from_theta(),
+            tol: 1e-30,
         },
     ];
 
