@@ -322,6 +322,48 @@ theorem pp_thermal_average3_positive
   have hthree : (0 : ℝ) < 3 := by norm_num
   exact div_pos hsum hthree
 
+/-- Uniform `(n+1)`-sample thermal average over an energy ladder `E0 + i*dE`. -/
+noncomputable def ppThermalAverageUniform
+    (g f0 protonDensity mReduced T E0 dE : ℝ) (n : ℕ) : ℝ :=
+  ((Finset.univ : Finset (Fin (n + 1))).sum
+      (fun i => ppThermalKernel g f0 protonDensity mReduced T
+        (E0 + (i : ℝ) * dE))) / (n + 1)
+
+theorem pp_thermal_average_uniform_positive
+    (g f0 protonDensity mReduced T E0 dE : ℝ) (n : ℕ)
+    (hg : g ≠ 0)
+    (hf0 : f0 ≠ 0)
+    (hρp : 0 < protonDensity)
+    (hm : 0 < mReduced)
+    (hE0 : 0 < E0)
+    (hdE : 0 ≤ dE) :
+    0 < ppThermalAverageUniform g f0 protonDensity mReduced T E0 dE n := by
+  unfold ppThermalAverageUniform
+  let term : Fin (n + 1) → ℝ := fun i =>
+    ppThermalKernel g f0 protonDensity mReduced T (E0 + (i : ℝ) * dE)
+  have hterm_pos : ∀ i : Fin (n + 1), 0 < term i := by
+    intro i
+    have hi_nonneg : 0 ≤ (i : ℝ) := by
+      exact_mod_cast (Nat.zero_le i.1)
+    have hEi_nonneg : 0 ≤ (i : ℝ) * dE := mul_nonneg hi_nonneg hdE
+    have hEi_pos : 0 < E0 + (i : ℝ) * dE := by nlinarith
+    exact pp_thermal_kernel_positive g f0 protonDensity mReduced T
+      (E0 + (i : ℝ) * dE) hg hf0 hρp hm hEi_pos
+  have hsum_nonneg : ∀ i ∈ (Finset.univ : Finset (Fin (n + 1))), 0 ≤ term i := by
+    intro i _
+    exact le_of_lt (hterm_pos i)
+  have hzero_mem : (0 : Fin (n + 1)) ∈ (Finset.univ : Finset (Fin (n + 1))) := by
+    simp
+  have hle :
+      term 0 ≤ (Finset.univ : Finset (Fin (n + 1))).sum term := by
+    exact Finset.single_le_sum hsum_nonneg hzero_mem
+  have hsum_pos :
+      0 < (Finset.univ : Finset (Fin (n + 1))).sum term := by
+    exact lt_of_lt_of_le (hterm_pos 0) hle
+  have hden : (0 : ℝ) < (n + 1 : ℝ) := by
+    exact_mod_cast Nat.succ_pos n
+  exact div_pos hsum_pos hden
+
 -- ── 4) Ignition threshold + hydrostatic balance witness ─────────────────────
 
 /-- Minimal linearized core-temperature compression model:

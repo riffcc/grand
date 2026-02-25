@@ -290,6 +290,32 @@ pub fn pp_thermal_average3(
     Some((k1 + k2 + k3) / 3.0)
 }
 
+/// Uniform `(n+1)`-sample thermal average on an energy ladder `e0 + i * de`.
+///
+/// This mirrors `ppThermalAverageUniform` in `Gutoe/StellarFusion.lean`.
+pub fn pp_thermal_average_uniform(
+    g: f64,
+    f0: f64,
+    proton_density: f64,
+    m_reduced: f64,
+    temperature_scale: f64,
+    e0: f64,
+    de: f64,
+    n: u32,
+) -> Option<f64> {
+    if de < 0.0 || e0 <= 0.0 {
+        return None;
+    }
+
+    let mut sum = 0.0;
+    for i in 0..=n {
+        let e = e0 + f64::from(i) * de;
+        let k = pp_thermal_kernel(g, f0, proton_density, m_reduced, temperature_scale, e)?;
+        sum += k;
+    }
+    Some(sum / f64::from(n + 1))
+}
+
 /// Lane-Emden-style compression proxy used by the Lean stellar-fusion bridge.
 #[inline]
 pub fn lane_emden_compression_proxy(mass: f64, rho_c: f64) -> f64 {
@@ -458,6 +484,24 @@ mod tests {
         let avg = pp_thermal_average3(0.65, 246.0, 1.0e30, 469.136, 0.002, 0.0008, 0.001, 0.0012)
             .expect("avg");
         assert!(avg > 0.0);
+    }
+
+    #[test]
+    fn pp_thermal_average_uniform_is_strictly_positive_under_physical_inputs() {
+        let avg =
+            pp_thermal_average_uniform(0.65, 246.0, 1.0e30, 469.136, 0.002, 0.0008, 0.0001, 8)
+                .expect("avg");
+        assert!(avg > 0.0);
+    }
+
+    #[test]
+    fn pp_thermal_average_uniform_rejects_nonphysical_grid() {
+        let bad_e0 = pp_thermal_average_uniform(0.65, 246.0, 1.0e30, 469.136, 0.002, 0.0, 0.001, 4);
+        assert!(bad_e0.is_none());
+
+        let bad_de =
+            pp_thermal_average_uniform(0.65, 246.0, 1.0e30, 469.136, 0.002, 0.001, -0.0001, 4);
+        assert!(bad_de.is_none());
     }
 
     // ── Black-hole entropy ───────────────────────────────────────────────────
