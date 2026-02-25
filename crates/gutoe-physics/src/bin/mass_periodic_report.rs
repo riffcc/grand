@@ -1,6 +1,6 @@
 use gutoe_physics::{
     closest_to_target_island, derived_superheavy_proton_candidates, magic_s2n_summary, proton_s2p_summary,
-    rank_island_candidates_with_config, scan_nuclear_chart, IslandRankingConfig, ScanConfig,
+    rank_island_candidates_with_config, scan_nuclear_chart, IslandRankingConfig, NucleusRecord, ScanConfig,
     StandardModelDynamicsMap,
 };
 use std::collections::BTreeMap;
@@ -18,12 +18,8 @@ fn triangular(n: u32) -> u32 {
     n * (n + 1) / 2
 }
 
-fn observed_has_stable_isotope(z: u16) -> bool {
-    z <= 82 && z != 43 && z != 61
-}
-
-fn observed_stable_isotope_count_ref(z: u16) -> Option<u16> {
-    // High-confidence anchor set for drift metrics (Z <= 20).
+fn observed_stable_isotope_count(z: u16) -> Option<u16> {
+    // Stable-isotope count reference (strictly stable nuclei; no long-lived radioisotopes).
     match z {
         1 => Some(2),
         2 => Some(2),
@@ -45,8 +41,110 @@ fn observed_stable_isotope_count_ref(z: u16) -> Option<u16> {
         18 => Some(3),
         19 => Some(2),
         20 => Some(6),
+        21 => Some(1),
+        22 => Some(5),
+        23 => Some(1),
+        24 => Some(4),
+        25 => Some(1),
+        26 => Some(4),
+        27 => Some(1),
+        28 => Some(5),
+        29 => Some(2),
+        30 => Some(5),
+        31 => Some(2),
+        32 => Some(5),
+        33 => Some(1),
+        34 => Some(6),
+        35 => Some(2),
+        36 => Some(6),
+        37 => Some(2),
+        38 => Some(4),
+        39 => Some(1),
+        40 => Some(5),
+        41 => Some(1),
+        42 => Some(7),
+        43 => Some(0),
+        44 => Some(7),
+        45 => Some(1),
+        46 => Some(6),
+        47 => Some(2),
+        48 => Some(8),
+        49 => Some(2),
+        50 => Some(10),
+        51 => Some(2),
+        52 => Some(8),
+        53 => Some(1),
+        54 => Some(9),
+        55 => Some(1),
+        56 => Some(7),
+        57 => Some(1),
+        58 => Some(4),
+        59 => Some(1),
+        60 => Some(7),
+        61 => Some(0),
+        62 => Some(7),
+        63 => Some(2),
+        64 => Some(7),
+        65 => Some(1),
+        66 => Some(7),
+        67 => Some(1),
+        68 => Some(6),
+        69 => Some(1),
+        70 => Some(7),
+        71 => Some(1),
+        72 => Some(6),
+        73 => Some(1),
+        74 => Some(5),
+        75 => Some(0),
+        76 => Some(7),
+        77 => Some(2),
+        78 => Some(6),
+        79 => Some(1),
+        80 => Some(7),
+        81 => Some(2),
+        82 => Some(4),
+        83 => Some(0),
+        84 => Some(0),
+        85 => Some(0),
+        86 => Some(0),
+        87 => Some(0),
+        88 => Some(0),
+        89 => Some(0),
+        90 => Some(0),
+        91 => Some(0),
+        92 => Some(0),
+        93 => Some(0),
+        94 => Some(0),
         _ => None,
     }
+}
+
+fn predicted_long_lived_isotope(r: &NucleusRecord) -> bool {
+    if !r.beta_optimal_for_a {
+        return false;
+    }
+    if r.fissility > 1.0 {
+        return false;
+    }
+    // Explicit beta-competition proxy: stay near valley and require positive separation.
+    let ok_s2n = if r.n <= 2 {
+        true
+    } else {
+        r.s2n_mev.map(|v| v > 0.0).unwrap_or(false)
+    };
+    let ok_s2p = if r.z <= 2 {
+        true
+    } else {
+        r.s2p_mev.map(|v| v > 0.0).unwrap_or(false)
+    };
+    if !(ok_s2n && ok_s2p) {
+        return false;
+    }
+    // High-Z stability requires long half-life in this classifier.
+    if r.z > 82 && r.sf_log10_half_life_s < 20.0 {
+        return false;
+    }
+    true
 }
 
 fn now_unix_seconds() -> u64 {
@@ -80,10 +178,7 @@ fn main() -> anyhow::Result<()> {
         },
         40,
     );
-    let stable_like: Vec<_> = records
-        .iter()
-        .filter(|r| r.s2n_mev.unwrap_or(-1.0) > 0.0 && r.s2p_mev.unwrap_or(-1.0) > 0.0)
-        .collect();
+    let stable_like: Vec<_> = records.iter().filter(|r| predicted_long_lived_isotope(r)).collect();
     let valley: Vec<_> = records.iter().filter(|r| r.beta_optimal_for_a).collect();
     let closest_target = closest_to_target_island(&records, 114, 184);
     let top = ranked.first().copied();
@@ -133,21 +228,19 @@ fn main() -> anyhow::Result<()> {
     for z in cfg.z_min..=cfg.z_max {
         let pred_count = isotopes_per_z.get(&z).copied().unwrap_or(0);
         let pred_has = pred_count > 0;
-        let obs_has = observed_has_stable_isotope(z);
-        if z <= 94 {
-            stable_presence_total += 1;
-            if pred_has == obs_has {
-                stable_presence_correct += 1;
-            }
-        }
-        let (obs_ref_s, drift_s) = match observed_stable_isotope_count_ref(z) {
+        let (obs_ref_s, obs_has, drift_s) = match observed_stable_isotope_count(z) {
             Some(obs_ref) => {
+                let obs_has = obs_ref > 0;
+                stable_presence_total += 1;
+                if pred_has == obs_has {
+                    stable_presence_correct += 1;
+                }
                 let drift = (pred_count as f64 - obs_ref as f64).abs();
                 ref_count_abs_error_sum += drift;
                 ref_count_samples += 1;
-                (obs_ref.to_string(), format!("{drift:.3}"))
+                (obs_ref.to_string(), obs_has, format!("{drift:.3}"))
             }
-            None => (String::new(), String::new()),
+            None => (String::new(), false, String::new()),
         };
         scoreboard_csv.push_str(&format!(
             "{},{},{},{},{},{}\n",
@@ -192,7 +285,7 @@ fn main() -> anyhow::Result<()> {
             "    \"max_z_with_stable_like\": {},\n",
             "    \"avg_isotopes_per_element\": {:.3},\n",
             "    \"stable_presence_accuracy_z_le_94\": {:.6},\n",
-            "    \"stable_isotope_count_mae_anchor_z_le_20\": {:.6},\n",
+            "    \"stable_isotope_count_mae_z_le_94\": {:.6},\n",
             "    \"top_island\": {{\"z\": {}, \"n\": {}, \"score\": {:.6}}},\n",
             "    \"closest_to_114_184\": {{\"z\": {}, \"n\": {}, \"score\": {:.6}}}\n",
             "  }},\n",
