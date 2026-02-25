@@ -35,6 +35,7 @@ lean_lib Gutoe where
              `Gutoe.StrongCPEmergence,
              `Gutoe.StrongCPGeneralCases,
              `Gutoe.SMQCDUnification,
+             `Gutoe.StellarFusion,
              `Gutoe.FalsifiabilityCatalog,
              `Gutoe.AsymptoticFreedomEntropy,
              `Gutoe.SM.Rep,
