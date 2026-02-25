@@ -1,6 +1,7 @@
 use gutoe_physics::{
-    closest_to_target_island, rank_island_candidates_with_config, scan_nuclear_chart, shell_gate_metrics,
-    write_magic_discontinuities_csv, write_records_csv, IslandRankingConfig, ScanConfig, ShellParams,
+    closest_to_target_island, magic_s2n_summary, rank_island_candidates_with_config, scan_nuclear_chart,
+    shell_gate_metrics, write_magic_discontinuities_csv, write_magic_summary_csv, write_records_csv,
+    IslandRankingConfig, ScanConfig, ShellParams,
 };
 use std::env;
 use std::fs;
@@ -73,10 +74,12 @@ fn main() -> anyhow::Result<()> {
         top_candidate_z: u16,
         top_candidate_n: u16,
         top_candidate_score: f64,
+        top_candidate_barrier: f64,
+        top_candidate_sf_log10: f64,
     }
 
     let mut leaderboard = String::from(
-        "rank,score,amp_z,amp_n,sigma_z,sigma_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score\n",
+        "rank,score,amp_z,amp_n,sigma_z,sigma_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
     );
     let mut rows: Vec<Row> = Vec::new();
     let mut best_score = f64::NEG_INFINITY;
@@ -123,6 +126,9 @@ fn main() -> anyhow::Result<()> {
 
                     let (top_candidate_z, top_candidate_n) =
                         top.map(|r| (r.z, r.n)).unwrap_or((0, 0));
+                    let top_candidate_barrier = top.map(|r| r.fission_barrier_mev).unwrap_or(0.0);
+                    let top_candidate_sf_log10 =
+                        top.map(|r| r.sf_log10_half_life_s).unwrap_or(-1.0e9);
                     let (closest_z, closest_n) =
                         closest.map(|r| (r.z, r.n)).unwrap_or((0, 0));
                     rows.push(Row {
@@ -140,6 +146,8 @@ fn main() -> anyhow::Result<()> {
                         top_candidate_z,
                         top_candidate_n,
                         top_candidate_score: top_score,
+                        top_candidate_barrier,
+                        top_candidate_sf_log10,
                     });
 
                     if objective > best_score {
@@ -158,7 +166,7 @@ fn main() -> anyhow::Result<()> {
 
     for (idx, row) in rows.iter().enumerate() {
         leaderboard.push_str(&format!(
-            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6}\n",
+            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
             idx + 1,
             row.score,
             row.amp_z,
@@ -173,11 +181,14 @@ fn main() -> anyhow::Result<()> {
             row.closest_score,
             row.top_candidate_z,
             row.top_candidate_n,
-            row.top_candidate_score
+            row.top_candidate_score,
+            row.top_candidate_barrier,
+            row.top_candidate_sf_log10
         ));
     }
 
     let best_magic = gutoe_physics::magic_s2n_discontinuities(&best_records, top_k);
+    let best_magic_summary = magic_s2n_summary(&best_records);
     let (amp_z, amp_n, sigma_z, sigma_n) = best_params;
     let metrics = best_metrics.unwrap_or(gutoe_physics::ShellGateMetrics {
         top_delta_s2n_mev: 0.0,
@@ -195,10 +206,12 @@ fn main() -> anyhow::Result<()> {
         metrics.avg_top5_delta_s2n_mev,
         metrics.strongest_n184_delta_s2n_mev
     );
-    let mut top_csv = String::from("rank,Z,N,A,binding_per_nucleon_mev,s2n_mev,s2p_mev,fissility,stability_score\n");
+    let mut top_csv = String::from(
+        "rank,Z,N,A,binding_per_nucleon_mev,s2n_mev,s2p_mev,fissility,fission_barrier_mev,sf_log10_half_life_s,stability_score\n",
+    );
     for (idx, r) in best_ranked.iter().enumerate() {
         top_csv.push_str(&format!(
-            "{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
+            "{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
             idx + 1,
             r.z,
             r.n,
@@ -207,6 +220,8 @@ fn main() -> anyhow::Result<()> {
             r.s2n_mev.unwrap_or(f64::NAN),
             r.s2p_mev.unwrap_or(f64::NAN),
             r.fissility,
+            r.fission_barrier_mev,
+            r.sf_log10_half_life_s,
             r.stability_score
         ));
     }
@@ -214,6 +229,7 @@ fn main() -> anyhow::Result<()> {
 
     write_records_csv(out.join("best_nuclides.csv"), &best_records)?;
     write_magic_discontinuities_csv(out.join("best_magic_discontinuities.csv"), &best_magic)?;
+    write_magic_summary_csv(out.join("best_magic_summary.csv"), &best_magic_summary)?;
     fs::write(out.join("leaderboard.csv"), leaderboard)?;
     fs::write(
         out.join("summary.txt"),
@@ -229,5 +245,6 @@ fn main() -> anyhow::Result<()> {
     println!("  {}", out.join("best_top_islands.csv").display());
     println!("  {}", out.join("best_nuclides.csv").display());
     println!("  {}", out.join("best_magic_discontinuities.csv").display());
+    println!("  {}", out.join("best_magic_summary.csv").display());
     Ok(())
 }

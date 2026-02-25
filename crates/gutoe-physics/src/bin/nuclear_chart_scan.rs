@@ -1,6 +1,6 @@
 use gutoe_physics::{
-    magic_s2n_discontinuities, rank_island_candidates, scan_nuclear_chart, write_magic_discontinuities_csv,
-    write_records_csv, NucleusRecord, ScanConfig,
+    magic_s2n_discontinuities, magic_s2n_summary, rank_island_candidates, scan_nuclear_chart,
+    write_magic_discontinuities_csv, write_magic_summary_csv, write_records_csv, NucleusRecord, ScanConfig,
 };
 use std::env;
 use std::fs;
@@ -21,10 +21,12 @@ fn env_usize(name: &str, default: usize) -> usize {
 }
 
 fn write_top_islands_csv(path: PathBuf, rows: &[NucleusRecord]) -> std::io::Result<()> {
-    let mut csv = String::from("rank,Z,N,A,binding_per_nucleon_mev,s2n_mev,s2p_mev,fissility,stability_score\n");
+    let mut csv = String::from(
+        "rank,Z,N,A,binding_per_nucleon_mev,s2n_mev,s2p_mev,fissility,fission_barrier_mev,sf_log10_half_life_s,stability_score\n",
+    );
     for (idx, r) in rows.iter().enumerate() {
         csv.push_str(&format!(
-            "{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
+            "{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
             idx + 1,
             r.z,
             r.n,
@@ -33,6 +35,8 @@ fn write_top_islands_csv(path: PathBuf, rows: &[NucleusRecord]) -> std::io::Resu
             r.s2n_mev.unwrap_or(f64::NAN),
             r.s2p_mev.unwrap_or(f64::NAN),
             r.fissility,
+            r.fission_barrier_mev,
+            r.sf_log10_half_life_s,
             r.stability_score
         ));
     }
@@ -61,10 +65,12 @@ fn main() -> anyhow::Result<()> {
 
     let records = scan_nuclear_chart(cfg);
     let magic = magic_s2n_discontinuities(&records, top_k);
+    let magic_summary = magic_s2n_summary(&records);
     let islands = rank_island_candidates(&records, min_island_z, top_k);
 
     write_records_csv(out.join("nuclides.csv"), &records)?;
     write_magic_discontinuities_csv(out.join("magic_s2n_discontinuities.csv"), &magic)?;
+    write_magic_summary_csv(out.join("magic_s2n_summary.csv"), &magic_summary)?;
     write_top_islands_csv(out.join("top_islands.csv"), &islands)?;
 
     let valley: Vec<&NucleusRecord> = records.iter().filter(|r| r.beta_optimal_for_a).collect();
@@ -91,6 +97,7 @@ fn main() -> anyhow::Result<()> {
     println!("  {}", out.join("nuclides.csv").display());
     println!("  {}", out.join("valley_of_stability.csv").display());
     println!("  {}", out.join("magic_s2n_discontinuities.csv").display());
+    println!("  {}", out.join("magic_s2n_summary.csv").display());
     println!("  {}", out.join("top_islands.csv").display());
     println!("  {}", out.join("summary.txt").display());
     Ok(())

@@ -89,11 +89,14 @@ pub struct NucleusRecord {
     pub binding_mev: f64,
     pub binding_per_nucleon_mev: f64,
     pub shell_bonus_mev: f64,
+    pub shell_scale_a: f64,
     pub pairing_mev: f64,
     pub s2n_mev: Option<f64>,
     pub s2p_mev: Option<f64>,
     pub beta_optimal_for_a: bool,
     pub fissility: f64,
+    pub fission_barrier_mev: f64,
+    pub sf_log10_half_life_s: f64,
     pub stability_score: f64,
 }
 
@@ -129,6 +132,15 @@ pub struct MagicDiscontinuity {
     pub magic_n: u16,
     pub z: u16,
     pub delta_s2n_mev: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MagicSummaryRow {
+    pub magic_n: u16,
+    pub strongest_delta_s2n_mev: f64,
+    pub mean_delta_s2n_mev: f64,
+    pub z_at_strongest: u16,
+    pub sample_count: usize,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -175,7 +187,10 @@ fn semf_binding_mev(z: u16, n: u16, semf: SemfParams, shell: ShellParams) -> (f6
 
     let shell_z = shell_bonus(z, &MAGIC_NUMBERS, shell.amplitude_z, shell.sigma_z);
     let shell_n = shell_bonus(n, &MAGIC_NUMBERS, shell.amplitude_n, shell.sigma_n);
-    let shell_total = shell_z + shell_n;
+    // A-dependent shell leverage: suppress light-nucleus over-bias and let
+    // shell structure compete against Coulomb/fission in superheavy region.
+    let shell_scale = (a / 56.0).powf(0.28).clamp(0.45, 1.35);
+    let shell_total = (shell_z + shell_n) * shell_scale;
 
     let binding = volume - surface - coulomb - asymmetry + pairing + shell_total;
     (binding, shell_total, pairing)
@@ -187,11 +202,44 @@ fn fissility(z: u16, a: u16) -> f64 {
     zf * zf / af / 50.0
 }
 
-fn stability_score(binding_per_nucleon: f64, s2n: Option<f64>, s2p: Option<f64>, fissility: f64) -> f64 {
+fn fission_barrier_mev(z: u16, a: u16, fissility: f64, shell_bonus_mev: f64) -> f64 {
+    // Regime gate: spontaneous fission relevance turns on for heavy nuclei.
+    if z < 70 {
+        return 0.0;
+    }
+    let af = a as f64;
+    let macro_term = if fissility < 1.0 {
+        0.36 * (1.0 - fissility).powi(2) * af.powf(2.0 / 3.0)
+    } else {
+        0.0
+    };
+    let shell_term = 0.55 * shell_bonus_mev.max(0.0);
+    macro_term + shell_term
+}
+
+fn sf_log10_half_life_seconds(z: u16, fission_barrier_mev: f64, fissility: f64) -> f64 {
+    if z < 70 {
+        return 30.0;
+    }
+    // Coarse surrogate inspired by barrier-penetration trend:
+    // higher barrier -> longer half-life, higher fissility -> shorter half-life.
+    -20.0 + 0.9 * fission_barrier_mev - 8.0 * (fissility - 0.8).max(0.0)
+}
+
+fn stability_score(
+    binding_per_nucleon: f64,
+    s2n: Option<f64>,
+    s2p: Option<f64>,
+    fissility: f64,
+    fission_barrier_mev: f64,
+    sf_log10_half_life_s: f64,
+) -> f64 {
     let s2n_term = s2n.unwrap_or(-10.0).clamp(-10.0, 20.0);
     let s2p_term = s2p.unwrap_or(-10.0).clamp(-10.0, 20.0);
     let fissility_penalty = if fissility > 1.0 { (fissility - 1.0) * 2.5 } else { 0.0 };
-    binding_per_nucleon + 0.02 * s2n_term + 0.02 * s2p_term - fissility_penalty
+    let barrier_term = 0.015 * fission_barrier_mev.clamp(0.0, 60.0);
+    let sf_term = 0.004 * sf_log10_half_life_s.clamp(-30.0, 30.0);
+    binding_per_nucleon + 0.02 * s2n_term + 0.02 * s2p_term + barrier_term + sf_term - fissility_penalty
 }
 
 /// Build a full nuclide table with SEMF+shell observables.
@@ -230,7 +278,10 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
         };
         let f = fissility(z, a);
         let bpa = binding / a as f64;
-        let score = stability_score(bpa, s2n, s2p, f);
+        let barrier = fission_barrier_mev(z, a, f, shell_bonus_mev);
+        let sf_log10 = sf_log10_half_life_seconds(z, barrier, f);
+        let score = stability_score(bpa, s2n, s2p, f, barrier, sf_log10);
+        let shell_scale_a = ((a as f64) / 56.0).powf(0.28).clamp(0.45, 1.35);
         let beta_optimal_for_a = best_by_a
             .get(&a)
             .map(|(best_z, _)| *best_z == z)
@@ -243,11 +294,14 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
             binding_mev: binding,
             binding_per_nucleon_mev: bpa,
             shell_bonus_mev,
+            shell_scale_a,
             pairing_mev,
             s2n_mev: s2n,
             s2p_mev: s2p,
             beta_optimal_for_a,
             fissility: f,
+            fission_barrier_mev: barrier,
+            sf_log10_half_life_s: sf_log10,
             stability_score: score,
         });
     }
@@ -290,6 +344,44 @@ pub fn magic_s2n_discontinuities(records: &[NucleusRecord], top_k: usize) -> Vec
     out
 }
 
+/// Summarize S2n shell cliffs for each magic N separately.
+pub fn magic_s2n_summary(records: &[NucleusRecord]) -> Vec<MagicSummaryRow> {
+    let all = magic_s2n_discontinuities(records, records.len());
+    let mut out = Vec::new();
+    for &magic_n in &MAGIC_NUMBERS {
+        let mut strongest = MagicDiscontinuity {
+            magic_n,
+            z: 0,
+            delta_s2n_mev: f64::NEG_INFINITY,
+        };
+        let mut sum = 0.0;
+        let mut count = 0usize;
+        for row in &all {
+            if row.magic_n == magic_n {
+                count += 1;
+                sum += row.delta_s2n_mev;
+                if row.delta_s2n_mev > strongest.delta_s2n_mev {
+                    strongest = *row;
+                }
+            }
+        }
+        let strongest_delta = if count > 0 {
+            strongest.delta_s2n_mev
+        } else {
+            0.0
+        };
+        let mean_delta = if count > 0 { sum / count as f64 } else { 0.0 };
+        out.push(MagicSummaryRow {
+            magic_n,
+            strongest_delta_s2n_mev: strongest_delta,
+            mean_delta_s2n_mev: mean_delta,
+            z_at_strongest: if count > 0 { strongest.z } else { 0 },
+            sample_count: count,
+        });
+    }
+    out
+}
+
 fn gaussian_proximity(x: f64, target: f64, sigma: f64) -> f64 {
     let d = x - target;
     (-(d * d) / (2.0 * sigma * sigma)).exp()
@@ -309,6 +401,7 @@ pub fn rank_island_candidates_with_config(
                 && r.s2n_mev.unwrap_or(-1.0) > 0.0
                 && r.s2p_mev.unwrap_or(-1.0) > 0.0
                 && r.fissility < cfg.max_fissility
+                && r.fission_barrier_mev > 1.5
         })
         .filter_map(|r| {
             let proximity = gaussian_proximity(r.z as f64, cfg.target_z as f64, cfg.sigma_z)
@@ -388,6 +481,7 @@ pub fn rank_island_candidates_legacy(records: &[NucleusRecord], min_z: u16, top_
                 && r.s2n_mev.unwrap_or(-1.0) > 0.0
                 && r.s2p_mev.unwrap_or(-1.0) > 0.0
                 && r.fissility < 1.1
+                && r.fission_barrier_mev > 1.5
         })
         .collect();
 
@@ -400,25 +494,28 @@ pub fn write_records_csv(path: impl AsRef<Path>, records: &[NucleusRecord]) -> s
     let mut file = fs::File::create(path)?;
     writeln!(
         file,
-        "Z,N,A,binding_mev,binding_per_nucleon_mev,shell_bonus_mev,pairing_mev,s2n_mev,s2p_mev,beta_optimal_for_a,fissility,stability_score"
+        "Z,N,A,binding_mev,binding_per_nucleon_mev,shell_bonus_mev,shell_scale_a,pairing_mev,s2n_mev,s2p_mev,beta_optimal_for_a,fissility,fission_barrier_mev,sf_log10_half_life_s,stability_score"
     )?;
     for r in records {
         let s2n = r.s2n_mev.map(|v| format!("{v:.6}")).unwrap_or_default();
         let s2p = r.s2p_mev.map(|v| format!("{v:.6}")).unwrap_or_default();
         writeln!(
             file,
-            "{},{},{},{:.6},{:.6},{:.6},{:.6},{},{},{},{:.6},{:.6}",
+            "{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{},{:.6},{:.6},{:.6},{:.6}",
             r.z,
             r.n,
             r.a,
             r.binding_mev,
             r.binding_per_nucleon_mev,
             r.shell_bonus_mev,
+            r.shell_scale_a,
             r.pairing_mev,
             s2n,
             s2p,
             r.beta_optimal_for_a,
             r.fissility,
+            r.fission_barrier_mev,
+            r.sf_log10_half_life_s,
             r.stability_score
         )?;
     }
@@ -433,6 +530,22 @@ pub fn write_magic_discontinuities_csv(
     writeln!(file, "magic_n,Z,delta_s2n_mev")?;
     for row in rows {
         writeln!(file, "{},{},{:.6}", row.magic_n, row.z, row.delta_s2n_mev)?;
+    }
+    Ok(())
+}
+
+pub fn write_magic_summary_csv(path: impl AsRef<Path>, rows: &[MagicSummaryRow]) -> std::io::Result<()> {
+    let mut file = fs::File::create(path)?;
+    writeln!(
+        file,
+        "magic_n,strongest_delta_s2n_mev,mean_delta_s2n_mev,z_at_strongest,sample_count"
+    )?;
+    for row in rows {
+        writeln!(
+            file,
+            "{},{:.6},{:.6},{},{}",
+            row.magic_n, row.strongest_delta_s2n_mev, row.mean_delta_s2n_mev, row.z_at_strongest, row.sample_count
+        )?;
     }
     Ok(())
 }
@@ -469,5 +582,27 @@ mod tests {
         let ranked = rank_island_candidates_with_config(&records, IslandRankingConfig::default(), 20);
         assert!(!ranked.is_empty());
         assert!(ranked.iter().all(|r| r.z >= 104));
+    }
+
+    #[test]
+    fn magic_summary_reports_all_magic_numbers_in_range() {
+        let cfg = ScanConfig::default();
+        let records = scan_nuclear_chart(cfg);
+        let summary = magic_s2n_summary(&records);
+        for m in MAGIC_NUMBERS {
+            assert!(summary.iter().any(|row| row.magic_n == m));
+        }
+    }
+
+    #[test]
+    fn low_z_fission_regime_is_neutralized() {
+        let cfg = ScanConfig::default();
+        let records = scan_nuclear_chart(cfg);
+        let h3 = records
+            .iter()
+            .find(|r| r.z == 1 && r.n == 2)
+            .expect("H-3 should be in scan range");
+        assert_eq!(h3.fission_barrier_mev, 0.0);
+        assert_eq!(h3.sf_log10_half_life_s, 30.0);
     }
 }
