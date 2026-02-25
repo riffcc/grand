@@ -71,6 +71,24 @@ fn main() {
             tol: 1e-15,
         },
         ParityRow {
+            term: "qcd_beta0_structural",
+            expected: 58.0 / 3.0,
+            runtime: sm.beta0,
+            tol: 1e-12,
+        },
+        ParityRow {
+            term: "qcd_su3_generators_structural",
+            expected: 8.0,
+            runtime: sm.su3_generators as f64,
+            tol: 1e-15,
+        },
+        ParityRow {
+            term: "sm_total_gauge_generators_structural",
+            expected: 12.0,
+            runtime: sm.total_gauge_generators as f64,
+            tol: 1e-15,
+        },
+        ParityRow {
             term: "theta_qcd_structural",
             expected: 0.0,
             runtime: sm.theta_qcd,
