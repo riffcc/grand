@@ -106,6 +106,14 @@ theorem deficitAngle_zero_of_full_angle
   unfold deficitAngle
   linarith
 
+/-- Sign convention check: if local dihedral sum exceeds `2π`,
+    the deficit angle is negative. -/
+theorem deficitAngle_neg_of_gt_full_angle
+    (hsum : 2 * Real.pi < sumDihedral) :
+    deficitAngle sumDihedral < 0 := by
+  unfold deficitAngle
+  linarith
+
 /-- Discrete Einstein equation written on edges:
     each edge variation is balanced by projected stress-energy. -/
 def reggeEdgeEquation
@@ -165,6 +173,40 @@ theorem sc_cube_tetrahedra_cover_vertices :
     (6 : CubeVertex) ∈ scCubeTetrahedra.biUnion id ∧
     (7 : CubeVertex) ∈ scCubeTetrahedra.biUnion id := by
   decide
+
+/-- Canonical `Z₃` action on cube vertices induced by cyclic axis permutation
+    `(x,y,z) ↦ (y,z,x)` in binary cube coordinates. -/
+def z3CubeAction : CubeVertex → CubeVertex
+  | 0 => 0
+  | 1 => 4
+  | 2 => 1
+  | 3 => 5
+  | 4 => 2
+  | 5 => 6
+  | 6 => 3
+  | 7 => 7
+
+/-- The cube `Z₃` action has order `3` on vertices. -/
+theorem z3_cube_action_order3 :
+    ∀ v : CubeVertex, z3CubeAction (z3CubeAction (z3CubeAction v)) = v := by
+  intro v
+  fin_cases v <;> rfl
+
+/-- `Z₃`-compatibility of the canonical 6-tetra SC decomposition:
+    applying the cyclic cube action maps each tetrahedron back into the
+    decomposition family. -/
+theorem sc_cube_tetrahedra_z3_compatible :
+    ∀ t ∈ scCubeTetrahedra, t.image z3CubeAction ∈ scCubeTetrahedra := by
+  intro t ht
+  have hmem :
+      t = ({0, 1, 3, 7} : Finset CubeVertex) ∨
+      t = ({0, 3, 2, 7} : Finset CubeVertex) ∨
+      t = ({0, 2, 6, 7} : Finset CubeVertex) ∨
+      t = ({0, 6, 4, 7} : Finset CubeVertex) ∨
+      t = ({0, 4, 5, 7} : Finset CubeVertex) ∨
+      t = ({0, 5, 1, 7} : Finset CubeVertex) := by
+    simpa [scCubeTetrahedra, Finset.mem_insert, Finset.mem_singleton] using ht
+  rcases hmem with h | h | h | h | h | h <;> subst h <;> decide
 
 /-- Bridge hypotheses from discrete Regge dynamics to continuum Einstein dynamics.
 
@@ -285,6 +327,85 @@ def scProjectionCoeffs (S : TensorField (Fin 3)) : SimpEdge → ℝ :=
     | 4 => S 0 2
     | 5 => S 1 2
     | _ => 0
+
+/-- A 6-edge generating subfamily (subset of the SC 19-edge set) used for
+    rank-6 projection witness on symmetric `3×3` tensors. -/
+abbrev BasisEdge := Fin 6
+
+/-- Basis-edge vectors chosen from SC edges:
+    e0=[1,0,0], e1=[0,1,0], e2=[0,0,1], e3=[1,1,0], e4=[1,0,1], e5=[0,1,1]. -/
+def basisEdgeVector : BasisEdge → Fin 3 → ℝ
+  | 0 => ![1, 0, 0]
+  | 1 => ![0, 1, 0]
+  | 2 => ![0, 0, 1]
+  | 3 => ![1, 1, 0]
+  | 4 => ![1, 0, 1]
+  | 5 => ![0, 1, 1]
+
+/-- Projection weight on the 6-edge basis. -/
+def basisProjectionWeight (μ ν : Fin 3) (e : BasisEdge) : ℝ :=
+  basisEdgeVector e μ * basisEdgeVector e ν
+
+/-- Linear projection from basis coefficients to symmetric tensor entries. -/
+def basisProjected (c : BasisEdge → ℝ) (μ ν : Fin 3) : ℝ :=
+  ∑ e, basisProjectionWeight μ ν e * c e
+
+/-- Coefficients solving the 6×6 linear system for symmetric tensors. -/
+def basisProjectionCoeffs (S : TensorField (Fin 3)) : BasisEdge → ℝ
+  | 0 => S 0 0 - S 0 1 - S 0 2
+  | 1 => S 1 1 - S 0 1 - S 1 2
+  | 2 => S 2 2 - S 0 2 - S 1 2
+  | 3 => S 0 1
+  | 4 => S 0 2
+  | 5 => S 1 2
+
+/-- Rank-6 witness (constructive surjectivity) for the basis projection map
+    onto symmetric `3×3` tensors. -/
+theorem basis_projection_surjective
+    (S : TensorField (Fin 3))
+    (hSym : ∀ μ ν, S μ ν = S ν μ) :
+    ∀ μ ν, S μ ν = basisProjected (basisProjectionCoeffs S) μ ν := by
+  intro μ ν
+  fin_cases μ <;> fin_cases ν
+  ·
+    simp [basisProjected, basisProjectionWeight, basisProjectionCoeffs, basisEdgeVector,
+      Fin.sum_univ_six]
+    ring
+  ·
+    simp [basisProjected, basisProjectionWeight, basisProjectionCoeffs, basisEdgeVector,
+      Fin.sum_univ_six]
+  ·
+    simp [basisProjected, basisProjectionWeight, basisProjectionCoeffs, basisEdgeVector,
+      Fin.sum_univ_six]
+  ·
+    simpa [hSym 1 0] using
+      (by
+        simp [basisProjected, basisProjectionWeight, basisProjectionCoeffs, basisEdgeVector,
+          Fin.sum_univ_six] :
+        S 0 1 = basisProjected (basisProjectionCoeffs S) 1 0)
+  ·
+    simp [basisProjected, basisProjectionWeight, basisProjectionCoeffs, basisEdgeVector,
+      Fin.sum_univ_six]
+    ring
+  ·
+    simp [basisProjected, basisProjectionWeight, basisProjectionCoeffs, basisEdgeVector,
+      Fin.sum_univ_six]
+  ·
+    simpa [hSym 2 0] using
+      (by
+        simp [basisProjected, basisProjectionWeight, basisProjectionCoeffs, basisEdgeVector,
+          Fin.sum_univ_six] :
+        S 0 2 = basisProjected (basisProjectionCoeffs S) 2 0)
+  ·
+    simpa [hSym 2 1] using
+      (by
+        simp [basisProjected, basisProjectionWeight, basisProjectionCoeffs, basisEdgeVector,
+          Fin.sum_univ_six] :
+        S 1 2 = basisProjected (basisProjectionCoeffs S) 2 1)
+  ·
+    simp [basisProjected, basisProjectionWeight, basisProjectionCoeffs, basisEdgeVector,
+      Fin.sum_univ_six]
+    ring
 
 /-- Residual on edge equations (`δS/δl - source`). -/
 def edgeResidual {Edge : Type} (dSdl source : Edge → ℝ) : Edge → ℝ :=

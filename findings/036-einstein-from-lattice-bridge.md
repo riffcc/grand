@@ -32,9 +32,12 @@ Additional bridge hardening now included:
   - exact tetra count (`= 6`)
   - each listed tetra has 4 vertices
   - coverage of all cube vertices `0..7`
+  - explicit `Z₃` compatibility of the decomposition (`sc_cube_tetrahedra_z3_compatible`)
+  - vertex-level `Z₃` action order proof (`z3_cube_action_order3`)
 - deficit-angle normalization:
   - `δ = 2π - Σθ`
   - proof that flat full-angle sum implies `δ = 0`
+  - sign-convention theorem: `Σθ > 2π → δ < 0`
 - edge-equation layer:
   - `reggeEdgeEquation` and stationarity-to-zero-source theorem
   - projection theorem from edge-level equations into tensor-level `ReggeToEinsteinBridge`
@@ -42,6 +45,10 @@ Additional bridge hardening now included:
   - `SimpEdge` with 19 unique edges from the 6-tetra decomposition
   - endpoint table `simpEdgeEndpoints`, cube coordinates `cubeCoord`, and vectors `simpEdgeVector`
   - canonical weights `edgeProjectionWeight(μ,ν,e) = v_e^μ v_e^ν`
+  - rank-6 constructive witness on symmetric spatial tensors:
+    - `basisProjectionWeight`
+    - `basisProjectionCoeffs`
+    - `basis_projection_surjective`
   - projected residual machinery + theorem:
     - `projectedResidual_zero_of_reggeEdgeEquation`
     - `bridge_from_edge_projection_model`
@@ -68,7 +75,11 @@ Core theorems:
 - `einstein_from_clifford_lattice`
 - `einstein_from_clifford_lattice_gr_limit`
 - `deficitAngle_zero_of_full_angle`
+- `deficitAngle_neg_of_gt_full_angle`
 - `regge_stationary_implies_zero_source`
+- `z3_cube_action_order3`
+- `sc_cube_tetrahedra_z3_compatible`
+- `basis_projection_surjective`
 - `regge_edge_projection_to_bridge`
 - `projectedResidual_zero_of_reggeEdgeEquation`
 - `bridge_from_edge_projection_model`
