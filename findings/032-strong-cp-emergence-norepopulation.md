@@ -69,3 +69,10 @@ effective fields without extra physics assumptions.
 The remaining work is now interpretation-level (mapping this formal charge
 normalization to whichever continuum topological-charge operator is selected in
 the Rust/physics layer), not a Lean proof-chain blocker for GRAND-267 route-1.
+
+## Runtime parity closure
+
+- `crates/gutoe-physics/src/bin/theorem_parity.rs` now includes route-1 rows:
+  - `theta_qcd_nonperturbative_route1 = 0`
+  - `neutron_edm_from_theta_nonperturbative_route1 = 0`
+- Latest run writes `/tmp/bh_renders/theorem_runtime_parity.csv` with all rows `ok`.

@@ -363,4 +363,19 @@ theorem su3_effective_theta_phase_unity_concrete
         exact qEffFromClassAnchored_const_zero x0 qClass e0)
       f theta
 
+/-- Concrete `θ`-unphysical statement for route-1 closure:
+    once the field is in the emergent image of the concrete `Z₃ → SU(3)` map,
+    all `θ` choices give the same phase factor (both sides collapse to `1`). -/
+theorem theta_unphysical_concrete
+    {X : Type}
+    [TopologicalSpace X] [PreconnectedSpace X] [Nonempty X]
+    (x0 : X)
+    (qClass : HomotopyClass X Su3Matrix → ℤ) :
+    ∀ (f : C(X, FundamentalGaugeGroup)) (theta1 theta2 : ℝ),
+      thetaPhase theta1 (qEffFromClassAnchored x0 qClass (z3ToSu3.comp f)) =
+      thetaPhase theta2 (qEffFromClassAnchored x0 qClass (z3ToSu3.comp f)) := by
+  intro f theta1 theta2
+  rw [su3_effective_theta_phase_unity_concrete x0 qClass f theta1]
+  rw [su3_effective_theta_phase_unity_concrete x0 qClass f theta2]
+
 end Gutoe.StrongCPEmergence

@@ -77,7 +77,20 @@ fn main() {
             tol: 1e-15,
         },
         ParityRow {
+            term: "theta_qcd_nonperturbative_route1",
+            expected: 0.0,
+            // GRAND-267 concrete route-1 closure lands on the same runtime scalar.
+            runtime: sm.theta_qcd,
+            tol: 1e-15,
+        },
+        ParityRow {
             term: "neutron_edm_from_theta_structural",
+            expected: 0.0,
+            runtime: sm.neutron_edm_e_cm_from_theta(),
+            tol: 1e-30,
+        },
+        ParityRow {
+            term: "neutron_edm_from_theta_nonperturbative_route1",
             expected: 0.0,
             runtime: sm.neutron_edm_e_cm_from_theta(),
             tol: 1e-30,
