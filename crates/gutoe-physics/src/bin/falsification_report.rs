@@ -25,6 +25,8 @@ fn main() {
             sin2_theta_w_ew: sin2,
             mz_over_mw: mzmw,
             alpha_inverse: alpha_inv,
+            theta_qcd: env_f64("GUTOE_THETA_QCD").unwrap_or(0.0),
+            neutron_edm_e_cm: env_f64("GUTOE_NEUTRON_EDM_E_CM").unwrap_or(0.0),
         }
     } else {
         provisional_corrected_observables()
@@ -33,7 +35,7 @@ fn main() {
     let full = evaluate_with_corrected(corrected, windows);
 
     println!(
-        "{{\n  \"structural_ok\": {},\n  \"gauge_count_ok\": {},\n  \"lambda_qg_ok\": {},\n  \"corrected_ok\": {},\n  \"passes_all\": {},\n  \"corrected\": {{\"sin2_theta_w_ew\": {:.9}, \"mz_over_mw\": {:.9}, \"alpha_inverse\": {:.9}}},\n  \"windows\": {{\"sin2_theta_w_ew\": [{:.5}, {:.5}], \"mz_over_mw\": [{:.4}, {:.4}], \"alpha_inverse\": [{:.3}, {:.3}]}}\n}}",
+        "{{\n  \"structural_ok\": {},\n  \"gauge_count_ok\": {},\n  \"lambda_qg_ok\": {},\n  \"corrected_ok\": {},\n  \"passes_all\": {},\n  \"corrected\": {{\"sin2_theta_w_ew\": {:.9}, \"mz_over_mw\": {:.9}, \"alpha_inverse\": {:.9}, \"theta_qcd\": {:.3e}, \"neutron_edm_e_cm\": {:.3e}}},\n  \"windows\": {{\"sin2_theta_w_ew\": [{:.5}, {:.5}], \"mz_over_mw\": [{:.4}, {:.4}], \"alpha_inverse\": [{:.3}, {:.3}], \"theta_qcd_abs_max\": {:.3e}, \"neutron_edm_abs_max_e_cm\": {:.3e}}}\n}}",
         structural.structural_ok,
         structural.gauge_count_ok,
         structural.lambda_qg_ok,
@@ -42,12 +44,15 @@ fn main() {
         corrected.sin2_theta_w_ew,
         corrected.mz_over_mw,
         corrected.alpha_inverse,
+        corrected.theta_qcd,
+        corrected.neutron_edm_e_cm,
         windows.sin2_theta_w_ew.min,
         windows.sin2_theta_w_ew.max,
         windows.mz_over_mw.min,
         windows.mz_over_mw.max,
         windows.alpha_inverse.min,
-        windows.alpha_inverse.max
+        windows.alpha_inverse.max,
+        windows.theta_qcd_abs_max,
+        windows.neutron_edm_abs_max_e_cm
     );
 }
-

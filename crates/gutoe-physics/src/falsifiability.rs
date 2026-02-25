@@ -21,6 +21,8 @@ pub struct FalsificationWindows {
     pub sin2_theta_w_ew: GateWindow,
     pub mz_over_mw: GateWindow,
     pub alpha_inverse: GateWindow,
+    pub theta_qcd_abs_max: f64,
+    pub neutron_edm_abs_max_e_cm: f64,
     pub lambda_qg_abs_tol: f64,
 }
 
@@ -30,6 +32,10 @@ impl Default for FalsificationWindows {
             sin2_theta_w_ew: GateWindow { min: 0.23100, max: 0.23140 },
             mz_over_mw: GateWindow { min: 1.1335, max: 1.1355 },
             alpha_inverse: GateWindow { min: 137.034, max: 137.038 },
+            // |d_n| < 1e-26 e*cm implies |theta_qcd| < 1e-26 / (2.4e-16) ~= 4.17e-11.
+            // Keep a tiny safety margin in the default gate.
+            theta_qcd_abs_max: 4.2e-11,
+            neutron_edm_abs_max_e_cm: 1.0e-26,
             lambda_qg_abs_tol: 1e-12,
         }
     }
@@ -40,6 +46,8 @@ pub struct CorrectedObservables {
     pub sin2_theta_w_ew: f64,
     pub mz_over_mw: f64,
     pub alpha_inverse: f64,
+    pub theta_qcd: f64,
+    pub neutron_edm_e_cm: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -77,7 +85,9 @@ pub fn evaluate_with_corrected(
     let corrected_ok =
         windows.sin2_theta_w_ew.contains(corrected.sin2_theta_w_ew) &&
         windows.mz_over_mw.contains(corrected.mz_over_mw) &&
-        windows.alpha_inverse.contains(corrected.alpha_inverse);
+        windows.alpha_inverse.contains(corrected.alpha_inverse) &&
+        corrected.theta_qcd.abs() <= windows.theta_qcd_abs_max &&
+        corrected.neutron_edm_e_cm.abs() <= windows.neutron_edm_abs_max_e_cm;
     FalsificationScorecard {
         structural_ok: structural.structural_ok,
         corrected_ok,
@@ -96,6 +106,8 @@ pub fn provisional_corrected_observables() -> CorrectedObservables {
         sin2_theta_w_ew: m.sin2_theta_w_at_mz(),
         mz_over_mw: m.mz_over_mw_sq.sqrt(),
         alpha_inverse: 1.0 / ALPHA,
+        theta_qcd: m.theta_qcd,
+        neutron_edm_e_cm: m.neutron_edm_e_cm_from_theta(),
     }
 }
 
@@ -119,5 +131,27 @@ mod tests {
             !s.corrected_ok,
             "corrected gates unexpectedly pass before full correction bridge is wired: {s:?}"
         );
+    }
+
+    #[test]
+    fn strong_cp_gate_passes_at_structural_zero_theta() {
+        let windows = FalsificationWindows::default();
+        let corr = provisional_corrected_observables();
+        assert!(corr.theta_qcd.abs() <= windows.theta_qcd_abs_max);
+        assert!(corr.neutron_edm_e_cm.abs() <= windows.neutron_edm_abs_max_e_cm);
+    }
+
+    #[test]
+    fn strong_cp_gate_fails_when_theta_exceeds_bound() {
+        let windows = FalsificationWindows::default();
+        let corr = CorrectedObservables {
+            sin2_theta_w_ew: 0.23122,
+            mz_over_mw: 1.1345,
+            alpha_inverse: 137.036,
+            theta_qcd: windows.theta_qcd_abs_max * 1.05,
+            neutron_edm_e_cm: windows.neutron_edm_abs_max_e_cm * 1.05,
+        };
+        let s = evaluate_with_corrected(corr, windows);
+        assert!(!s.corrected_ok, "theta/EDM overflow must fail corrected gates");
     }
 }

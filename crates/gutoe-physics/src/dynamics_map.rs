@@ -21,6 +21,7 @@ pub struct StandardModelDynamicsMap {
     pub su2_generators: u32,
     pub u1_generators: u32,
     pub total_gauge_generators: u32,
+    pub theta_qcd: f64,
 }
 
 impl StandardModelDynamicsMap {
@@ -49,6 +50,9 @@ impl StandardModelDynamicsMap {
             su2_generators,
             u1_generators,
             total_gauge_generators: su3_generators + su2_generators + u1_generators,
+            // Structural CP-odd QCD phase in current GUTOE map.
+            // Runtime bridge keeps this explicit and auditable.
+            theta_qcd: 0.0,
         }
     }
 
@@ -60,6 +64,7 @@ impl StandardModelDynamicsMap {
             && (self.alpha_leading_order - 1.0 / 137.0).abs() < eps
             && (self.lambda_qg - 1.0 / 12.0).abs() < eps
             && (self.beta0 - 58.0 / 3.0).abs() < eps
+            && self.theta_qcd.abs() < eps
             && self.generations == 3
             && self.total_gauge_generators == 12
     }
@@ -69,6 +74,14 @@ impl StandardModelDynamicsMap {
     /// This keeps the correction explicit and auditable while GRAND-61 is in progress.
     pub fn sin2_theta_w_at_mz(&self) -> f64 {
         self.sin2_theta_w + 4.51e-4
+    }
+
+    /// Minimal neutron EDM bridge from θ_QCD.
+    ///
+    /// The standard chiral estimate is O(2.4e-16 * θ) e·cm.
+    /// Keeping this explicit gives a direct falsifiability hook.
+    pub fn neutron_edm_e_cm_from_theta(&self) -> f64 {
+        2.4e-16 * self.theta_qcd
     }
 }
 
@@ -99,5 +112,12 @@ mod tests {
             (0.23100..=0.23140).contains(&sin2_mz),
             "sin²(theta_W) at M_Z out of target window: {sin2_mz:.9}"
         );
+    }
+
+    #[test]
+    fn strong_cp_structural_defaults_are_zero() {
+        let m = StandardModelDynamicsMap::from_clifford_z3();
+        assert!(m.theta_qcd.abs() < 1e-15);
+        assert!(m.neutron_edm_e_cm_from_theta().abs() < 1e-30);
     }
 }

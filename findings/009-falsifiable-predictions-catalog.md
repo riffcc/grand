@@ -40,9 +40,17 @@ All criteria below are intentionally binary: pass window or dead.
 - Kill criterion: if low-energy phenomenology requires extra unscreened gauge
   generators not derivable from the Cl(1,3) decomposition, fail.
 
-6. Null-result consistency gates
+6. Strong-CP / neutron-EDM gate
+- Runtime bridge claim: `theta_qcd` is structurally pinned to zero in the
+  current Cl(1,3) dynamics map (`theta_qcd = 0`).
+- Chiral estimate bridge: `|d_n| ~= 2.4e-16 * |theta_qcd| e*cm`.
+- Kill criteria (numeric):
+  - `|theta_qcd| <= 4.2e-11`
+  - `|d_n| <= 1.0e-26 e*cm`
+  Any violation fails this gate.
+
+7. Null-result consistency gates
 - Proton decay: predicted lifetime must satisfy `tau_p >= 1e34 years`.
-- EDM: predicted EDM magnitude must stay below current bound used by pipeline.
 - Fifth force/LV: predicted signal strengths must stay below configured bounds.
 - Kill criterion: any bound violation fails.
 
