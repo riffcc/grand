@@ -23,6 +23,8 @@ pub const PROTON_MAGIC_NUMBERS: [u16; 7] = [2, 8, 20, 28, 50, 82, 126];
 pub const NEUTRON_MAGIC_NUMBERS: [u16; 8] = [2, 8, 20, 28, 50, 82, 126, 184];
 /// Backwards-compatible alias for existing callers expecting neutron closures.
 pub const MAGIC_NUMBERS: [u16; 8] = NEUTRON_MAGIC_NUMBERS;
+/// Fixed superheavy proton closures monitored in calibration objectives.
+pub const MONITORED_SUPERHEAVY_PROTON_CLOSURES: [u16; 3] = [114, 120, 126];
 
 #[derive(Clone, Copy, Debug)]
 pub struct SuperheavyClosureConstraintSet {
@@ -316,6 +318,9 @@ pub struct ShellGateMetrics {
     pub strongest_superheavy_proton_delta_s2p_mev: f64,
     pub avg_superheavy_proton_delta_s2p_mev: f64,
     pub min_superheavy_proton_delta_s2p_mev: f64,
+    pub strongest_monitored_proton_delta_s2p_mev: f64,
+    pub avg_monitored_proton_delta_s2p_mev: f64,
+    pub min_monitored_proton_delta_s2p_mev: f64,
 }
 
 fn pairing_term(z: u16, n: u16, a: f64, a_p: f64) -> f64 {
@@ -1053,14 +1058,22 @@ pub fn magic_s2n_summary(records: &[NucleusRecord]) -> Vec<MagicSummaryRow> {
 
 /// Return strongest proton shell-closure signatures around selected closure Z.
 pub fn proton_s2p_discontinuities(records: &[NucleusRecord], top_k: usize) -> Vec<ProtonDiscontinuity> {
+    proton_s2p_discontinuities_for_closures(records, &derived_superheavy_proton_candidates(), top_k)
+}
+
+/// Return strongest proton shell-closure signatures around an explicit closure list.
+pub fn proton_s2p_discontinuities_for_closures(
+    records: &[NucleusRecord],
+    closures: &[u16],
+    top_k: usize,
+) -> Vec<ProtonDiscontinuity> {
     let mut by_zn: BTreeMap<(u16, u16), &NucleusRecord> = BTreeMap::new();
     for r in records {
         by_zn.insert((r.z, r.n), r);
     }
-    let closures = derived_superheavy_proton_candidates();
 
     let mut out = Vec::new();
-    for &closure_z in &closures {
+    for &closure_z in closures {
         for r in records {
             if r.z == closure_z {
                 let Some(s2p_here) = r.s2p_mev else {
@@ -1088,10 +1101,14 @@ pub fn proton_s2p_discontinuities(records: &[NucleusRecord], top_k: usize) -> Ve
 
 /// Summarize S2p shell cliffs for monitored proton closure candidates.
 pub fn proton_s2p_summary(records: &[NucleusRecord]) -> Vec<ProtonSummaryRow> {
-    let all = proton_s2p_discontinuities(records, records.len());
-    let closures = derived_superheavy_proton_candidates();
+    proton_s2p_summary_for_closures(records, &derived_superheavy_proton_candidates())
+}
+
+/// Summarize S2p shell cliffs for an explicit closure list.
+pub fn proton_s2p_summary_for_closures(records: &[NucleusRecord], closures: &[u16]) -> Vec<ProtonSummaryRow> {
+    let all = proton_s2p_discontinuities_for_closures(records, closures, records.len());
     let mut out = Vec::new();
-    for &closure_z in &closures {
+    for &closure_z in closures {
         let mut strongest = ProtonDiscontinuity {
             closure_z,
             n: 0,
@@ -1232,6 +1249,8 @@ pub fn rank_island_candidates(records: &[NucleusRecord], min_z: u16, top_k: usiz
 pub fn shell_gate_metrics(records: &[NucleusRecord]) -> ShellGateMetrics {
     let neutron_rows = magic_s2n_discontinuities(records, records.len());
     let proton_summary = proton_s2p_summary(records);
+    let monitored_proton_summary =
+        proton_s2p_summary_for_closures(records, &MONITORED_SUPERHEAVY_PROTON_CLOSURES);
 
     let top_delta = neutron_rows.first().map(|r| r.delta_s2n_mev).unwrap_or(0.0);
     let top5_len = neutron_rows.len().min(5);
@@ -1245,7 +1264,24 @@ pub fn shell_gate_metrics(records: &[NucleusRecord]) -> ShellGateMetrics {
         .filter(|r| r.magic_n == 184)
         .map(|r| r.delta_s2n_mev)
         .fold(0.0_f64, f64::max);
-    let proton_deltas: Vec<f64> = proton_summary.iter().map(|row| row.strongest_delta_s2p_mev).collect();
+    let (proton_strongest, proton_avg, proton_min) = proton_summary_stats(&proton_summary);
+    let (monitored_strongest, monitored_avg, monitored_min) =
+        proton_summary_stats(&monitored_proton_summary);
+    ShellGateMetrics {
+        top_delta_s2n_mev: top_delta,
+        avg_top5_delta_s2n_mev: avg_top5,
+        strongest_n184_delta_s2n_mev: n184,
+        strongest_superheavy_proton_delta_s2p_mev: proton_strongest,
+        avg_superheavy_proton_delta_s2p_mev: proton_avg,
+        min_superheavy_proton_delta_s2p_mev: proton_min,
+        strongest_monitored_proton_delta_s2p_mev: monitored_strongest,
+        avg_monitored_proton_delta_s2p_mev: monitored_avg,
+        min_monitored_proton_delta_s2p_mev: monitored_min,
+    }
+}
+
+fn proton_summary_stats(summary: &[ProtonSummaryRow]) -> (f64, f64, f64) {
+    let proton_deltas: Vec<f64> = summary.iter().map(|row| row.strongest_delta_s2p_mev).collect();
     let proton_avg = if proton_deltas.is_empty() {
         0.0
     } else {
@@ -1257,14 +1293,7 @@ pub fn shell_gate_metrics(records: &[NucleusRecord]) -> ShellGateMetrics {
     } else {
         proton_deltas.iter().copied().fold(f64::INFINITY, f64::min)
     };
-    ShellGateMetrics {
-        top_delta_s2n_mev: top_delta,
-        avg_top5_delta_s2n_mev: avg_top5,
-        strongest_n184_delta_s2n_mev: n184,
-        strongest_superheavy_proton_delta_s2p_mev: proton_strongest,
-        avg_superheavy_proton_delta_s2p_mev: proton_avg,
-        min_superheavy_proton_delta_s2p_mev: proton_min,
-    }
+    (proton_strongest, proton_avg, proton_min)
 }
 
 pub fn valley_of_stability(records: &[NucleusRecord]) -> Vec<NucleusRecord> {
@@ -1504,6 +1533,16 @@ mod tests {
         for z in derived_superheavy_proton_candidates() {
             assert!(summary.iter().any(|row| row.closure_z == z && row.sample_count > 0));
         }
+    }
+
+    #[test]
+    fn monitored_proton_summary_tracks_114_120_126_only() {
+        let cfg = ScanConfig::default();
+        let records = scan_nuclear_chart(cfg);
+        let summary = proton_s2p_summary_for_closures(&records, &MONITORED_SUPERHEAVY_PROTON_CLOSURES);
+        let closures: Vec<u16> = summary.iter().map(|r| r.closure_z).collect();
+        assert_eq!(closures, MONITORED_SUPERHEAVY_PROTON_CLOSURES);
+        assert!(summary.iter().all(|row| row.sample_count > 0));
     }
 
     #[test]

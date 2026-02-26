@@ -1,8 +1,9 @@
 use gutoe_physics::{
-    closest_to_target_island, derived_superheavy_proton_candidates, magic_s2n_summary, proton_s2p_summary,
-    rank_island_candidates_with_config, scan_nuclear_chart, score_derived_superheavy_closures,
-    superheavy_closure_constraints, IslandRankingConfig, NucleusRecord, ScanConfig, ShellParams,
-    StandardModelDynamicsMap,
+    closest_to_target_island, derived_superheavy_proton_candidates, magic_s2n_summary,
+    proton_s2p_summary, proton_s2p_summary_for_closures, rank_island_candidates_with_config,
+    scan_nuclear_chart, score_derived_superheavy_closures, superheavy_closure_constraints,
+    IslandRankingConfig, NucleusRecord, ScanConfig, ShellParams, StandardModelDynamicsMap,
+    MONITORED_SUPERHEAVY_PROTON_CLOSURES,
 };
 use std::collections::BTreeMap;
 use std::env;
@@ -15,6 +16,15 @@ const ELECTRON_MASS_MEV_OBS: f64 = 0.510_998_950;
 const PROTON_MASS_MEV_OBS: f64 = 938.272_088_16;
 const NEUTRON_MASS_MEV_OBS: f64 = 939.565_420_52;
 const BETA_MASS_COEFF_Z_MEV: f64 = (PROTON_MASS_MEV_OBS + ELECTRON_MASS_MEV_OBS) - NEUTRON_MASS_MEV_OBS;
+
+#[derive(Clone, Copy, Debug)]
+struct ScoreboardDriftRow {
+    z: u16,
+    predicted_count: usize,
+    observed_count: u16,
+    signed_drift: f64,
+    abs_drift: f64,
+}
 
 fn reference_shell_gap_bounds_mev(magic_n: u16) -> Option<(f64, f64)> {
     // Broad experimental windows (MeV) used only for attenuation diagnostics.
@@ -473,6 +483,8 @@ fn main() -> anyhow::Result<()> {
     let derived_closure_candidates = derived_superheavy_proton_candidates();
     let neutron_magic = magic_s2n_summary(&records);
     let proton_magic = proton_s2p_summary(&records);
+    let proton_monitored =
+        proton_s2p_summary_for_closures(&records, &MONITORED_SUPERHEAVY_PROTON_CLOSURES);
     let neutron_hit_rate = if neutron_magic.is_empty() {
         0.0
     } else {
@@ -491,6 +503,29 @@ fn main() -> anyhow::Result<()> {
             .count() as f64
             / proton_magic.len() as f64
     };
+    let proton_monitored_hit_rate = if proton_monitored.is_empty() {
+        0.0
+    } else {
+        proton_monitored
+            .iter()
+            .filter(|row| row.strongest_delta_s2p_mev > 1.0)
+            .count() as f64
+            / proton_monitored.len() as f64
+    };
+    let monitored_proton_avg_delta = if proton_monitored.is_empty() {
+        0.0
+    } else {
+        proton_monitored
+            .iter()
+            .map(|row| row.strongest_delta_s2p_mev)
+            .sum::<f64>()
+            / proton_monitored.len() as f64
+    };
+    let monitored_proton_min_delta = proton_monitored
+        .iter()
+        .map(|row| row.strongest_delta_s2p_mev)
+        .min_by(|a, b| a.total_cmp(b))
+        .unwrap_or(0.0);
     let closure_constraints = superheavy_closure_constraints();
     let closure_scores = score_derived_superheavy_closures(&records, 184);
     let mut closure_csv = String::from(
@@ -576,32 +611,67 @@ fn main() -> anyhow::Result<()> {
     let mut stable_presence_total = 0usize;
     let mut ref_count_abs_error_sum = 0.0;
     let mut ref_count_samples = 0usize;
+    let mut drift_rows: Vec<ScoreboardDriftRow> = Vec::new();
     let mut scoreboard_csv = String::from(
-        "Z,predicted_stable_like_isotopes,predicted_has_stable,observed_has_stable,observed_stable_isotopes_ref,abs_drift_isotope_count\n",
+        "Z,predicted_stable_like_isotopes,predicted_has_stable,observed_has_stable,observed_stable_isotopes_ref,signed_drift_isotope_count,abs_drift_isotope_count\n",
     );
     for z in cfg.z_min..=cfg.z_max {
         let pred_count = isotopes_per_z.get(&z).copied().unwrap_or(0);
         let pred_has = pred_count > 0;
-        let (obs_ref_s, obs_has, drift_s) = match observed_stable_isotope_count(z) {
+        let (obs_ref_s, obs_has, signed_drift_s, abs_drift_s) = match observed_stable_isotope_count(z) {
             Some(obs_ref) => {
                 let obs_has = obs_ref > 0;
                 stable_presence_total += 1;
                 if pred_has == obs_has {
                     stable_presence_correct += 1;
                 }
-                let drift = (pred_count as f64 - obs_ref as f64).abs();
-                ref_count_abs_error_sum += drift;
+                let signed_drift = pred_count as f64 - obs_ref as f64;
+                let abs_drift = signed_drift.abs();
+                ref_count_abs_error_sum += abs_drift;
                 ref_count_samples += 1;
-                (obs_ref.to_string(), obs_has, format!("{drift:.3}"))
+                drift_rows.push(ScoreboardDriftRow {
+                    z,
+                    predicted_count: pred_count,
+                    observed_count: obs_ref,
+                    signed_drift,
+                    abs_drift,
+                });
+                (
+                    obs_ref.to_string(),
+                    obs_has,
+                    format!("{signed_drift:.3}"),
+                    format!("{abs_drift:.3}"),
+                )
             }
-            None => (String::new(), false, String::new()),
+            None => (String::new(), false, String::new(), String::new()),
         };
         scoreboard_csv.push_str(&format!(
-            "{},{},{},{},{},{}\n",
-            z, pred_count, pred_has, obs_has, obs_ref_s, drift_s
+            "{},{},{},{},{},{},{}\n",
+            z, pred_count, pred_has, obs_has, obs_ref_s, signed_drift_s, abs_drift_s
         ));
     }
     fs::write(out.join("periodic_table_scoreboard.csv"), scoreboard_csv)?;
+    let mut drift_sorted = drift_rows.clone();
+    drift_sorted.sort_by(|a, b| b.abs_drift.total_cmp(&a.abs_drift).then_with(|| a.z.cmp(&b.z)));
+    let summary_top_n = env::var("GUTOE_PERIODIC_SUMMARY_TOP")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(30);
+    let mut summary_csv = String::from(
+        "rank_by_abs_drift,Z,predicted_stable_like_isotopes,observed_stable_isotopes_ref,signed_drift_isotope_count,abs_drift_isotope_count\n",
+    );
+    for (idx, row) in drift_sorted.into_iter().take(summary_top_n).enumerate() {
+        summary_csv.push_str(&format!(
+            "{},{},{},{},{:.3},{:.3}\n",
+            idx + 1,
+            row.z,
+            row.predicted_count,
+            row.observed_count,
+            row.signed_drift,
+            row.abs_drift
+        ));
+    }
+    fs::write(out.join("periodic_table_scoreboard_summary.csv"), summary_csv)?;
 
     let stable_presence_accuracy = if stable_presence_total > 0 {
         stable_presence_correct as f64 / stable_presence_total as f64
@@ -631,10 +701,30 @@ fn main() -> anyhow::Result<()> {
         })
         .collect::<Vec<_>>()
         .join(", ");
+    let monitored_proton_json = proton_monitored
+        .iter()
+        .map(|row| {
+            format!(
+                "{{\"z\":{},\"strongest_delta_s2p_mev\":{:.6},\"mean_delta_s2p_mev\":{:.6},\"n_at_strongest\":{},\"sample_count\":{}}}",
+                row.closure_z,
+                row.strongest_delta_s2p_mev,
+                row.mean_delta_s2p_mev,
+                row.n_at_strongest,
+                row.sample_count
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let report_timestamp = now_unix_seconds();
 
     let json = format!(
         concat!(
             "{{\n",
+            "  \"report_meta\": {{\n",
+            "    \"generated_at_unix\": {},\n",
+            "    \"scan_bounds\": {{\"z_min\": {}, \"z_max\": {}, \"n_min\": {}, \"n_max\": {}}},\n",
+            "    \"monitored_superheavy_proton_closures\": [{}]\n",
+            "  }},\n",
             "  \"mass_predictions\": {{\n",
             "    \"alpha_inv_struct\": {},\n",
             "    \"mp_me_struct\": {},\n",
@@ -663,7 +753,8 @@ fn main() -> anyhow::Result<()> {
             "  }},\n",
             "  \"closure_stats\": {{\n",
             "    \"neutron_magic_hit_rate\": {:.6},\n",
-            "    \"proton_closure_hit_rate\": {:.6}\n",
+            "    \"proton_closure_hit_rate\": {:.6},\n",
+            "    \"monitored_proton_closure_hit_rate\": {:.6}\n",
             "  }},\n",
             "  \"shell_gap_attenuation\": {{\n",
             "    \"heavy_magic_mean_ratio\": {:.6},\n",
@@ -671,6 +762,11 @@ fn main() -> anyhow::Result<()> {
             "    \"n50_ratio\": {:.6},\n",
             "    \"n82_ratio\": {:.6},\n",
             "    \"n126_ratio\": {:.6}\n",
+            "  }},\n",
+            "  \"proton_s2p_monitored_114_120_126\": {{\n",
+            "    \"avg_strongest_delta_s2p_mev\": {:.6},\n",
+            "    \"min_strongest_delta_s2p_mev\": {:.6},\n",
+            "    \"rows\": [{}]\n",
             "  }},\n",
             "  \"derived_superheavy_proton_candidates\": [{}],\n",
             "  \"superheavy_closure_derivation\": {{\n",
@@ -706,6 +802,16 @@ fn main() -> anyhow::Result<()> {
             "  }}\n",
             "}}\n"
         ),
+        report_timestamp,
+        cfg.z_min,
+        cfg.z_max,
+        cfg.n_min,
+        cfg.n_max,
+        MONITORED_SUPERHEAVY_PROTON_CLOSURES
+            .iter()
+            .map(|z| z.to_string())
+            .collect::<Vec<_>>()
+            .join(", "),
         alpha_inv_struct,
         mp_me_struct,
         electron_pred_from_p,
@@ -734,11 +840,15 @@ fn main() -> anyhow::Result<()> {
         closest_target.map(|r| r.stability_score).unwrap_or(0.0),
         neutron_hit_rate,
         proton_hit_rate,
+        proton_monitored_hit_rate,
         heavy_gap_mean_ratio,
         heavy_gap_min_ratio,
         n50_ratio,
         n82_ratio,
         n126_ratio,
+        monitored_proton_avg_delta,
+        monitored_proton_min_delta,
+        monitored_proton_json,
         derived_closure_candidates
             .iter()
             .map(|z| z.to_string())
@@ -786,19 +896,33 @@ fn main() -> anyhow::Result<()> {
     );
     fs::write(out.join("mass_periodic_report.json"), json)?;
 
+    let trend_header = "timestamp_unix,rows,stable_like_rows,elements_with_stable_like,max_z_with_stable_like,stable_presence_accuracy,stable_isotope_count_mae,neutron_magic_hit_rate,proton_closure_hit_rate,monitored_proton_closure_hit_rate,n50_ratio,n82_ratio,n126_ratio,monitored_proton_avg_delta_s2p,monitored_proton_min_delta_s2p,top_island_z,top_island_n,top_island_score,closest_114_184_score,mp_me_struct,electron_rel_error,proton_rel_error,neutron_rel_error";
     let trend_path = out.join("periodic_table_trend.csv");
-    let trend_exists = trend_path.exists();
+    let mut trend_needs_header = !trend_path.exists();
+    if trend_path.exists() {
+        let existing_header = fs::read_to_string(&trend_path)
+            .ok()
+            .and_then(|s| s.lines().next().map(|line| line.trim().to_string()))
+            .unwrap_or_default();
+        if existing_header != trend_header {
+            let legacy_path = out.join(format!("periodic_table_trend.legacy_{}.csv", report_timestamp));
+            fs::rename(&trend_path, &legacy_path)?;
+            println!(
+                "Archived legacy trend schema {} -> {}",
+                trend_path.display(),
+                legacy_path.display()
+            );
+            trend_needs_header = true;
+        }
+    }
     let mut trend = OpenOptions::new().create(true).append(true).open(&trend_path)?;
-    if !trend_exists {
-        writeln!(
-            trend,
-            "timestamp_unix,rows,stable_like_rows,elements_with_stable_like,max_z_with_stable_like,stable_presence_accuracy,stable_isotope_count_mae,neutron_magic_hit_rate,proton_closure_hit_rate,top_island_z,top_island_n,top_island_score,closest_114_184_score,mp_me_struct,electron_rel_error,proton_rel_error,neutron_rel_error"
-        )?;
+    if trend_needs_header {
+        writeln!(trend, "{trend_header}")?;
     }
     writeln!(
         trend,
-        "{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{:.6},{},{:.6},{:.6},{:.6}",
-        now_unix_seconds(),
+        "{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{:.6},{},{:.6},{:.6},{:.6}",
+        report_timestamp,
         records.len(),
         stable_like.len(),
         elements_with_stable_like,
@@ -807,6 +931,12 @@ fn main() -> anyhow::Result<()> {
         ref_count_mae,
         neutron_hit_rate,
         proton_hit_rate,
+        proton_monitored_hit_rate,
+        n50_ratio,
+        n82_ratio,
+        n126_ratio,
+        monitored_proton_avg_delta,
+        monitored_proton_min_delta,
         top.map(|r| r.z).unwrap_or(0),
         top.map(|r| r.n).unwrap_or(0),
         top.map(|r| r.stability_score).unwrap_or(0.0),
@@ -819,6 +949,10 @@ fn main() -> anyhow::Result<()> {
 
     println!("Wrote {}", out.join("mass_periodic_report.json").display());
     println!("Wrote {}", out.join("periodic_table_scoreboard.csv").display());
+    println!(
+        "Wrote {}",
+        out.join("periodic_table_scoreboard_summary.csv").display()
+    );
     println!("Wrote {}", out.join("shell_gap_attenuation.csv").display());
     println!("Wrote {}", out.join("superheavy_closure_derivation.csv").display());
     println!("Wrote {}", out.join("tin_isotope_diagnostics.csv").display());

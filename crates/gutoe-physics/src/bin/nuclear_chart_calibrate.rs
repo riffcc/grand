@@ -1,7 +1,7 @@
 use gutoe_physics::{
     closest_to_target_island, magic_s2n_summary, rank_island_candidates_with_config, scan_nuclear_chart,
     shell_gate_metrics, write_magic_discontinuities_csv, write_magic_summary_csv, write_records_csv,
-    IslandRankingConfig, MagicSummaryRow, ScanConfig, ShellParams,
+    IslandRankingConfig, MagicSummaryRow, ScanConfig, ShellParams, MONITORED_SUPERHEAVY_PROTON_CLOSURES,
 };
 use std::env;
 use std::fs;
@@ -208,6 +208,8 @@ fn main() -> anyhow::Result<()> {
         n184_delta: f64,
         proton_avg_delta_s2p: f64,
         proton_min_delta_s2p: f64,
+        proton_monitored_avg_delta_s2p: f64,
+        proton_monitored_min_delta_s2p: f64,
         n50_ratio: f64,
         n82_ratio: f64,
         n126_ratio: f64,
@@ -223,7 +225,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut leaderboard = String::from(
-        "rank,score,amp_z,amp_n,shell_amp,shell_scale_exp,use_strutinsky,strutinsky_mix,strutinsky_gamma,strutinsky_spacing_mev,strutinsky_spin_orbit_mev,strutinsky_coulomb_shift_mev,strutinsky_ws_depth_mev,strutinsky_ws_diffuseness_fm,strutinsky_ws_a_ref,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,proton_avg_delta_s2p,proton_min_delta_s2p,n50_ratio,n82_ratio,n126_ratio,ratio_penalty,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
+        "rank,score,amp_z,amp_n,shell_amp,shell_scale_exp,use_strutinsky,strutinsky_mix,strutinsky_gamma,strutinsky_spacing_mev,strutinsky_spin_orbit_mev,strutinsky_coulomb_shift_mev,strutinsky_ws_depth_mev,strutinsky_ws_diffuseness_fm,strutinsky_ws_a_ref,sigma_z,sigma_n,superheavy_proton_amp,superheavy_proton_sigma,heavy_amp,heavy_sigma_z,heavy_sigma_n,heavy_target_z,heavy_target_n,top_delta_s2n,avg_top5_delta_s2n,n184_delta,proton_avg_delta_s2p,proton_min_delta_s2p,proton_monitored_avg_delta_s2p,proton_monitored_min_delta_s2p,n50_ratio,n82_ratio,n126_ratio,ratio_penalty,closest_z,closest_n,closest_score,top_candidate_z,top_candidate_n,top_candidate_score,top_candidate_barrier,top_candidate_sf_log10\n",
     );
     let mut rows: Vec<Row> = Vec::new();
     let mut best_score = f64::NEG_INFINITY;
@@ -326,12 +328,14 @@ fn main() -> anyhow::Result<()> {
                                                                             let closest_score = closest
                                                                                 .map(|r| r.stability_score)
                                                                                 .unwrap_or(-1.0e9);
-                                                                            let objective_base = 0.42 * metrics.strongest_n184_delta_s2n_mev
+                                                                            let objective_base = 0.40 * metrics.strongest_n184_delta_s2n_mev
                                                                                 + 0.14 * metrics.avg_top5_delta_s2n_mev
-                                                                                + 0.20 * metrics.avg_superheavy_proton_delta_s2p_mev
-                                                                                + 0.10 * metrics.min_superheavy_proton_delta_s2p_mev
-                                                                                + 0.08 * top_score
-                                                                                + 0.06 * closest_score;
+                                                                                + 0.16 * metrics.avg_monitored_proton_delta_s2p_mev
+                                                                                + 0.12 * metrics.min_monitored_proton_delta_s2p_mev
+                                                                                + 0.08 * metrics.avg_superheavy_proton_delta_s2p_mev
+                                                                                + 0.04 * metrics.min_superheavy_proton_delta_s2p_mev
+                                                                                + 0.04 * top_score
+                                                                                + 0.02 * closest_score;
                                                                             let objective = objective_base
                                                                                 - ratio_penalty_weight * ratio_penalty;
 
@@ -375,6 +379,8 @@ fn main() -> anyhow::Result<()> {
                                                                                 n184_delta: metrics.strongest_n184_delta_s2n_mev,
                                                                                 proton_avg_delta_s2p: metrics.avg_superheavy_proton_delta_s2p_mev,
                                                                                 proton_min_delta_s2p: metrics.min_superheavy_proton_delta_s2p_mev,
+                                                                                proton_monitored_avg_delta_s2p: metrics.avg_monitored_proton_delta_s2p_mev,
+                                                                                proton_monitored_min_delta_s2p: metrics.min_monitored_proton_delta_s2p_mev,
                                                                                 n50_ratio,
                                                                                 n82_ratio,
                                                                                 n126_ratio,
@@ -422,7 +428,7 @@ fn main() -> anyhow::Result<()> {
 
     for (idx, row) in rows.iter().enumerate() {
         leaderboard.push_str(&format!(
-            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
+            "{},{:.6},{:.3},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{},{},{:.6},{},{},{:.6},{:.6},{:.6}\n",
             idx + 1,
             row.score,
             row.amp_z,
@@ -452,6 +458,8 @@ fn main() -> anyhow::Result<()> {
             row.n184_delta,
             row.proton_avg_delta_s2p,
             row.proton_min_delta_s2p,
+            row.proton_monitored_avg_delta_s2p,
+            row.proton_monitored_min_delta_s2p,
             row.n50_ratio,
             row.n82_ratio,
             row.n126_ratio,
@@ -476,9 +484,12 @@ fn main() -> anyhow::Result<()> {
         strongest_superheavy_proton_delta_s2p_mev: 0.0,
         avg_superheavy_proton_delta_s2p_mev: 0.0,
         min_superheavy_proton_delta_s2p_mev: 0.0,
+        strongest_monitored_proton_delta_s2p_mev: 0.0,
+        avg_monitored_proton_delta_s2p_mev: 0.0,
+        min_monitored_proton_delta_s2p_mev: 0.0,
     });
     let best_desc = format!(
-        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},shell_amp:{:.3},shell_scale_exp:{:.3},use_strutinsky:{},strutinsky_mix:{:.3},strutinsky_gamma:{:.3},strutinsky_spacing:{:.3},strutinsky_spin_orbit:{:.3},strutinsky_coulomb_shift:{:.3},strutinsky_ws_depth:{:.3},strutinsky_ws_diffuseness:{:.3},strutinsky_ws_a_ref:{:.3},sigma_z:{:.3},sigma_n:{:.3},superheavy_proton_amp:{:.3},superheavy_proton_sigma:{:.3},heavy_amp:{:.3},heavy_sigma_z:{:.3},heavy_sigma_n:{:.3},heavy_target_z:{:.3},heavy_target_n:{:.3}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\nproton_avg_delta_s2p={:.6}\nproton_min_delta_s2p={:.6}\n",
+        "best_score={:.6}\nbest_shell=amp_z:{:.3},amp_n:{:.3},shell_amp:{:.3},shell_scale_exp:{:.3},use_strutinsky:{},strutinsky_mix:{:.3},strutinsky_gamma:{:.3},strutinsky_spacing:{:.3},strutinsky_spin_orbit:{:.3},strutinsky_coulomb_shift:{:.3},strutinsky_ws_depth:{:.3},strutinsky_ws_diffuseness:{:.3},strutinsky_ws_a_ref:{:.3},sigma_z:{:.3},sigma_n:{:.3},superheavy_proton_amp:{:.3},superheavy_proton_sigma:{:.3},heavy_amp:{:.3},heavy_sigma_z:{:.3},heavy_sigma_n:{:.3},heavy_target_z:{:.3},heavy_target_n:{:.3}\nmonitored_proton_closures={:?}\ntop_delta_s2n={:.6}\navg_top5_delta_s2n={:.6}\nn184_delta={:.6}\nproton_avg_delta_s2p={:.6}\nproton_min_delta_s2p={:.6}\nproton_monitored_avg_delta_s2p={:.6}\nproton_monitored_min_delta_s2p={:.6}\n",
         best_score,
         best_shell.amplitude_z,
         best_shell.amplitude_n,
@@ -502,11 +513,14 @@ fn main() -> anyhow::Result<()> {
         best_shell.heavy_sigma_n,
         best_shell.heavy_target_z,
         best_shell.heavy_target_n,
+        MONITORED_SUPERHEAVY_PROTON_CLOSURES,
         metrics.top_delta_s2n_mev,
         metrics.avg_top5_delta_s2n_mev,
         metrics.strongest_n184_delta_s2n_mev,
         metrics.avg_superheavy_proton_delta_s2p_mev,
-        metrics.min_superheavy_proton_delta_s2p_mev
+        metrics.min_superheavy_proton_delta_s2p_mev,
+        metrics.avg_monitored_proton_delta_s2p_mev,
+        metrics.min_monitored_proton_delta_s2p_mev
     );
     let mut top_csv = String::from(
         "rank,Z,N,A,binding_per_nucleon_mev,s2n_mev,s2p_mev,fissility,fission_barrier_mev,sf_log10_half_life_s,stability_score\n",
