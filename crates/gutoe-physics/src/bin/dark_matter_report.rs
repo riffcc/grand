@@ -1,7 +1,8 @@
 //! GRAND-346: dark-sector phenomenology harness (particle + geometric branches).
 
 use gutoe_physics::constants::{
-    DARK_FRACTION_TOTAL_STATE_SPLIT, DARK_TO_VISIBLE_COUNT_RATIO,
+    DARK_FRACTION_GEOMETRIC_STRUCTURAL, DARK_FRACTION_TOTAL_STATE_SPLIT,
+    DARK_GEOMETRIC_AMPLIFICATION, DARK_TO_VISIBLE_COUNT_RATIO, DARK_TO_VISIBLE_GEOMETRIC_RATIO,
 };
 use gutoe_physics::dark_sector::{
     circular_velocity, curvature_proxy, dark_density, enclosed_mass_constant_density,
@@ -46,6 +47,10 @@ fn main() {
     let omega_dm_particle = OMEGA_BARYON_OBS * DARK_TO_VISIBLE_COUNT_RATIO;
     let omega_m_particle = OMEGA_BARYON_OBS + omega_dm_particle;
     let dm_fraction_particle = omega_dm_particle / omega_m_particle;
+    let omega_dm_geometric = OMEGA_BARYON_OBS * DARK_TO_VISIBLE_GEOMETRIC_RATIO;
+    let omega_m_geometric = OMEGA_BARYON_OBS + omega_dm_geometric;
+    let dm_fraction_geometric = omega_dm_geometric / omega_m_geometric;
+    let dm_fraction_geometric_with_curvature = rho_dark_geometric / (rho_visible + rho_dark_geometric);
     let dm_fraction_obs = OMEGA_DM_OBS / OMEGA_MATTER_OBS;
 
     let out_dir = "/tmp/bh_renders";
@@ -59,6 +64,10 @@ fn main() {
     writeln!(txt, "[structural_split]").expect("write");
     writeln!(txt, "dark_to_visible_ratio = {:.12}", DARK_TO_VISIBLE_COUNT_RATIO).expect("write");
     writeln!(txt, "dark_fraction_total_split = {:.12}", DARK_FRACTION_TOTAL_STATE_SPLIT).expect("write");
+    writeln!(txt, "dark_geometric_amplification = {:.12}", DARK_GEOMETRIC_AMPLIFICATION).expect("write");
+    writeln!(txt, "dark_to_visible_geometric_ratio = {:.12}", DARK_TO_VISIBLE_GEOMETRIC_RATIO).expect("write");
+    writeln!(txt, "dark_fraction_geometric_structural = {:.12}", DARK_FRACTION_GEOMETRIC_STRUCTURAL)
+        .expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[inputs]").expect("write");
     writeln!(txt, "rho_visible = {:.6e} kg/m^3", rho_visible).expect("write");
@@ -85,12 +94,32 @@ fn main() {
     writeln!(txt, "omega_baryon_obs = {:.9}", OMEGA_BARYON_OBS).expect("write");
     writeln!(txt, "omega_dm_obs = {:.9}", OMEGA_DM_OBS).expect("write");
     writeln!(txt, "omega_dm_particle_from_ratio = {:.9}", omega_dm_particle).expect("write");
+    writeln!(txt, "omega_dm_geometric_from_ratio = {:.9}", omega_dm_geometric).expect("write");
     writeln!(txt, "dm_fraction_obs = {:.9}", dm_fraction_obs).expect("write");
     writeln!(txt, "dm_fraction_particle = {:.9}", dm_fraction_particle).expect("write");
+    writeln!(txt, "dm_fraction_geometric = {:.9}", dm_fraction_geometric).expect("write");
     writeln!(
         txt,
-        "dm_fraction_delta = {:.9}",
+        "dm_fraction_geometric_with_curvature = {:.9}",
+        dm_fraction_geometric_with_curvature
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "dm_fraction_particle_delta = {:.9}",
         dm_fraction_particle - dm_fraction_obs
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "dm_fraction_geometric_delta = {:.9}",
+        dm_fraction_geometric - dm_fraction_obs
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "dm_fraction_geometric_with_curvature_delta = {:.9}",
+        dm_fraction_geometric_with_curvature - dm_fraction_obs
     )
     .expect("write");
 
@@ -99,6 +128,14 @@ fn main() {
         json,
         "{{\n  \"structural_split\": {{\"dark_to_visible_ratio\": {:.12}, \"dark_fraction_total_split\": {:.12}}},",
         DARK_TO_VISIBLE_COUNT_RATIO, DARK_FRACTION_TOTAL_STATE_SPLIT
+    )
+    .expect("write");
+    writeln!(
+        json,
+        "  \"structural_geometric\": {{\"amplification\": {:.12}, \"dark_to_visible_ratio\": {:.12}, \"dark_fraction\": {:.12}}},",
+        DARK_GEOMETRIC_AMPLIFICATION,
+        DARK_TO_VISIBLE_GEOMETRIC_RATIO,
+        DARK_FRACTION_GEOMETRIC_STRUCTURAL
     )
     .expect("write");
     writeln!(
@@ -127,13 +164,18 @@ fn main() {
     .expect("write");
     writeln!(
         json,
-        "  \"cmb_check\": {{\"omega_baryon_obs\": {:.12}, \"omega_dm_obs\": {:.12}, \"omega_dm_particle\": {:.12}, \"dm_fraction_obs\": {:.12}, \"dm_fraction_particle\": {:.12}, \"dm_fraction_delta\": {:.12}}}\n}}",
+        "  \"cmb_check\": {{\"omega_baryon_obs\": {:.12}, \"omega_dm_obs\": {:.12}, \"omega_dm_particle\": {:.12}, \"omega_dm_geometric\": {:.12}, \"dm_fraction_obs\": {:.12}, \"dm_fraction_particle\": {:.12}, \"dm_fraction_geometric\": {:.12}, \"dm_fraction_geometric_with_curvature\": {:.12}, \"dm_fraction_particle_delta\": {:.12}, \"dm_fraction_geometric_delta\": {:.12}, \"dm_fraction_geometric_with_curvature_delta\": {:.12}}}\n}}",
         OMEGA_BARYON_OBS,
         OMEGA_DM_OBS,
         omega_dm_particle,
+        omega_dm_geometric,
         dm_fraction_obs,
         dm_fraction_particle,
-        dm_fraction_particle - dm_fraction_obs
+        dm_fraction_geometric,
+        dm_fraction_geometric_with_curvature,
+        dm_fraction_particle - dm_fraction_obs,
+        dm_fraction_geometric - dm_fraction_obs,
+        dm_fraction_geometric_with_curvature - dm_fraction_obs
     )
     .expect("write");
 

@@ -101,6 +101,20 @@ pub const DARK_TO_VISIBLE_COUNT_RATIO: f64 =
 pub const DARK_FRACTION_TOTAL_STATE_SPLIT: f64 =
     DARK_STATE_COUNT_STRUCTURAL / (DARK_STATE_COUNT_STRUCTURAL + VISIBLE_STATE_COUNT_STRUCTURAL);
 
+/// Total Clifford basis-state count in Cl(1,3).
+pub const CLIFFORD_STATE_COUNT_STRUCTURAL: f64 = 16.0;
+/// Grade-1 state count in Cl(1,3): {γ⁰,γ¹,γ²,γ³}.
+pub const GRADE1_STATE_COUNT_STRUCTURAL: f64 = 4.0;
+/// Geometric dark amplification from non-grade-1 channels: 16 - 4 = 12.
+pub const DARK_GEOMETRIC_AMPLIFICATION: f64 =
+    CLIFFORD_STATE_COUNT_STRUCTURAL - GRADE1_STATE_COUNT_STRUCTURAL;
+/// Geometric branch dark/visible ratio: (5/11) * 12 = 60/11.
+pub const DARK_TO_VISIBLE_GEOMETRIC_RATIO: f64 =
+    DARK_TO_VISIBLE_COUNT_RATIO * DARK_GEOMETRIC_AMPLIFICATION;
+/// Geometric branch dark fraction in total matter: (60/11)/(1+60/11) = 60/71.
+pub const DARK_FRACTION_GEOMETRIC_STRUCTURAL: f64 =
+    DARK_TO_VISIBLE_GEOMETRIC_RATIO / (1.0 + DARK_TO_VISIBLE_GEOMETRIC_RATIO);
+
 /// Lorentz-signature normalization from explicit bivector split:
 /// sqrt(total / timelike-spacelike) = sqrt(6/3) = sqrt(2).
 pub fn lorentz_signature_factor_from_bivector_split() -> f64 {
@@ -305,5 +319,10 @@ mod tests {
         assert!((DARK_STATE_COUNT_STRUCTURAL - 5.0).abs() < 1e-15);
         assert!((DARK_TO_VISIBLE_COUNT_RATIO - 5.0 / 11.0).abs() < 1e-15);
         assert!((DARK_FRACTION_TOTAL_STATE_SPLIT - 5.0 / 16.0).abs() < 1e-15);
+        assert!((CLIFFORD_STATE_COUNT_STRUCTURAL - 16.0).abs() < 1e-15);
+        assert!((GRADE1_STATE_COUNT_STRUCTURAL - 4.0).abs() < 1e-15);
+        assert!((DARK_GEOMETRIC_AMPLIFICATION - 12.0).abs() < 1e-15);
+        assert!((DARK_TO_VISIBLE_GEOMETRIC_RATIO - 60.0 / 11.0).abs() < 1e-15);
+        assert!((DARK_FRACTION_GEOMETRIC_STRUCTURAL - 60.0 / 71.0).abs() < 1e-15);
     }
 }

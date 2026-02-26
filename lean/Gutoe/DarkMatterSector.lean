@@ -92,6 +92,56 @@ theorem dark_fraction_of_total_states_eq :
   rw [hVis, hDark]
   norm_num
 
+/-- Total finite state count in the visible+dark split. -/
+def totalFiniteStateCount : ℕ :=
+  darkSectorCandidates.card + visibleSectorStates.card
+
+/-- The visible+dark split spans all 16 Clifford states. -/
+theorem total_finite_state_count_eq :
+    totalFiniteStateCount = 16 := by
+  unfold totalFiniteStateCount
+  rcases visible_dark_state_count_split with ⟨_, _, _, hTot⟩
+  simpa [Nat.add_comm] using hTot
+
+/-- Grade-1 has four states in Cl(1,3). -/
+theorem grade1_state_count_eq : grade1_4d.card = 4 := by
+  decide
+
+/-- Geometric dark amplification from non-grade-1 Clifford channels:
+    (total states) - (grade-1 states) = 16 - 4 = 12. -/
+def geometricDarkAmplificationQ : ℚ :=
+  ((totalFiniteStateCount - grade1_4d.card : ℕ) : ℚ)
+
+/-- Exact geometric amplification from shared Clifford counts. -/
+theorem geometric_dark_amplification_eq :
+    geometricDarkAmplificationQ = 12 := by
+  unfold geometricDarkAmplificationQ
+  rw [total_finite_state_count_eq, grade1_state_count_eq]
+  norm_num
+
+/-- Geometric branch dark/visible ratio after structural amplification. -/
+def geometricDarkToVisibleRatio : ℚ :=
+  geometricDarkAmplificationQ * darkToVisibleCountRatio
+
+/-- Exact geometric branch dark/visible ratio. -/
+theorem geometric_dark_to_visible_ratio_eq :
+    geometricDarkToVisibleRatio = 60 / 11 := by
+  unfold geometricDarkToVisibleRatio
+  rw [geometric_dark_amplification_eq, dark_to_visible_count_ratio_eq]
+  norm_num
+
+/-- Geometric branch dark fraction in total matter:
+    f = (ρ_dark/ρ_visible) / (1 + ρ_dark/ρ_visible). -/
+def geometricDarkFractionOfMatter : ℚ :=
+  geometricDarkToVisibleRatio / (1 + geometricDarkToVisibleRatio)
+
+/-- Exact geometric dark fraction from the structural amplified ratio. -/
+theorem geometric_dark_fraction_of_matter_eq :
+    geometricDarkFractionOfMatter = 60 / 71 := by
+  unfold geometricDarkFractionOfMatter
+  rw [geometric_dark_to_visible_ratio_eq]
+  norm_num
+
 /-- Particle-branch effective dark density from the count ratio. -/
 def effectiveDarkDensityQ (rhoVisible : ℚ) : ℚ :=
   darkToVisibleCountRatio * rhoVisible

@@ -26,6 +26,9 @@ Core definitions/theorems:
 - `dark_sector_disjoint_from_sm_carrier`
 - `visible_dark_state_count_split` (`11` visible vs `5` dark candidates; disjoint; total `16`)
 - `dark_to_visible_count_ratio_eq` (`5/11`)
+- `geometric_dark_amplification_eq` (`12 = 16 - 4` from shared state counts)
+- `geometric_dark_to_visible_ratio_eq` (`60/11`)
+- `geometric_dark_fraction_of_matter_eq` (`60/71 ≈ 0.84507`)
 
 Rust harness additions:
 
@@ -38,6 +41,7 @@ Core runtime outputs:
 - geometric branch density map: `ρ_dark = (5/11) κ(r) ρ_visible`
 - rotation/lensing proxies from enclosed mass
 - CMB-era matter-fraction consistency report from structural ratio
+- geometric branch using structural amplification from shared Cl(1,3) counts
 
 Initial run artifact:
 
@@ -47,8 +51,9 @@ Initial run artifact:
 Current headline from the report:
 
 - Structural particle branch gives dark matter fraction `5/16 = 0.3125`
-- Observed matter dark fraction baseline is `~0.8426`
-- Delta is `~ -0.5301` (large mismatch; this lane is not closed yet)
+- Structural geometric branch gives dark matter fraction `60/71 = 0.84507`
+- Observed matter dark fraction baseline is `~0.84264`
+- Geometric branch delta is `+0.00243` (~0.29% high)
 
 ## Why this is real progress
 
@@ -58,16 +63,18 @@ This isolates a structurally defined sector that is:
 2. disjoint from the current SM interaction carrier orbits in the finite lane
 3. counted from existing shared primitives only
 
-No new physics constants were introduced.
+No new physics constants were introduced; the geometric amplification is built
+from shared counts `16 - 4 = 12` (total Clifford states minus grade-1 states).
 
 ## Honest boundary
 
-This is a **candidate-sector isolation result**, not yet a cosmology fit.
+This is still a **candidate-sector derivation lane**, not yet a closure of
+dark-matter phenomenology.
 Remaining GRAND-346 closure work:
 
 1. Upgrade the report from proxy checks to dataset-backed scoring (rotation/lensing curves).
 2. Tighten the geometric branch by deriving `κ(r)` from the cosmology/metric lane instead of using a report-level proxy.
-3. Add structural weighting from energy-per-state dynamics (not just state counts) to test whether the 0.3125 fraction can move toward observed matter fractions without fit knobs.
+3. Replace branch-level density proxies with a dynamical map tied to halo profiles and CMB constraints.
 4. Push branch comparison into a falsification gate with explicit pass/fail thresholds.
 
 ## Build sanity
