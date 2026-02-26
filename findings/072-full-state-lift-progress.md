@@ -126,6 +126,22 @@ Interpretation: even when an explicit real full-mode witness is not yet
 constructed, strict positive full-state gap lower bounds are already proven at
 every refinement step.
 
+### 12) Steel wrap (GRAND-315 lane): Schur-safe structural spectral witness
+
+- `supNorm3`
+- `rowStochastic_supNorm3_nonexpansive`
+- `schur_safe_supNorm3_contraction_of_doeblin`
+- `wilson_reduced_kernel_schur_safe_contraction`
+
+This replaces real-eigenmode dependence for contraction control with a
+mode-agnostic operator statement:
+every zero-sum mode contracts under the Wilson-induced kernel by
+`1 - minorizationEps`, in `supNorm3`, purely from Doeblin decomposition +
+row-stochastic structure.
+
+Meaning: contraction is now certified in a Schur-safe way (compatible with
+complex spectra), not only through real-eigenmode witnesses.
+
 ## Cl(1,3) anchor
 
 - `reduced_transfer_basis_dim_eq_three` reuses transfer-basis dimension from

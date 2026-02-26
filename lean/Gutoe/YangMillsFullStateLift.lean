@@ -68,8 +68,13 @@ theorem supNorm3_smul_of_nonneg
     (c : ℝ) (hc : 0 ≤ c) (v : Fin 3 → ℝ) :
     supNorm3 (c • v) = c * supNorm3 v := by
   unfold supNorm3
-  simp [Pi.smul_apply, abs_mul, abs_of_nonneg hc,
-    max_mul_of_nonneg, hc, mul_assoc, mul_left_comm, mul_comm]
+  calc
+    max (|c * v 0|) (max (|c * v 1|) (|c * v 2|))
+        = max (c * |v 0|) (max (c * |v 1|) (c * |v 2|)) := by
+            simp [abs_mul, abs_of_nonneg hc]
+    _ = c * max (|v 0|) (max (|v 1|) (|v 2|)) := by
+          rw [← (mul_max_of_nonneg (a := c) (|v 1|) (|v 2|) hc)]
+          rw [← (mul_max_of_nonneg (a := c) (|v 0|) (max (|v 1|) (|v 2|)) hc)]
 
 /-- Diagonal full-state operator induced by a lifted observable. -/
 def liftDiagonalOperator (π : F → R) (obsR : R → ℝ) : Matrix F F ℝ :=
@@ -113,13 +118,13 @@ theorem rowStochastic_supNorm3_nonexpansive
     have hsumAbs :
         |(R.mulVec v) i| ≤ ∑ j : Fin 3, |R i j * v j| := by
       simpa [Matrix.mulVec, dotProduct] using
-        (abs_sum_le_sum_abs (s := (Finset.univ : Finset (Fin 3)))
+        (Finset.abs_sum_le_sum_abs (s := (Finset.univ : Finset (Fin 3)))
           (f := fun j : Fin 3 => R i j * v j))
     have hsumBound :
         (∑ j : Fin 3, |R i j * v j|) ≤ ∑ j : Fin 3, (R i j) * s := by
       refine Finset.sum_le_sum ?_
       intro j hj
-      have hRij : 0 ≤ R i j := Matrix.nonneg_of_mem_rowStochastic hR i j
+      have hRij : 0 ≤ R i j := Matrix.nonneg_of_mem_rowStochastic hR
       have hvj : |v j| ≤ s := by
         fin_cases j
         · exact hs0
