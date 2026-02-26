@@ -152,6 +152,54 @@ theorem lambda_signature_from_split_eq_candidate (lP : ℝ) :
   unfold lambdaCosmologicalSignatureFromSplit lambdaCosmologicalSignatureCandidate
   rw [lorentz_signature_normalization_eq_sqrt2]
 
+/-- Structural count of Z₃-fixed grade-1 generators. -/
+def z3FixedGrade1Count : ℕ :=
+  (Gutoe.DimensionalStructure.grade1_4d.filter
+    (fun s => Gutoe.DimensionalStructure.z3_4d s = s)).card
+
+/-- Exact Z₃-fixed grade-1 count (unique fixed generator). -/
+theorem z3_fixed_grade1_count_eq_one : z3FixedGrade1Count = 1 := by
+  unfold z3FixedGrade1Count
+  simpa using z3_grade1_fixed_count
+
+/-- Effective micro-mode channel count for Λ refinement:
+    N_micro = ewsbScaleFactor + |grade-2| = 480 + 6 = 486. -/
+def microModeCount : ℕ := ewsbScaleFactor + grade2_4d.card
+
+/-- Exact micro-mode channel count. -/
+theorem micro_mode_count_eq_486 : microModeCount = 486 := by
+  unfold microModeCount
+  have he : ewsbScaleFactor = 480 := ewsb_scale_factor_eq_480
+  have hg2 : grade2_4d.card = 6 := by native_decide
+  rw [he, hg2]
+
+/-- Micro finite-mode rescale from subtracting the unique fixed mode:
+    k_micro = N_micro / (N_micro - 1) = 486/485. -/
+def microFiniteModeRescale : ℚ :=
+  (microModeCount : ℚ) / ((microModeCount - z3FixedGrade1Count : ℕ) : ℚ)
+
+/-- Exact value of micro finite-mode rescale. -/
+theorem micro_finite_mode_rescale_eq_486_485 :
+    microFiniteModeRescale = (486 : ℚ) / 485 := by
+  unfold microFiniteModeRescale
+  rw [micro_mode_count_eq_486, z3_fixed_grade1_count_eq_one]
+  norm_num
+
+/-- Fully corrected cosmological candidate:
+    Λ_full = Λ_sig * k_micro. -/
+noncomputable def lambdaCosmologicalFullCandidate (lP : ℝ) : ℝ :=
+  lambdaCosmologicalSignatureCandidate lP * ((microFiniteModeRescale : ℚ) : ℝ)
+
+/-- Exact full candidate in closed form:
+    Λ_full = ((13/100)^137)/(√2 * l_P²) * (486/485). -/
+theorem lambda_cosmological_full_candidate_eq
+    (lP : ℝ) :
+    lambdaCosmologicalFullCandidate lP =
+      (((((13 : ℚ) / 100) ^ (137 : ℕ) : ℚ) : ℝ) / (Real.sqrt 2 * (lP ^ 2))) *
+      (((486 : ℚ) / 485 : ℚ) : ℝ) := by
+  unfold lambdaCosmologicalFullCandidate
+  rw [lambda_cosmological_signature_candidate_eq, micro_finite_mode_rescale_eq_486_485]
+
 /-- For nonzero Planck length, the structural Λ candidate is positive. -/
 theorem lambda_cosmological_from_planck_pos
     {lP : ℝ}
@@ -175,5 +223,20 @@ theorem lambda_cosmological_signature_candidate_pos
   have hs2 : 0 < Real.sqrt 2 := by
     exact Real.sqrt_pos.2 (by norm_num)
   exact div_pos hbase hs2
+
+/-- Positive full candidate for nonzero Planck length. -/
+theorem lambda_cosmological_full_candidate_pos
+    {lP : ℝ}
+    (hlP : lP ≠ 0) :
+    0 < lambdaCosmologicalFullCandidate lP := by
+  unfold lambdaCosmologicalFullCandidate
+  have hsig : 0 < lambdaCosmologicalSignatureCandidate lP :=
+    lambda_cosmological_signature_candidate_pos hlP
+  have hmicroQ : 0 < microFiniteModeRescale := by
+    rw [micro_finite_mode_rescale_eq_486_485]
+    norm_num
+  have hmicroR : 0 < ((microFiniteModeRescale : ℚ) : ℝ) := by
+    exact_mod_cast hmicroQ
+  exact mul_pos hsig hmicroR
 
 end Gutoe.CosmologicalConstant

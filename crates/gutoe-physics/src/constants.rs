@@ -84,6 +84,11 @@ pub const HIGGS_QUARTIC_STRUCTURAL: f64 = (16.0 - 3.0) / ((4.0 + 6.0) * (4.0 + 6
 pub const BIVECTOR_TOTAL_COUNT: f64 = 6.0;
 /// Timelike-spacelike bivector count in (1,3) signature.
 pub const BIVECTOR_TIMELIKE_SPACELIKE_COUNT: f64 = 3.0;
+/// Structural electroweak scale factor from shared Clifford counts.
+/// 2^4 * (|grade-1| + |grade-2|) * |SU(2)| = 480.
+pub const EWSB_SCALE_FACTOR_STRUCTURAL: f64 = 480.0;
+/// Unique Z3-fixed grade-1 generator count.
+pub const Z3_FIXED_GRADE1_COUNT: f64 = 1.0;
 
 /// Lorentz-signature normalization from explicit bivector split:
 /// sqrt(total / timelike-spacelike) = sqrt(6/3) = sqrt(2).
@@ -110,6 +115,25 @@ pub fn lambda_cosmological_structural() -> f64 {
 /// bivector/metric normalization chain in Lean.
 pub fn lambda_cosmological_signature_candidate() -> f64 {
     lambda_cosmological_structural() / lorentz_signature_factor_from_bivector_split()
+}
+
+/// GRAND-295 micro-mode channel count:
+/// N_micro = ewsbScaleFactor + |grade-2| = 480 + 6 = 486.
+pub fn lambda_micro_mode_count() -> f64 {
+    EWSB_SCALE_FACTOR_STRUCTURAL + BIVECTOR_TOTAL_COUNT
+}
+
+/// GRAND-295 finite-mode rescale from subtracting the unique fixed mode:
+/// k_micro = N_micro / (N_micro - 1) = 486/485.
+pub fn lambda_micro_finite_mode_rescale() -> f64 {
+    let n_micro = lambda_micro_mode_count();
+    n_micro / (n_micro - Z3_FIXED_GRADE1_COUNT)
+}
+
+/// GRAND-295 full candidate:
+/// Λ_full = Λ_struct / sqrt(2) * (486/485).
+pub fn lambda_cosmological_full_candidate() -> f64 {
+    lambda_cosmological_signature_candidate() * lambda_micro_finite_mode_rescale()
 }
 
 /// Observed cosmological constant reference (1/m²).
@@ -232,13 +256,22 @@ mod tests {
     fn test_lambda_cosmological_signature_candidate_is_close_to_observed() {
         let lambda_struct = lambda_cosmological_structural();
         let lambda_candidate = lambda_cosmological_signature_candidate();
+        let lambda_full = lambda_cosmological_full_candidate();
         let ratio_struct = lambda_struct / LAMBDA_COSMOLOGICAL_OBSERVED;
         let ratio_candidate = lambda_candidate / LAMBDA_COSMOLOGICAL_OBSERVED;
+        let ratio_full = lambda_full / LAMBDA_COSMOLOGICAL_OBSERVED;
+        let k_micro = lambda_micro_finite_mode_rescale();
 
         // Structural-over-observed residual is near sqrt(2).
         assert!(((ratio_struct / SQRT_2) - 1.0).abs() < 0.01);
 
         // Candidate should be within 1% of observed (currently ~0.205%).
         assert!((ratio_candidate - 1.0).abs() < 0.01);
+
+        // GRAND-295 finite-mode rescale is exact 486/485.
+        assert!((k_micro - (486.0 / 485.0)).abs() < 1e-15);
+
+        // Full candidate should be within 0.1% (currently ~2.3e-6).
+        assert!((ratio_full - 1.0).abs() < 1e-3);
     }
 }
