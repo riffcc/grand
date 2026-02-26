@@ -116,6 +116,24 @@ theorem uniform_eps_floor_of_sc_regular_schedule
   · intro n
     rw [minorization_eps_eq_sc_regular (rowTotals n) alpha (hreg n)]
 
+/-- Structural extraction of a uniform epsilon floor from a refinement schedule
+with a uniform bound on `maxRowTotal`. -/
+theorem uniform_eps_floor_of_bounded_max_row_total_schedule
+    (rowTotals : ℕ → Fin 3 → ℕ)
+    (bound : ℕ)
+    (alpha : ℝ)
+    (ha : 0 < alpha)
+    (hbound : ∀ n, maxRowTotal (rowTotals n) ≤ bound) :
+    ∃ epsFloor : ℝ, 0 < epsFloor ∧
+      ∀ n, epsFloor ≤ minorizationEps (rowTotals n) alpha := by
+  refine ⟨(3 * alpha) / ((bound : ℝ) + 3 * alpha), ?_, ?_⟩
+  · have hboundNonneg : (0 : ℝ) ≤ bound := by exact_mod_cast (Nat.zero_le bound)
+    have hdenPos : 0 < (bound : ℝ) + 3 * alpha := by nlinarith
+    exact div_pos (by nlinarith) hdenPos
+  · intro n
+    exact minorization_eps_ge_bounded_max_row_total_floor
+      (rowTotals n) ha bound (hbound n)
+
 /-- Continuum-survival hypotheses instantiated from SC-regular row totals.
 This discharges the epsilon-floor part by theorem, leaving only explicit
 time-step positivity/cap assumptions on `a_t`. -/
@@ -151,6 +169,47 @@ theorem continuum_hypotheses_of_sc_regular_schedule
         nlinarith
       exact (div_lt_one hdenPos).2 hdenGtNum
   · exact uniform_eps_floor_of_sc_regular_schedule rowTotals alpha ha hreg
+
+/-- Continuum-survival hypotheses instantiated from a refinement schedule with
+uniformly bounded `maxRowTotal`. This discharges the epsilon-floor lane without
+SC-regularity assumptions. -/
+theorem continuum_hypotheses_of_bounded_max_row_total_schedule
+    (a_t : ℕ → ℝ)
+    (rowTotals : ℕ → Fin 3 → ℕ)
+    (bound : ℕ)
+    (alpha : ℝ)
+    (ha_t_pos : ∀ n, 0 < a_t n)
+    (ha_t_cap : ∃ aCap, 0 < aCap ∧ ∀ n, a_t n ≤ aCap)
+    (ha : 0 < alpha)
+    (hmaxPos : ∀ n, 0 < maxRowTotal (rowTotals n))
+    (hbound : ∀ n, maxRowTotal (rowTotals n) ≤ bound) :
+    ContinuumSurvivalHypotheses a_t (fun n => minorizationEps (rowTotals n) alpha) := by
+  rcases ha_t_cap with ⟨aCap, haCapPos, haCap⟩
+  refine ⟨ha_t_pos, ?_, ?_, ⟨aCap, haCapPos, haCap⟩⟩
+  · intro n
+    constructor
+    · have hepsFloor : 0 < (3 * alpha) / ((bound : ℝ) + 3 * alpha) := by
+        have hboundNonneg : (0 : ℝ) ≤ bound := by exact_mod_cast (Nat.zero_le bound)
+        have hdenPos : 0 < (bound : ℝ) + 3 * alpha := by nlinarith
+        exact div_pos (by nlinarith) hdenPos
+      have hepsn :
+          (3 * alpha) / ((bound : ℝ) + 3 * alpha) ≤ minorizationEps (rowTotals n) alpha :=
+        minorization_eps_ge_bounded_max_row_total_floor (rowTotals n) ha bound (hbound n)
+      exact lt_of_lt_of_le hepsFloor hepsn
+    · have hmaxPosReal : 0 < (maxRowTotal (rowTotals n) : ℝ) := by
+        exact_mod_cast hmaxPos n
+      have hdenPosN : 0 < (maxRowTotal (rowTotals n) : ℝ) + 3 * alpha := by nlinarith
+      have hnumLtDenN : 3 * alpha < (maxRowTotal (rowTotals n) : ℝ) + 3 * alpha := by
+        nlinarith
+      have hltDiv :
+          (3 * alpha) / ((maxRowTotal (rowTotals n) : ℝ) + 3 * alpha) < 1 :=
+        (div_lt_one hdenPosN).2 hnumLtDenN
+      unfold minorizationEps laplaceGlobalFloor
+      have hrew :
+          3 * (alpha / ((maxRowTotal (rowTotals n) : ℝ) + 3 * alpha)) =
+            (3 * alpha) / ((maxRowTotal (rowTotals n) : ℝ) + 3 * alpha) := by ring
+      simpa [hrew] using hltDiv
+  · exact uniform_eps_floor_of_bounded_max_row_total_schedule rowTotals bound alpha ha hbound
 
 /-- Row-total schedule induced by a refinement-indexed local-count schedule. -/
 def rowTotalsScheduleFromCountsSchedule
@@ -237,5 +296,40 @@ theorem continuum_survival_gap_nonvanishing_of_z3_canonical_schedule
     a_t
     (fun n => minorizationEps (z3CanonicalRowTotalsSchedule n) alpha)
     (continuum_hypotheses_of_z3_canonical_schedule a_t alpha ha_t_pos ha_t_cap ha)
+
+/-- Empirical row-total bound from current measured YM transfer lane (GRAND-306
+artifact). This is a finite-data certificate, not a structural theorem. -/
+def empiricalMaxRowTotalBound : ℕ := 846
+
+/-- Uniform epsilon floor specialized to the current empirical max-row-total
+certificate (`maxRowTotal ≤ 846` at each refinement step). -/
+theorem uniform_eps_floor_of_empirical_bound_846
+    (rowTotals : ℕ → Fin 3 → ℕ)
+    (alpha : ℝ)
+    (ha : 0 < alpha)
+    (h846 : ∀ n, maxRowTotal (rowTotals n) ≤ empiricalMaxRowTotalBound) :
+    ∃ epsFloor : ℝ, 0 < epsFloor ∧
+      ∀ n, epsFloor ≤ minorizationEps (rowTotals n) alpha := by
+  exact uniform_eps_floor_of_bounded_max_row_total_schedule
+    rowTotals empiricalMaxRowTotalBound alpha ha h846
+
+/-- Continuum-survival corollary under the current empirical row-total
+certificate (`maxRowTotal ≤ 846`). -/
+theorem continuum_survival_gap_nonvanishing_of_empirical_bound_846
+    (a_t : ℕ → ℝ)
+    (rowTotals : ℕ → Fin 3 → ℕ)
+    (alpha : ℝ)
+    (ha_t_pos : ∀ n, 0 < a_t n)
+    (ha_t_cap : ∃ aCap, 0 < aCap ∧ ∀ n, a_t n ≤ aCap)
+    (ha : 0 < alpha)
+    (hmaxPos : ∀ n, 0 < maxRowTotal (rowTotals n))
+    (h846 : ∀ n, maxRowTotal (rowTotals n) ≤ empiricalMaxRowTotalBound) :
+    ∃ c : ℝ, 0 < c ∧
+      ∀ n, c ≤ doeblinGapLowerBound (a_t n) (minorizationEps (rowTotals n) alpha) := by
+  exact continuum_survival_gap_nonvanishing
+    a_t
+    (fun n => minorizationEps (rowTotals n) alpha)
+    (continuum_hypotheses_of_bounded_max_row_total_schedule
+      a_t rowTotals empiricalMaxRowTotalBound alpha ha_t_pos ha_t_cap ha hmaxPos h846)
 
 end Gutoe.YangMillsContinuumSurvival

@@ -30,11 +30,14 @@ In `YangMillsStructuralGap`:
 - `maxRowTotal_le_coordination_of_sc_bound`
 - `maxRowTotal_eq_coordination_of_sc_regular`
 - `minorization_eps_ge_sc_coordination_floor`
+- `minorization_eps_ge_bounded_max_row_total_floor`
 - `minorization_eps_eq_sc_regular`
 
 In `YangMillsContinuumSurvival`:
 - `uniform_eps_floor_of_sc_regular_schedule`
+- `uniform_eps_floor_of_bounded_max_row_total_schedule`
 - `continuum_hypotheses_of_sc_regular_schedule`
+- `continuum_hypotheses_of_bounded_max_row_total_schedule`
 - `rowTotalsScheduleFromCountsSchedule`
 - `sc_regular_schedule_of_z3_local_regular_counts`
 - `uniform_eps_floor_of_z3_local_regular_schedule`
@@ -43,6 +46,9 @@ In `YangMillsContinuumSurvival`:
 - `uniform_eps_floor_of_z3_canonical_schedule`
 - `continuum_hypotheses_of_z3_canonical_schedule`
 - `continuum_survival_gap_nonvanishing_of_z3_canonical_schedule`
+- `empiricalMaxRowTotalBound` (= `846`)
+- `uniform_eps_floor_of_empirical_bound_846`
+- `continuum_survival_gap_nonvanishing_of_empirical_bound_846`
 
 ## What is proven
 
@@ -69,6 +75,10 @@ The remaining practical bridge is proving the empirical transfer construction
 satisfies `Z3SCLocalRegularCounts` at each refinement step (or is bounded by a
 schedule that does), so the local-regular bridge theorems can be applied
 directly to measured lanes.
+
+Layer-1 empirical lane now has an explicit theorem target: if measured
+refinement rows satisfy `maxRowTotal ≤ 846` and remain positive, the
+continuum-survival non-vanishing gap corollary follows with a computable floor.
 
 ## Build verification
 

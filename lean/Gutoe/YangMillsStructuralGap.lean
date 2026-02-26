@@ -250,6 +250,34 @@ theorem minorization_eps_range
 
 /-- Structural lower bound on the Doeblin minorization constant from SC
 coordination boundedness. This is the key floor witness used in GRAND-305. -/
+theorem minorization_eps_ge_bounded_max_row_total_floor
+    (rowTotals : Fin 3 → ℕ)
+    {alpha : ℝ} (ha : 0 < alpha)
+    (bound : ℕ)
+    (hbound : maxRowTotal rowTotals ≤ bound) :
+    (3 * alpha) / ((bound : ℝ) + 3 * alpha) ≤
+      minorizationEps rowTotals alpha := by
+  have hmaxReal : (maxRowTotal rowTotals : ℝ) ≤ bound := by
+    exact_mod_cast hbound
+  have hdenMaxPos : 0 < (maxRowTotal rowTotals : ℝ) + 3 * alpha := by nlinarith
+  have hbase :
+      alpha / ((bound : ℝ) + 3 * alpha) ≤
+        alpha / ((maxRowTotal rowTotals : ℝ) + 3 * alpha) := by
+    have hdenLe :
+        (maxRowTotal rowTotals : ℝ) + 3 * alpha ≤
+          (bound : ℝ) + 3 * alpha := by
+      nlinarith
+    exact div_le_div_of_nonneg_left (le_of_lt ha) hdenMaxPos hdenLe
+  unfold minorizationEps laplaceGlobalFloor
+  calc
+    (3 * alpha) / ((bound : ℝ) + 3 * alpha)
+        = 3 * (alpha / ((bound : ℝ) + 3 * alpha)) := by ring
+    _ ≤ 3 * (alpha / ((maxRowTotal rowTotals : ℝ) + 3 * alpha)) := by
+          nlinarith [hbase]
+    _ = minorizationEps rowTotals alpha := by rfl
+
+/-- Structural lower bound on the Doeblin minorization constant from SC
+coordination boundedness. This is the key floor witness used in GRAND-305. -/
 theorem minorization_eps_ge_sc_coordination_floor
     (rowTotals : Fin 3 → ℕ)
     {alpha : ℝ} (ha : 0 < alpha)
@@ -258,24 +286,8 @@ theorem minorization_eps_ge_sc_coordination_floor
       minorizationEps rowTotals alpha := by
   have hmaxNat : maxRowTotal rowTotals ≤ coordinationNumber :=
     maxRowTotal_le_coordination_of_sc_bound rowTotals hcoord
-  have hmaxReal : (maxRowTotal rowTotals : ℝ) ≤ coordinationNumber := by
-    exact_mod_cast hmaxNat
-  have hdenMaxPos : 0 < (maxRowTotal rowTotals : ℝ) + 3 * alpha := by nlinarith
-  have hbase :
-      alpha / ((coordinationNumber : ℝ) + 3 * alpha) ≤
-        alpha / ((maxRowTotal rowTotals : ℝ) + 3 * alpha) := by
-    have hdenLe :
-        (maxRowTotal rowTotals : ℝ) + 3 * alpha ≤
-          (coordinationNumber : ℝ) + 3 * alpha := by
-      nlinarith
-    exact div_le_div_of_nonneg_left (le_of_lt ha) hdenMaxPos hdenLe
-  unfold minorizationEps laplaceGlobalFloor
-  calc
-    (3 * alpha) / ((coordinationNumber : ℝ) + 3 * alpha)
-        = 3 * (alpha / ((coordinationNumber : ℝ) + 3 * alpha)) := by ring
-    _ ≤ 3 * (alpha / ((maxRowTotal rowTotals : ℝ) + 3 * alpha)) := by
-          nlinarith [hbase]
-    _ = minorizationEps rowTotals alpha := by rfl
+  exact minorization_eps_ge_bounded_max_row_total_floor
+    rowTotals ha coordinationNumber hmaxNat
 
 /-- Exact minorization constant for SC-regular row totals. -/
 theorem minorization_eps_eq_sc_regular
