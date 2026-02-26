@@ -41,7 +41,11 @@ pub use su2_gauge::{
 };
 pub use weak::{
     sin2_weinberg, w_z_mass_ratio, higgs_vev, w_boson_mass, z_boson_mass,
-    fermi_constant, electroweak_summary, NEUTRINO_STATE, ELECTRON_STATE,
+    fermi_constant, electroweak_summary, higgs_mu_sq, higgs_potential,
+    higgs_potential_derivative, higgs_nontrivial_vev, higgs_mass_from_vev,
+    electroweak_vev_from_fermi, weak_coupling_from_alpha, w_mass_from_vev_and_alpha,
+    z_mass_from_vev_and_alpha, ALPHA_EW_MZ, HIGGS_QUARTIC_LAMBDA,
+    HIGGS_CRITICAL_VOID_FRACTION, NEUTRINO_STATE, ELECTRON_STATE,
 };
 pub use sim::{
     alignment_rg, cycle_prob_rg, init_lattice, instanton_threshold, landau_pole,

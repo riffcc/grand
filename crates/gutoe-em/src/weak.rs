@@ -36,6 +36,7 @@
 //   Experimental: 80.377/91.1876 = 0.8819   (0.5% match)
 
 use crate::config::{VOID, LEPTON_SEED};
+use std::f64::consts::PI;
 
 /// State index for the electron neutrino (grade-0 scalar in Cl(1,3)).
 /// ν_e is the Z₃-singlet partner of e⁻ in the weak SU(2)_W doublet.
@@ -44,6 +45,16 @@ pub const NEUTRINO_STATE: u8 = 1; // mi = 0b0000, grade-0 scalar
 /// State index for the electron (γ⁰, grade-1 timelike vector in Cl(1,3)).
 /// This is LEPTON_SEED = 2.
 pub const ELECTRON_STATE: u8 = LEPTON_SEED; // = 2, mi = 0b0001
+
+/// PDG-like electroweak-scale electromagnetic coupling (alpha(m_Z)^-1 ≈ 127.95).
+pub const ALPHA_EW_MZ: f64 = 1.0 / 127.95;
+
+/// Structural Higgs quartic from Cl(1,3) grade counts:
+/// λ_H = (16 - 3) / (4 + 6)^2 = 13/100.
+pub const HIGGS_QUARTIC_LAMBDA: f64 = (16.0 - 3.0) / ((4.0 + 6.0) * (4.0 + 6.0));
+
+/// Critical void fraction for symmetry restoration: f_c = 3/16.
+pub const HIGGS_CRITICAL_VOID_FRACTION: f64 = 3.0 / 16.0;
 
 // ── Weinberg angle ────────────────────────────────────────────────────────────
 
@@ -73,6 +84,60 @@ pub fn sin2_weinberg() -> f64 {
 /// GUTOE prediction: √(10/13) = 0.87706.  (0.55% error)
 pub fn w_z_mass_ratio() -> f64 {
     (1.0 - sin2_weinberg()).sqrt()
+}
+
+/// Effective Higgs mass-squared control parameter μ²(f₀) = f₀ - f_c.
+pub fn higgs_mu_sq(higgs_vev: f64) -> f64 {
+    higgs_vev - HIGGS_CRITICAL_VOID_FRACTION
+}
+
+/// Effective quartic Higgs potential in order-parameter form:
+/// V(φ;f₀) = -μ²(f₀) φ² + λ φ⁴.
+pub fn higgs_potential(phi: f64, higgs_vev: f64) -> f64 {
+    let mu_sq = higgs_mu_sq(higgs_vev);
+    -(mu_sq) * phi * phi + HIGGS_QUARTIC_LAMBDA * phi.powi(4)
+}
+
+/// Derivative dV/dφ of the effective quartic Higgs potential.
+pub fn higgs_potential_derivative(phi: f64, higgs_vev: f64) -> f64 {
+    let mu_sq = higgs_mu_sq(higgs_vev);
+    -2.0 * mu_sq * phi + 4.0 * HIGGS_QUARTIC_LAMBDA * phi.powi(3)
+}
+
+/// Non-trivial stationary branch from quartic potential:
+/// φ² = μ² / (2λ), valid only in broken phase (μ² > 0).
+pub fn higgs_nontrivial_vev(higgs_vev: f64) -> Option<f64> {
+    let mu_sq = higgs_mu_sq(higgs_vev);
+    if mu_sq <= 0.0 {
+        None
+    } else {
+        Some((mu_sq / (2.0 * HIGGS_QUARTIC_LAMBDA)).sqrt())
+    }
+}
+
+/// Higgs mass from vev using m_H = sqrt(2 λ_H) * v.
+pub fn higgs_mass_from_vev(vev: f64) -> f64 {
+    (2.0 * HIGGS_QUARTIC_LAMBDA).sqrt() * vev
+}
+
+/// Electroweak vev from Fermi constant: v = [sqrt(2) * G_F]^{-1/2}.
+pub fn electroweak_vev_from_fermi(g_f: f64) -> f64 {
+    (1.0 / (2.0_f64.sqrt() * g_f)).sqrt()
+}
+
+/// SU(2) coupling from alpha and sin²θ_W: g = sqrt(4π α / sin²θ_W).
+pub fn weak_coupling_from_alpha(alpha: f64) -> f64 {
+    (4.0 * PI * alpha / sin2_weinberg()).sqrt()
+}
+
+/// Absolute W mass from vev and alpha-derived weak coupling.
+pub fn w_mass_from_vev_and_alpha(vev: f64, alpha: f64) -> f64 {
+    weak_coupling_from_alpha(alpha) * vev / 2.0
+}
+
+/// Absolute Z mass from vev and alpha-derived weak coupling.
+pub fn z_mass_from_vev_and_alpha(vev: f64, alpha: f64) -> f64 {
+    w_mass_from_vev_and_alpha(vev, alpha) / w_z_mass_ratio()
 }
 
 // ── Higgs mechanism ───────────────────────────────────────────────────────────
@@ -248,6 +313,49 @@ mod tests {
             (m_w_phys / m_z_phys - w_z_mass_ratio()).abs() < 1e-10,
             "m_W/m_Z ratio must be exactly cos(θ_W)"
         );
+    }
+
+    /// Structural quartic and critical fraction from Cl(1,3) counts.
+    #[test]
+    fn higgs_structural_quartic_and_critical_fraction() {
+        assert!(
+            (HIGGS_QUARTIC_LAMBDA - 13.0 / 100.0).abs() < 1e-15,
+            "quartic λ_H must be 13/100"
+        );
+        assert!(
+            (HIGGS_CRITICAL_VOID_FRACTION - 3.0 / 16.0).abs() < 1e-15,
+            "critical fraction must be 3/16"
+        );
+    }
+
+    /// Broken phase has a non-trivial stationary branch of the quartic potential.
+    #[test]
+    fn nontrivial_higgs_stationary_branch() {
+        let f0_broken = 0.97;
+        let vev = higgs_nontrivial_vev(f0_broken).expect("broken phase should admit non-trivial vev");
+        let d = higgs_potential_derivative(vev, f0_broken);
+        assert!(d.abs() < 1e-10, "stationary branch derivative should vanish, got {d}");
+
+        // Symmetry-restored side should have no non-trivial branch.
+        let f0_hot = 0.10;
+        assert!(higgs_nontrivial_vev(f0_hot).is_none());
+        assert!(higgs_mu_sq(f0_hot) <= 0.0);
+    }
+
+    /// Mass-sector closure slice: from G_F + alpha(m_Z), recover near-physical v, W, Z, H.
+    #[test]
+    fn mass_sector_closure_slice_from_fermi_and_alpha_mz() {
+        let g_f = 1.166_378_7e-5;
+        let v = electroweak_vev_from_fermi(g_f);
+        let m_w = w_mass_from_vev_and_alpha(v, ALPHA_EW_MZ);
+        let m_z = z_mass_from_vev_and_alpha(v, ALPHA_EW_MZ);
+        let m_h = higgs_mass_from_vev(v);
+
+        assert!((v - 246.22).abs() < 0.5, "vev should be near 246 GeV");
+        assert!((m_w - 80.38).abs() < 2.0, "W mass should be near 80 GeV");
+        assert!((m_z - 91.19).abs() < 2.0, "Z mass should be near 91 GeV");
+        assert!((m_h - 125.25).abs() < 1.0, "Higgs mass should be near 125 GeV");
+        assert!((m_w / m_z - w_z_mass_ratio()).abs() < 1e-12);
     }
 
     /// At f₀ = 0: SU(2)_W restored, W/Z massless.
