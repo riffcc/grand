@@ -7,6 +7,7 @@
 
 pub mod alpha;
 pub mod analysis;
+pub mod flavor;
 pub mod su2_gauge;
 pub mod weak;
 pub mod quantum_lepton;
@@ -22,6 +23,10 @@ pub mod sim;
 pub use analysis::{analyze, detect_quarks, find_proton_triplets, AnalysisResult, Quark};
 pub use config::{
     LatticeConfig, QuarkType, DOWN_CHARGE, LEPTON_CHARGE, LEPTON_SEED, UP_CHARGE, VOID,
+};
+pub use flavor::{
+    ckm_from_clifford, pmns_from_clifford, residuals, MixingObservables, MixingResiduals,
+    MixingTargets, CKM_TARGET, PMNS_TARGET,
 };
 pub use gauge::{
     compute_charge_density, em_force_on_lepton, jacobi_poisson, maxwell_wave_step, update_gauge,
