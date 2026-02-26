@@ -48,6 +48,7 @@ lean_lib Gutoe where
              `Gutoe.YangMillsStructuralGap,
              `Gutoe.YangMillsFullStateLift,
              `Gutoe.YangMillsWilsonBridge,
+             `Gutoe.YangMillsWilsonEquivalence,
              `Gutoe.HaarBridgeScaffold,
              `Gutoe.HaarMeasureHooks,
              `Gutoe.HaarExpectationDecomposition,
