@@ -329,6 +329,20 @@ noncomputable def ppThermalAverageUniform
       (fun i => ppThermalKernel g f0 protonDensity mReduced T
         (E0 + (i : ℝ) * dE))) / (n + 1)
 
+/-- Algebraic decomposition of a uniform `(n+1)` point average into the first
+    endpoint term plus a shifted interior sum. -/
+theorem uniform_sample_average_decompose
+    (φ : ℝ → ℝ) (a dE : ℝ) (n : ℕ) :
+    (((Finset.univ : Finset (Fin (n + 1))).sum (fun i => φ (a + (i : ℝ) * dE))) / (n + 1 : ℝ))
+      =
+      (φ a + (∑ k ∈ Finset.range n, φ (a + ((k + 1 : ℕ) : ℝ) * dE))) / (n + 1 : ℝ) := by
+  rw [Fin.sum_univ_eq_sum_range (f := fun k : ℕ => φ (a + (k : ℝ) * dE)) (n := n + 1)]
+  have hsum := Finset.sum_range_add (f := fun k : ℕ => φ (a + (k : ℝ) * dE)) 1 n
+  rw [Nat.add_comm] at hsum
+  rw [hsum]
+  norm_num
+  simp [add_comm]
+
 theorem pp_thermal_average_uniform_positive
     (g f0 protonDensity mReduced T E0 dE : ℝ) (n : ℕ)
     (hg : g ≠ 0)
@@ -481,6 +495,119 @@ theorem pp_thermal_average_trapezoidal_interval_tendsto_continuum
       hUpperZero
   exact (tendsto_iff_norm_sub_tendsto_zero).2 (by
     simpa [Real.norm_eq_abs] using hAbsZero)
+
+/-- Exact endpoint-correction bridge between the existing uniform sampled
+    interval average and the trapezoidal sampled interval average. -/
+theorem pp_thermal_average_uniform_interval_decompose
+    (g f0 protonDensity mReduced T Emin Emax : ℝ) (n : ℕ) :
+    ppThermalAverageUniformInterval g f0 protonDensity mReduced T Emin Emax n
+      =
+      ((ppThermalKernel g f0 protonDensity mReduced T Emin
+        + ∑ k ∈ Finset.range n,
+            ppThermalKernel g f0 protonDensity mReduced T
+              (Emin + ((k + 1 : ℕ) : ℝ) * ((Emax - Emin) / (n + 1 : ℝ)))) /
+          (n + 1 : ℝ)) := by
+  simpa [ppThermalAverageUniformInterval, ppThermalAverageUniform] using
+    (uniform_sample_average_decompose
+      (φ := fun E => ppThermalKernel g f0 protonDensity mReduced T E)
+      (a := Emin)
+      (dE := (Emax - Emin) / (n + 1 : ℝ))
+      (n := n))
+
+theorem pp_thermal_average_trapezoidal_interval_decompose
+    (g f0 protonDensity mReduced T Emin Emax : ℝ) (n : ℕ)
+    (hRange : Emin < Emax) :
+    ppThermalAverageTrapezoidalInterval g f0 protonDensity mReduced T Emin Emax n
+      =
+      (((ppThermalKernel g f0 protonDensity mReduced T Emin
+          + ppThermalKernel g f0 protonDensity mReduced T Emax) / 2
+        + ∑ k ∈ Finset.range n,
+            ppThermalKernel g f0 protonDensity mReduced T
+              (Emin + ((k + 1 : ℕ) : ℝ) * ((Emax - Emin) / (n + 1 : ℝ)))) /
+          (n + 1 : ℝ)) := by
+  unfold ppThermalAverageTrapezoidalInterval trapezoidal_integral
+  simp
+  have hne : Emax - Emin ≠ 0 := sub_ne_zero.mpr (ne_of_gt hRange)
+  have hn : (n + 1 : ℝ) ≠ 0 := by positivity
+  field_simp [hne, hn]
+
+theorem pp_thermal_average_uniform_sub_trapezoidal_eq_endpoint_correction
+    (g f0 protonDensity mReduced T Emin Emax : ℝ) (n : ℕ)
+    (hRange : Emin < Emax) :
+    ppThermalAverageUniformInterval g f0 protonDensity mReduced T Emin Emax n
+      - ppThermalAverageTrapezoidalInterval g f0 protonDensity mReduced T Emin Emax n
+      =
+      (ppThermalKernel g f0 protonDensity mReduced T Emin
+        - ppThermalKernel g f0 protonDensity mReduced T Emax) / (2 * (n + 1 : ℝ)) := by
+  rw [pp_thermal_average_uniform_interval_decompose]
+  rw [pp_thermal_average_trapezoidal_interval_decompose
+      g f0 protonDensity mReduced T Emin Emax n hRange]
+  set A : ℝ := ppThermalKernel g f0 protonDensity mReduced T Emin
+  set B : ℝ := ppThermalKernel g f0 protonDensity mReduced T Emax
+  set S : ℝ :=
+    ∑ k ∈ Finset.range n,
+      ppThermalKernel g f0 protonDensity mReduced T
+        (Emin + ((k + 1 : ℕ) : ℝ) * ((Emax - Emin) / (n + 1 : ℝ)))
+  set N : ℝ := (n + 1 : ℝ)
+  ring_nf
+
+/-- Uniform-ladder convergence to the continuum interval average via the
+    endpoint-correction bridge and trapezoidal convergence. -/
+theorem pp_thermal_average_uniform_interval_tendsto_continuum
+    (g f0 protonDensity mReduced T Emin Emax ζ : ℝ)
+    (hRange : Emin < Emax)
+    (hC2 : ContDiffOn ℝ 2
+      (fun E => ppThermalKernel g f0 protonDensity mReduced T E)
+      (Set.uIcc Emin Emax))
+    (hBound2 : ∀ E : ℝ,
+      |iteratedDerivWithin 2
+        (fun x => ppThermalKernel g f0 protonDensity mReduced T x)
+        (Set.uIcc Emin Emax) E| ≤ ζ) :
+    Filter.Tendsto
+      (fun n : ℕ => ppThermalAverageUniformInterval g f0 protonDensity mReduced T Emin Emax n)
+      Filter.atTop
+      (nhds (ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax)) := by
+  let correction : ℕ → ℝ := fun n =>
+    (ppThermalKernel g f0 protonDensity mReduced T Emin
+      - ppThermalKernel g f0 protonDensity mReduced T Emax) / (2 * (n + 1 : ℝ))
+  have hTrap :
+      Filter.Tendsto
+        (fun n : ℕ => ppThermalAverageTrapezoidalInterval g f0 protonDensity mReduced T Emin Emax n)
+        Filter.atTop
+        (nhds (ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax)) :=
+    pp_thermal_average_trapezoidal_interval_tendsto_continuum
+      g f0 protonDensity mReduced T Emin Emax ζ hRange hC2 hBound2
+  have hNatPlus : Filter.Tendsto (fun n : ℕ => ((n + 1 : ℕ) : ℝ)) Filter.atTop Filter.atTop := by
+    exact tendsto_natCast_atTop_atTop.comp (Filter.tendsto_add_atTop_nat 1)
+  have hInv :
+      Filter.Tendsto (fun n : ℕ => (((n + 1 : ℕ) : ℝ)⁻¹)) Filter.atTop (nhds 0) := by
+    exact tendsto_inv_atTop_zero.comp hNatPlus
+  have hCorr :
+      Filter.Tendsto correction Filter.atTop (nhds 0) := by
+    unfold correction
+    simpa [div_eq_mul_inv, mul_assoc, mul_comm, mul_left_comm]
+      using (hInv.const_mul ((ppThermalKernel g f0 protonDensity mReduced T Emin
+        - ppThermalKernel g f0 protonDensity mReduced T Emax) / 2))
+  have hSum :
+      Filter.Tendsto
+        (fun n : ℕ =>
+          ppThermalAverageTrapezoidalInterval g f0 protonDensity mReduced T Emin Emax n
+            + correction n)
+        Filter.atTop
+        (nhds (ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax)) := by
+    simpa using hTrap.add hCorr
+  refine Filter.Tendsto.congr' (Filter.Eventually.of_forall ?_) hSum
+  intro n
+  have hBridge :=
+    pp_thermal_average_uniform_sub_trapezoidal_eq_endpoint_correction
+      g f0 protonDensity mReduced T Emin Emax n hRange
+  have hEq :
+      ppThermalAverageUniformInterval g f0 protonDensity mReduced T Emin Emax n
+        =
+      ppThermalAverageTrapezoidalInterval g f0 protonDensity mReduced T Emin Emax n
+        + correction n := by
+    nlinarith [hBridge]
+  simpa [correction] using hEq.symm
 
 /-- Every finite sampled interval average is strictly positive when
     `Emin > 0` and `Emax ≥ Emin`. -/
