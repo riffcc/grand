@@ -40,6 +40,37 @@ variable {R F : Type*} [Fintype F] [DecidableEq F]
 def liftObservable (π : F → R) (obsR : R → ℝ) : F → ℝ :=
   fun f => obsR (π f)
 
+/-- Sup-norm on the 3-state transfer-basis vectors (coordinate form). -/
+def supNorm3 (v : Fin 3 → ℝ) : ℝ :=
+  max (|v 0|) (max (|v 1|) (|v 2|))
+
+/-- Coordinate-wise bound by `supNorm3`. -/
+theorem abs_le_supNorm3 (v : Fin 3 → ℝ) (i : Fin 3) :
+    |v i| ≤ supNorm3 v := by
+  fin_cases i
+  · exact le_max_left _ _
+  · exact le_trans (le_max_left _ _) (le_max_right _ _)
+  · exact le_trans (le_max_right _ _) (le_max_right _ _)
+
+/-- Nonnegativity of `supNorm3`. -/
+theorem supNorm3_nonneg (v : Fin 3 → ℝ) : 0 ≤ supNorm3 v := by
+  exact le_trans (abs_nonneg (v 0)) (le_max_left _ _)
+
+/-- Bounding each coordinate absolute value bounds `supNorm3`. -/
+theorem supNorm3_le_of_coord_bounds
+    (v : Fin 3 → ℝ) {s : ℝ}
+    (h0 : |v 0| ≤ s) (h1 : |v 1| ≤ s) (h2 : |v 2| ≤ s) :
+    supNorm3 v ≤ s := by
+  exact max_le_iff.mpr ⟨h0, max_le_iff.mpr ⟨h1, h2⟩⟩
+
+/-- `supNorm3` scaling for nonnegative scalars. -/
+theorem supNorm3_smul_of_nonneg
+    (c : ℝ) (hc : 0 ≤ c) (v : Fin 3 → ℝ) :
+    supNorm3 (c • v) = c * supNorm3 v := by
+  unfold supNorm3
+  simp [Pi.smul_apply, abs_mul, abs_of_nonneg hc,
+    max_mul_of_nonneg, hc, mul_assoc, mul_left_comm, mul_comm]
+
 /-- Diagonal full-state operator induced by a lifted observable. -/
 def liftDiagonalOperator (π : F → R) (obsR : R → ℝ) : Matrix F F ℝ :=
   fun i j => if i = j then liftObservable π obsR i else 0
@@ -66,6 +97,82 @@ theorem liftObservable_fiber_constant
 end LiftMaps
 
 section GapLift
+
+/-- Row-stochastic `3×3` kernels are non-expansive on `supNorm3`. -/
+theorem rowStochastic_supNorm3_nonexpansive
+    (R : Matrix (Fin 3) (Fin 3) ℝ)
+    (hR : R ∈ Matrix.rowStochastic ℝ (Fin 3))
+    (v : Fin 3 → ℝ) :
+    supNorm3 (R.mulVec v) ≤ supNorm3 v := by
+  let s : ℝ := supNorm3 v
+  have hs0 : |v 0| ≤ s := by simpa [s] using abs_le_supNorm3 v 0
+  have hs1 : |v 1| ≤ s := by simpa [s] using abs_le_supNorm3 v 1
+  have hs2 : |v 2| ≤ s := by simpa [s] using abs_le_supNorm3 v 2
+  have hcoord : ∀ i : Fin 3, |(R.mulVec v) i| ≤ s := by
+    intro i
+    have hsumAbs :
+        |(R.mulVec v) i| ≤ ∑ j : Fin 3, |R i j * v j| := by
+      simpa [Matrix.mulVec, dotProduct] using
+        (abs_sum_le_sum_abs (s := (Finset.univ : Finset (Fin 3)))
+          (f := fun j : Fin 3 => R i j * v j))
+    have hsumBound :
+        (∑ j : Fin 3, |R i j * v j|) ≤ ∑ j : Fin 3, (R i j) * s := by
+      refine Finset.sum_le_sum ?_
+      intro j hj
+      have hRij : 0 ≤ R i j := Matrix.nonneg_of_mem_rowStochastic hR i j
+      have hvj : |v j| ≤ s := by
+        fin_cases j
+        · exact hs0
+        · exact hs1
+        · exact hs2
+      calc
+        |R i j * v j| = R i j * |v j| := by simp [abs_mul, abs_of_nonneg hRij]
+        _ ≤ R i j * s := mul_le_mul_of_nonneg_left hvj hRij
+    have hsumEq :
+        (∑ j : Fin 3, (R i j) * s) = s := by
+      calc
+        (∑ j : Fin 3, (R i j) * s) = (∑ j : Fin 3, R i j) * s := by
+          simp [Finset.sum_mul]
+        _ = 1 * s := by rw [Matrix.sum_row_of_mem_rowStochastic hR i]
+        _ = s := by ring
+    exact (le_trans hsumAbs (le_trans hsumBound (by simpa [hsumEq])))
+  exact supNorm3_le_of_coord_bounds (R.mulVec v)
+    (hcoord 0) (hcoord 1) (hcoord 2)
+
+/-- Schur-safe contraction lemma:
+Doeblin decomposition contracts every zero-sum mode in `supNorm3` by `1-ε`,
+without requiring a real eigenmode witness. -/
+theorem schur_safe_supNorm3_contraction_of_doeblin
+    (P R : Matrix (Fin 3) (Fin 3) ℝ)
+    (eps : ℝ)
+    (v : Fin 3 → ℝ)
+    (hdecomp : ∀ i j, P i j = eps * Gutoe.YangMillsStructuralGap.uniformKernel i j + (1 - eps) * R i j)
+    (hRstoch : R ∈ Matrix.rowStochastic ℝ (Fin 3))
+    (heps1 : eps < 1)
+    (hsum0 : v 0 + v 1 + v 2 = 0) :
+    supNorm3 (P.mulVec v) ≤ (1 - eps) * supNorm3 v := by
+  have hPmat : P = eps • Gutoe.YangMillsStructuralGap.uniformKernel + (1 - eps) • R := by
+    ext i j
+    simp [hdecomp i j, mul_comm]
+  have hU0 :
+      Gutoe.YangMillsStructuralGap.uniformKernel.mulVec v = 0 :=
+    Gutoe.YangMillsStructuralGap.uniformKernel_mulVec_zero_of_sum_zero v hsum0
+  have hPv :
+      P.mulVec v = (1 - eps) • (R.mulVec v) := by
+    calc
+      P.mulVec v = (eps • Gutoe.YangMillsStructuralGap.uniformKernel + (1 - eps) • R).mulVec v := by
+        simp [hPmat]
+      _ = eps • (Gutoe.YangMillsStructuralGap.uniformKernel.mulVec v) + (1 - eps) • (R.mulVec v) := by
+            simp [Matrix.add_mulVec, Matrix.smul_mulVec]
+      _ = (1 - eps) • (R.mulVec v) := by simp [hU0]
+  have honeps_nonneg : 0 ≤ 1 - eps := by linarith
+  have hRnonexp : supNorm3 (R.mulVec v) ≤ supNorm3 v :=
+    rowStochastic_supNorm3_nonexpansive R hRstoch v
+  calc
+    supNorm3 (P.mulVec v)
+        = supNorm3 ((1 - eps) • (R.mulVec v)) := by simpa [hPv]
+    _ = (1 - eps) * supNorm3 (R.mulVec v) := supNorm3_smul_of_nonneg (1 - eps) honeps_nonneg (R.mulVec v)
+    _ ≤ (1 - eps) * supNorm3 v := mul_le_mul_of_nonneg_left hRnonexp honeps_nonneg
 
 /-- Sufficient obligations to transfer strict mass-gap positivity from reduced
 ratio control to full-state ratio control. -/
@@ -392,6 +499,61 @@ theorem reduced_mode_dominates_of_wilson_doeblin
           using hdecomp i j)
       hEigP hEigR hRstoch hsum0 hvne
   simpa [epsN, rowTotals, counts, wilsonRowTotalsSchedule] using hle
+
+/-- Schur-safe (complex-stable) contraction witness on the Wilson-induced
+reduced kernel: every zero-sum mode contracts in `supNorm3` by the structural
+factor `1 - eps_n`, with no real-eigenmode assumption. -/
+theorem wilson_reduced_kernel_schur_safe_contraction
+    (W : WilsonZ3Action)
+    (alpha : ℝ)
+    (ha : 0 < alpha) :
+    ∀ n (v : Fin 3 → ℝ),
+      (v 0 + v 1 + v 2 = 0) →
+      supNorm3 ((wilsonReducedKernel W alpha n).mulVec v) ≤
+        (1 - Gutoe.YangMillsStructuralGap.minorizationEps (wilsonRowTotalsSchedule W n) alpha) *
+          supNorm3 v := by
+  intro n v hsum0
+  let counts : Fin 3 → Fin 3 → ℕ :=
+    Gutoe.YangMillsStructuralGap.z3NearestNeighborCounts (W.targetSchedule n)
+  let rowTotals : Fin 3 → ℕ := Gutoe.YangMillsStructuralGap.rowTotalsFromCounts counts
+  let P : Matrix (Fin 3) (Fin 3) ℝ := wilsonReducedKernel W alpha n
+  let epsN : ℝ := Gutoe.YangMillsStructuralGap.minorizationEps rowTotals alpha
+  have hrow : ∀ i, rowTotals i = ∑ j : Fin 3, counts i j := by
+    intro i
+    rfl
+  have hεlt : epsN < 1 := by
+    have hreg : Gutoe.YangMillsStructuralGap.SCRegularRowTotals rowTotals := by
+      simpa [rowTotals, counts] using
+        (Gutoe.YangMillsStructuralGap.z3_nn_row_totals_sc_regular (W.targetSchedule n))
+    have hclosed :
+        epsN =
+          (3 * alpha) / ((Gutoe.LatticeGeometry.coordinationNumber : ℝ) + 3 * alpha) := by
+      simpa [epsN] using
+        (Gutoe.YangMillsStructuralGap.minorization_eps_eq_sc_regular rowTotals alpha hreg)
+    rw [hclosed]
+    have hdenPos : 0 < (Gutoe.LatticeGeometry.coordinationNumber : ℝ) + 3 * alpha := by
+      nlinarith [show (0 : ℝ) < Gutoe.LatticeGeometry.coordinationNumber by
+        norm_num [Gutoe.LatticeGeometry.coordination_number_is_6]]
+    have hnumLt : 3 * alpha < (Gutoe.LatticeGeometry.coordinationNumber : ℝ) + 3 * alpha := by
+      nlinarith [show (0 : ℝ) < Gutoe.LatticeGeometry.coordinationNumber by
+        norm_num [Gutoe.LatticeGeometry.coordination_number_is_6]]
+    exact (div_lt_one hdenPos).2 hnumLt
+  rcases Gutoe.YangMillsStructuralGap.doeblin_decomposition counts rowTotals ha hrow hεlt with
+    ⟨R, hRnonneg, hRrowsum, hdecomp⟩
+  have hRstoch : R ∈ Matrix.rowStochastic ℝ (Fin 3) := by
+    rw [Matrix.mem_rowStochastic_iff_sum]
+    exact ⟨hRnonneg, hRrowsum⟩
+  have hcontract :
+      supNorm3 (P.mulVec v) ≤ (1 - epsN) * supNorm3 v :=
+    schur_safe_supNorm3_contraction_of_doeblin
+      P R epsN v
+      (by
+        intro i j
+        simpa [P, epsN] using hdecomp i j)
+      hRstoch
+      hεlt
+      hsum0
+  simpa [epsN, rowTotals, counts, wilsonRowTotalsSchedule] using hcontract
 
 /-- Structural no-extra-unit-mode theorem on the Wilson-induced reduced kernel:
 there is no nontrivial zero-sum eigenmode with eigenvalue `1`. -/
