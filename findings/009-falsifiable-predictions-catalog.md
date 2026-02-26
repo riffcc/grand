@@ -54,6 +54,16 @@ All criteria below are intentionally binary: pass window or dead.
 - Fifth force/LV: predicted signal strengths must stay below configured bounds.
 - Kill criterion: any bound violation fails.
 
+8. Yang-Mills mass-gap structural gate (SU(3) sector)
+- Structural theorem path: Doeblin minorization + stochastic spectral contraction gives
+  `m_gap >= -log(1-eps)/a_t > 0` in the transfer-basis construction.
+- Kill criterion (structural): if Lean cannot discharge positivity of the gap from
+  row-stochastic/Doeblin hypotheses (without an external `|mu| ≤ 1` axiom), this gate fails.
+- Status:
+  - Theorem A (structural gap existence): closed.
+  - Theorem B (continuum-survival bridge): open.
+  - Theorem C (Wilson-action equivalence bridge): open.
+
 ## Basis Theorems / Code Anchors
 
 - `lean/Gutoe/Z3Uniqueness.lean`
@@ -62,6 +72,8 @@ All criteria below are intentionally binary: pass window or dead.
 - `lean/Gutoe/LambdaQG.lean`
 - `lean/Gutoe/DispersionRelation.lean`
 - `lean/Gutoe/FalsifiabilityCatalog.lean`
+- `lean/Gutoe/YangMillsStructuralGap.lean`
+- `lean/Gutoe/YangMillsMassGap.lean`
 - `crates/gutoe-physics/src/constants.rs`
 
 ## Acceptance Artifacts

@@ -111,6 +111,74 @@ impl DenseSymmetricMatrix {
         Self::norm(work)
     }
 
+    /// Jacobi eigenvalue iterations for symmetric matrices.
+    fn symmetric_eigenvalues_jacobi(&self, max_iters: usize, tol: f64) -> Vec<f64> {
+        let n = self.dim;
+        let mut a = self.data.clone();
+        if n <= 1 {
+            return vec![a.first().copied().unwrap_or(0.0)];
+        }
+
+        for _ in 0..max_iters {
+            let mut p = 0usize;
+            let mut q = 1usize;
+            let mut max_off = 0.0_f64;
+            for i in 0..n {
+                for j in (i + 1)..n {
+                    let v = a[i * n + j].abs();
+                    if v > max_off {
+                        max_off = v;
+                        p = i;
+                        q = j;
+                    }
+                }
+            }
+            if max_off < tol {
+                break;
+            }
+
+            let app = a[p * n + p];
+            let aqq = a[q * n + q];
+            let apq = a[p * n + q];
+            if apq.abs() < tol {
+                continue;
+            }
+
+            let tau = (aqq - app) / (2.0 * apq);
+            let t = if tau >= 0.0 {
+                1.0 / (tau + (1.0 + tau * tau).sqrt())
+            } else {
+                -1.0 / (-tau + (1.0 + tau * tau).sqrt())
+            };
+            let c = 1.0 / (1.0 + t * t).sqrt();
+            let s = t * c;
+
+            for k in 0..n {
+                if k != p && k != q {
+                    let aik = a[p * n + k];
+                    let akq = a[q * n + k];
+                    let new_pk = c * aik - s * akq;
+                    let new_qk = s * aik + c * akq;
+                    a[p * n + k] = new_pk;
+                    a[k * n + p] = new_pk;
+                    a[q * n + k] = new_qk;
+                    a[k * n + q] = new_qk;
+                }
+            }
+
+            let new_pp = c * c * app - 2.0 * s * c * apq + s * s * aqq;
+            let new_qq = s * s * app + 2.0 * s * c * apq + c * c * aqq;
+            a[p * n + p] = new_pp;
+            a[q * n + q] = new_qq;
+            a[p * n + q] = 0.0;
+            a[q * n + p] = 0.0;
+        }
+
+        let mut evals: Vec<f64> = (0..n).map(|i| a[i * n + i]).collect();
+        evals.sort_by(|x, y| y.partial_cmp(x).unwrap_or(std::cmp::Ordering::Equal));
+        evals
+    }
+
     /// Largest eigenpair estimate from power iteration.
     pub fn largest_eigenpair_power(&self, max_iters: usize, tol: f64) -> Option<EigenEstimate> {
         if self.dim == 0 {
@@ -157,46 +225,32 @@ impl DenseSymmetricMatrix {
         if self.dim < 2 || v1.len() != self.dim {
             return None;
         }
-        let mut v = vec![0.0; self.dim];
-        v[0] = 1.0;
-        v[1] = -1.0;
-        let proj0 = Self::dot(&v, v1);
+        let mut tmp = vec![0.0; self.dim];
+        let lambda0 = self.rayleigh(v1, &mut tmp);
+
+        // Deflation: A' = A - λ0 v1 v1^T.
+        let mut rows = vec![vec![0.0; self.dim]; self.dim];
         for i in 0..self.dim {
-            v[i] -= proj0 * v1[i];
+            for j in 0..self.dim {
+                rows[i][j] = self.get(i, j) - lambda0 * v1[i] * v1[j];
+            }
         }
-        if !Self::normalize(&mut v) {
+        let deflated = DenseSymmetricMatrix::from_rows(&rows)?;
+        let mut e = deflated.largest_eigenpair_power(max_iters, tol)?;
+
+        // Re-orthogonalize against v1, then measure residual in original matrix.
+        let proj = Self::dot(&e.vector, v1);
+        for (i, v_i) in e.vector.iter_mut().enumerate().take(self.dim) {
+            *v_i -= proj * v1[i];
+        }
+        if !Self::normalize(&mut e.vector) {
             return None;
         }
-
-        let mut w = vec![0.0; self.dim];
-        let mut lambda_prev = f64::NEG_INFINITY;
-        for _ in 0..max_iters {
-            self.mat_vec(&v, &mut w);
-            let proj = Self::dot(&w, v1);
-            for i in 0..self.dim {
-                w[i] -= proj * v1[i];
-            }
-            if !Self::normalize(&mut w) {
-                return None;
-            }
-            v.clone_from_slice(&w);
-            let lambda = self.rayleigh(&v, &mut w);
-            let resid = self.residual_norm(&v, lambda, &mut w);
-            if (lambda - lambda_prev).abs() < tol && resid < tol {
-                return Some(EigenEstimate {
-                    value: lambda,
-                    vector: v,
-                    residual: resid,
-                });
-            }
-            lambda_prev = lambda;
-        }
-
-        let lambda = self.rayleigh(&v, &mut w);
-        let resid = self.residual_norm(&v, lambda, &mut w);
+        let lambda = self.rayleigh(&e.vector, &mut tmp);
+        let resid = self.residual_norm(&e.vector, lambda, &mut tmp);
         Some(EigenEstimate {
             value: lambda,
-            vector: v,
+            vector: e.vector,
             residual: resid,
         })
     }
@@ -241,11 +295,16 @@ pub fn transfer_matrix_diagnostics(
     let entrywise_nonnegative = t.is_entrywise_nonnegative(tol);
     let gersh_lb = t.gershgorin_lower_bound();
 
-    let e0 = t.largest_eigenpair_power(max_iters, tol)?;
-    let e1 = t.second_eigenvalue_deflated(&e0.vector, max_iters, tol)?;
-
-    let lambda0 = e0.value.max(0.0);
-    let lambda1 = e1.value.max(0.0);
+    let (lambda0, lambda1, r0, r1) = if symmetric {
+        let evals = t.symmetric_eigenvalues_jacobi(max_iters, tol);
+        let l0 = evals.first().copied().unwrap_or(0.0).abs();
+        let l1 = evals.get(1).copied().unwrap_or(0.0).abs();
+        (l0, l1, 0.0, 0.0)
+    } else {
+        let e0 = t.largest_eigenpair_power(max_iters, tol)?;
+        let e1 = t.second_eigenvalue_deflated(&e0.vector, max_iters, tol)?;
+        (e0.value.abs(), e1.value.abs(), e0.residual, e1.residual)
+    };
     let ratio = lambda1 / lambda0;
     let gap_est = if lambda0 > 0.0 && lambda1 > 0.0 && ratio < 1.0 {
         -ratio.ln() / a_t
@@ -256,8 +315,8 @@ pub fn transfer_matrix_diagnostics(
     // Conservative lower bound using residual intervals:
     // λ0 ∈ [λ0_est-r0, λ0_est+r0], λ1 ∈ [λ1_est-r1, λ1_est+r1].
     // If λ1_ub < λ0_lb then m_gap ≥ -(1/a_t) ln(λ1_ub/λ0_lb).
-    let lambda0_lb = (lambda0 - e0.residual).max(0.0);
-    let lambda1_ub = (lambda1 + e1.residual).max(0.0);
+    let lambda0_lb = (lambda0 - r0).max(0.0);
+    let lambda1_ub = (lambda1 + r1).max(0.0);
     let gap_lower_bound = if lambda0_lb > 0.0 && lambda1_ub > 0.0 && lambda1_ub < lambda0_lb {
         Some(-(lambda1_ub / lambda0_lb).ln() / a_t)
     } else {
@@ -268,8 +327,8 @@ pub fn transfer_matrix_diagnostics(
         Some(TransferMatrixGapEstimate {
             lambda0_est: lambda0,
             lambda1_est: lambda1,
-            lambda0_residual: e0.residual,
-            lambda1_residual: e1.residual,
+            lambda0_residual: r0,
+            lambda1_residual: r1,
             gap_est,
             gap_lower_bound,
         })

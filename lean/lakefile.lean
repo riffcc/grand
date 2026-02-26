@@ -41,6 +41,8 @@ lean_lib Gutoe where
              `Gutoe.StellarFusion,
              `Gutoe.FalsifiabilityCatalog,
              `Gutoe.AsymptoticFreedomEntropy,
+             `Gutoe.YangMillsMassGap,
+             `Gutoe.YangMillsStructuralGap,
              `Gutoe.SM.Rep,
              `Gutoe.SM.Anomalies,
              `Gutoe.SM.HyperchargeBridge,
