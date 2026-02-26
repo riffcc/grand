@@ -44,6 +44,7 @@ lean_lib Gutoe where
              `Gutoe.YangMillsMassGap,
              `Gutoe.YangMillsContinuumSurvival,
              `Gutoe.YangMillsStructuralGap,
+             `Gutoe.YangMillsWilsonBridge,
              `Gutoe.SM.Rep,
              `Gutoe.SM.Anomalies,
              `Gutoe.SM.HyperchargeBridge,
