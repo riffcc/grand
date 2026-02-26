@@ -73,8 +73,31 @@ pub const ALPHA: f64 = 7.2973525693e-3;
 /// Leading-order structural value from the Lean proof chain: α = 1/137.
 pub const ALPHA_LEADING_ORDER: f64 = 1.0 / 137.0;
 
-/// Cosmological constant (approximately)
-pub const LAMBDA_COSMOLOGICAL: f64 = 1.1056e-52; // 1/m²
+/// Leading-order structural inverse fine-structure count from Cl(1,3).
+pub const ALPHA_INV_LEADING_ORDER: i32 = 137;
+
+/// Structural Higgs quartic from shared Clifford counts:
+/// λ_H = (16 - 3) / (4 + 6)^2 = 13/100.
+pub const HIGGS_QUARTIC_STRUCTURAL: f64 = (16.0 - 3.0) / ((4.0 + 6.0) * (4.0 + 6.0));
+
+/// Structural cosmological suppression factor:
+/// s_Λ = λ_H^(α^{-1}_LO) = (13/100)^137.
+pub fn lambda_cosmological_suppression() -> f64 {
+    HIGGS_QUARTIC_STRUCTURAL.powi(ALPHA_INV_LEADING_ORDER)
+}
+
+/// Cosmological constant derived from structural suppression over Planck curvature:
+/// Λ_struct = λ_H^(α^{-1}_LO) / l_P^2.
+pub fn lambda_cosmological_structural() -> f64 {
+    lambda_cosmological_suppression() / (PLANCK_LENGTH * PLANCK_LENGTH)
+}
+
+/// Observed cosmological constant reference (1/m²).
+pub const LAMBDA_COSMOLOGICAL_OBSERVED: f64 = 1.1056e-52;
+
+/// Runtime cosmological constant source term (theory-first default).
+/// Numeric value of λ_H^137 / l_P^2 with λ_H = 13/100 and l_P = 1.616255e-35 m.
+pub const LAMBDA_COSMOLOGICAL: f64 = 1.560_340_938_612_886_7e-52;
 
 /// GUTOE wave velocity (should equal c in appropriate units)
 pub const V_RAIL: f64 = C;
@@ -149,6 +172,32 @@ mod tests {
         assert!(
             rel < 3.0e-4,
             "runtime α drifted too far from leading-order α: rel diff={rel:.6e}"
+        );
+    }
+
+    #[test]
+    fn test_higgs_quartic_structural_value() {
+        assert!((HIGGS_QUARTIC_STRUCTURAL - 13.0 / 100.0).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_lambda_cosmological_structural_scale() {
+        let s = lambda_cosmological_suppression();
+        let lambda_struct = lambda_cosmological_structural();
+
+        assert!(s > 0.0 && s < 1.0);
+        assert!(lambda_struct > 0.0);
+
+        // Structural Λ should be the same order as observed Λ.
+        let ratio = lambda_struct / LAMBDA_COSMOLOGICAL_OBSERVED;
+        assert!(
+            (0.1..10.0).contains(&ratio),
+            "structural Λ should be within one order of magnitude of observed; ratio={ratio:.6}"
+        );
+
+        assert!(
+            (LAMBDA_COSMOLOGICAL - lambda_struct).abs() / lambda_struct < 1e-12,
+            "runtime Λ constant should match structural computation"
         );
     }
 }

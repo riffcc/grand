@@ -37,6 +37,7 @@ lean_lib Gutoe where
              `Gutoe.StrongCPGeneralCases,
              `Gutoe.SMQCDUnification,
              `Gutoe.EWSBHiggs,
+             `Gutoe.CosmologicalConstant,
              `Gutoe.StellarFusion,
              `Gutoe.FalsifiabilityCatalog,
              `Gutoe.AsymptoticFreedomEntropy,

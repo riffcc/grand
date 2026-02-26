@@ -1,0 +1,55 @@
+//! Structural cosmological constant report from Clifford-derived suppression.
+
+use gutoe_physics::constants::{
+    lambda_cosmological_structural, lambda_cosmological_suppression, ALPHA_INV_LEADING_ORDER,
+    HIGGS_QUARTIC_STRUCTURAL, LAMBDA_COSMOLOGICAL_OBSERVED, PLANCK_LENGTH,
+};
+use std::fs::{self, File};
+use std::io::Write;
+
+fn main() {
+    let suppression = lambda_cosmological_suppression();
+    let lambda_struct = lambda_cosmological_structural();
+    let ratio = lambda_struct / LAMBDA_COSMOLOGICAL_OBSERVED;
+    let rel_err = (lambda_struct - LAMBDA_COSMOLOGICAL_OBSERVED).abs() / LAMBDA_COSMOLOGICAL_OBSERVED;
+
+    let out_dir = "/tmp/bh_renders";
+    let _ = fs::create_dir_all(out_dir);
+    let txt_path = format!("{out_dir}/lambda_cosmological_report.txt");
+    let json_path = format!("{out_dir}/lambda_cosmological_report.json");
+
+    let mut txt = File::create(&txt_path).expect("create txt");
+    writeln!(txt, "[structural_inputs]").expect("write");
+    writeln!(txt, "planck_length_m = {:.12e}", PLANCK_LENGTH).expect("write");
+    writeln!(txt, "higgs_quartic = {:.12}", HIGGS_QUARTIC_STRUCTURAL).expect("write");
+    writeln!(txt, "alpha_inv_lo = {}", ALPHA_INV_LEADING_ORDER).expect("write");
+    writeln!(txt, "suppression = {:.12e}", suppression).expect("write");
+    writeln!(txt).expect("write");
+    writeln!(txt, "[lambda_cosmological]").expect("write");
+    writeln!(txt, "lambda_structural = {:.12e}", lambda_struct).expect("write");
+    writeln!(txt, "lambda_observed = {:.12e}", LAMBDA_COSMOLOGICAL_OBSERVED).expect("write");
+    writeln!(txt, "ratio_struct_over_obs = {:.12}", ratio).expect("write");
+    writeln!(txt, "relative_error = {:.12}", rel_err).expect("write");
+
+    let mut json = File::create(&json_path).expect("create json");
+    writeln!(
+        json,
+        "{{\n  \"planck_length_m\": {:.12e},\n  \"higgs_quartic\": {:.12},\n  \"alpha_inv_lo\": {},\n  \"suppression\": {:.12e},\n  \"lambda_structural\": {:.12e},\n  \"lambda_observed\": {:.12e},\n  \"ratio_struct_over_obs\": {:.12},\n  \"relative_error\": {:.12}\n}}",
+        PLANCK_LENGTH,
+        HIGGS_QUARTIC_STRUCTURAL,
+        ALPHA_INV_LEADING_ORDER,
+        suppression,
+        lambda_struct,
+        LAMBDA_COSMOLOGICAL_OBSERVED,
+        ratio,
+        rel_err
+    )
+    .expect("write json");
+
+    println!("wrote {txt_path}");
+    println!("wrote {json_path}");
+    println!(
+        "Λ_struct={:.6e}, Λ_obs={:.6e}, ratio={:.4}, rel_err={:.4}",
+        lambda_struct, LAMBDA_COSMOLOGICAL_OBSERVED, ratio, rel_err
+    );
+}
