@@ -25,7 +25,8 @@ pub use config::{
     LatticeConfig, QuarkType, DOWN_CHARGE, LEPTON_CHARGE, LEPTON_SEED, UP_CHARGE, VOID,
 };
 pub use flavor::{
-    ckm_from_clifford, pmns_from_clifford, residuals, MixingObservables, MixingResiduals,
+    ckm_from_clifford, ckm_from_textures, pmns_from_clifford, pmns_from_textures, residuals,
+    MixingObservables, MixingResiduals,
     MixingTargets, CKM_TARGET, PMNS_TARGET,
 };
 pub use gauge::{

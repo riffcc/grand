@@ -3,7 +3,8 @@
  */
 
 use gutoe_em::{
-    ckm_from_clifford, pmns_from_clifford, residuals, CKM_TARGET, PMNS_TARGET,
+    ckm_from_clifford, ckm_from_textures, pmns_from_clifford, pmns_from_textures, residuals,
+    CKM_TARGET, PMNS_TARGET,
 };
 use std::fs::{self, File};
 use std::io::Write;
@@ -39,8 +40,12 @@ fn write_block(
 fn main() {
     let ckm = ckm_from_clifford();
     let pmns = pmns_from_clifford();
+    let ckm_tex = ckm_from_textures();
+    let pmns_tex = pmns_from_textures();
     let ckm_r = residuals(ckm, CKM_TARGET);
     let pmns_r = residuals(pmns, PMNS_TARGET);
+    let ckm_tex_r = residuals(ckm_tex, CKM_TARGET);
+    let pmns_tex_r = residuals(pmns_tex, PMNS_TARGET);
 
     let out_dir = "/tmp/bh_renders";
     let _ = fs::create_dir_all(out_dir);
@@ -50,7 +55,7 @@ fn main() {
     let mut txt = File::create(&txt_path).expect("create report txt");
     write_block(
         &mut txt,
-        "CKM",
+        "CKM (direct algebraic)",
         ckm.theta12_deg,
         ckm.theta23_deg,
         ckm.theta13_deg,
@@ -64,7 +69,7 @@ fn main() {
     );
     write_block(
         &mut txt,
-        "PMNS",
+        "PMNS (direct algebraic)",
         pmns.theta12_deg,
         pmns.theta23_deg,
         pmns.theta13_deg,
@@ -76,11 +81,39 @@ fn main() {
         pmns_r.d_delta_deg,
         pmns_r.d_jarlskog,
     );
+    write_block(
+        &mut txt,
+        "CKM (texture diagonalization)",
+        ckm_tex.theta12_deg,
+        ckm_tex.theta23_deg,
+        ckm_tex.theta13_deg,
+        ckm_tex.delta_deg,
+        ckm_tex.jarlskog,
+        ckm_tex_r.d_theta12_deg,
+        ckm_tex_r.d_theta23_deg,
+        ckm_tex_r.d_theta13_deg,
+        ckm_tex_r.d_delta_deg,
+        ckm_tex_r.d_jarlskog,
+    );
+    write_block(
+        &mut txt,
+        "PMNS (texture diagonalization)",
+        pmns_tex.theta12_deg,
+        pmns_tex.theta23_deg,
+        pmns_tex.theta13_deg,
+        pmns_tex.delta_deg,
+        pmns_tex.jarlskog,
+        pmns_tex_r.d_theta12_deg,
+        pmns_tex_r.d_theta23_deg,
+        pmns_tex_r.d_theta13_deg,
+        pmns_tex_r.d_delta_deg,
+        pmns_tex_r.d_jarlskog,
+    );
 
     let mut json = File::create(&json_path).expect("create report json");
     writeln!(
         json,
-        "{{\n  \"ckm\": {{\n    \"theta12_deg\": {:.12},\n    \"theta23_deg\": {:.12},\n    \"theta13_deg\": {:.12},\n    \"delta_deg\": {:.12},\n    \"jarlskog\": {:.12e},\n    \"delta_theta12_deg\": {:.12},\n    \"delta_theta23_deg\": {:.12},\n    \"delta_theta13_deg\": {:.12},\n    \"delta_delta_deg\": {:.12},\n    \"delta_jarlskog\": {:.12e}\n  }},\n  \"pmns\": {{\n    \"theta12_deg\": {:.12},\n    \"theta23_deg\": {:.12},\n    \"theta13_deg\": {:.12},\n    \"delta_deg\": {:.12},\n    \"jarlskog\": {:.12e},\n    \"delta_theta12_deg\": {:.12},\n    \"delta_theta23_deg\": {:.12},\n    \"delta_theta13_deg\": {:.12},\n    \"delta_delta_deg\": {:.12},\n    \"delta_jarlskog\": {:.12e}\n  }}\n}}",
+        "{{\n  \"ckm\": {{\n    \"direct\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }},\n    \"texture\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }}\n  }},\n  \"pmns\": {{\n    \"direct\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }},\n    \"texture\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }}\n  }}\n}}",
         ckm.theta12_deg,
         ckm.theta23_deg,
         ckm.theta13_deg,
@@ -91,6 +124,16 @@ fn main() {
         ckm_r.d_theta13_deg,
         ckm_r.d_delta_deg,
         ckm_r.d_jarlskog,
+        ckm_tex.theta12_deg,
+        ckm_tex.theta23_deg,
+        ckm_tex.theta13_deg,
+        ckm_tex.delta_deg,
+        ckm_tex.jarlskog,
+        ckm_tex_r.d_theta12_deg,
+        ckm_tex_r.d_theta23_deg,
+        ckm_tex_r.d_theta13_deg,
+        ckm_tex_r.d_delta_deg,
+        ckm_tex_r.d_jarlskog,
         pmns.theta12_deg,
         pmns.theta23_deg,
         pmns.theta13_deg,
@@ -100,7 +143,17 @@ fn main() {
         pmns_r.d_theta23_deg,
         pmns_r.d_theta13_deg,
         pmns_r.d_delta_deg,
-        pmns_r.d_jarlskog
+        pmns_r.d_jarlskog,
+        pmns_tex.theta12_deg,
+        pmns_tex.theta23_deg,
+        pmns_tex.theta13_deg,
+        pmns_tex.delta_deg,
+        pmns_tex.jarlskog,
+        pmns_tex_r.d_theta12_deg,
+        pmns_tex_r.d_theta23_deg,
+        pmns_tex_r.d_theta13_deg,
+        pmns_tex_r.d_delta_deg,
+        pmns_tex_r.d_jarlskog
     )
     .expect("write report json");
 
@@ -113,5 +166,21 @@ fn main() {
     println!(
         "PMNS θ12={:.3}° θ23={:.3}° θ13={:.3}° δ={:.3}° J={:.3e}",
         pmns.theta12_deg, pmns.theta23_deg, pmns.theta13_deg, pmns.delta_deg, pmns.jarlskog
+    );
+    println!(
+        "CKM(texture)  θ12={:.3}° θ23={:.3}° θ13={:.3}° δ={:.3}° J={:.3e}",
+        ckm_tex.theta12_deg,
+        ckm_tex.theta23_deg,
+        ckm_tex.theta13_deg,
+        ckm_tex.delta_deg,
+        ckm_tex.jarlskog
+    );
+    println!(
+        "PMNS(texture) θ12={:.3}° θ23={:.3}° θ13={:.3}° δ={:.3}° J={:.3e}",
+        pmns_tex.theta12_deg,
+        pmns_tex.theta23_deg,
+        pmns_tex.theta13_deg,
+        pmns_tex.delta_deg,
+        pmns_tex.jarlskog
     );
 }

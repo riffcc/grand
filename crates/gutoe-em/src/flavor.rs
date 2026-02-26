@@ -12,6 +12,7 @@
 //   grade2_dim = 6
 //   complement_dim = clifford_dim - su2_dim = 13
 
+use num_complex::Complex64;
 use std::f64::consts::PI;
 
 const CLIFFORD_DIM: f64 = 16.0; // 2^4
@@ -76,6 +77,263 @@ fn jarlskog(s12: f64, s23: f64, s13: f64, delta_rad: f64) -> f64 {
     let c23 = (1.0 - s23 * s23).sqrt();
     let c13 = (1.0 - s13 * s13).sqrt();
     c12 * c23 * c13 * c13 * s12 * s23 * s13 * delta_rad.sin()
+}
+
+type CMat3 = [[Complex64; 3]; 3];
+
+fn c_identity() -> CMat3 {
+    [
+        [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0)],
+        [Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
+        [Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)],
+    ]
+}
+
+fn c_mul(a: &CMat3, b: &CMat3) -> CMat3 {
+    let mut out = [[Complex64::new(0.0, 0.0); 3]; 3];
+    for i in 0..3 {
+        for j in 0..3 {
+            let mut s = Complex64::new(0.0, 0.0);
+            for k in 0..3 {
+                s += a[i][k] * b[k][j];
+            }
+            out[i][j] = s;
+        }
+    }
+    out
+}
+
+fn c_conj_transpose(m: &CMat3) -> CMat3 {
+    [
+        [m[0][0].conj(), m[1][0].conj(), m[2][0].conj()],
+        [m[0][1].conj(), m[1][1].conj(), m[2][1].conj()],
+        [m[0][2].conj(), m[1][2].conj(), m[2][2].conj()],
+    ]
+}
+
+fn clamp_unit(x: f64) -> f64 {
+    x.clamp(-1.0, 1.0)
+}
+
+fn angles_from_unitary(v: &CMat3) -> (f64, f64, f64) {
+    let s13 = clamp_unit(v[0][2].norm());
+    let c13 = (1.0 - s13 * s13).sqrt();
+
+    let s12 = clamp_unit(v[0][1].norm() / c13.max(1e-15));
+    let s23 = clamp_unit(v[1][2].norm() / c13.max(1e-15));
+    (s12, s23, s13)
+}
+
+fn unitary_from_observables(obs: MixingObservables) -> CMat3 {
+    let s12 = obs.s12;
+    let s23 = obs.s23;
+    let s13 = obs.s13;
+    let c12 = (1.0 - s12 * s12).sqrt();
+    let c23 = (1.0 - s23 * s23).sqrt();
+    let c13 = (1.0 - s13 * s13).sqrt();
+    let eid = Complex64::from_polar(1.0, obs.delta_rad);
+    let e_minus = eid.conj();
+
+    [
+        [
+            Complex64::new(c12 * c13, 0.0),
+            Complex64::new(s12 * c13, 0.0),
+            Complex64::new(s13, 0.0) * e_minus,
+        ],
+        [
+            Complex64::new(-s12 * c23, 0.0) - Complex64::new(c12 * s23 * s13, 0.0) * eid,
+            Complex64::new(c12 * c23, 0.0) - Complex64::new(s12 * s23 * s13, 0.0) * eid,
+            Complex64::new(s23 * c13, 0.0),
+        ],
+        [
+            Complex64::new(s12 * s23, 0.0) - Complex64::new(c12 * c23 * s13, 0.0) * eid,
+            Complex64::new(-c12 * s23, 0.0) - Complex64::new(s12 * c23 * s13, 0.0) * eid,
+            Complex64::new(c23 * c13, 0.0),
+        ],
+    ]
+}
+
+fn hermitian_from_unitary(u: &CMat3, evals: [f64; 3]) -> CMat3 {
+    let d = [
+        [Complex64::new(evals[0], 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0)],
+        [Complex64::new(0.0, 0.0), Complex64::new(evals[1], 0.0), Complex64::new(0.0, 0.0)],
+        [Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(evals[2], 0.0)],
+    ];
+    c_mul(&c_mul(u, &d), &c_conj_transpose(u))
+}
+
+/// Jacobi eigen-decomposition for complex Hermitian 3x3.
+fn jacobi_eigen_hermitian(mut a: CMat3) -> ([f64; 3], CMat3) {
+    let mut u = c_identity();
+    let max_iter = 96usize;
+    let tol = 1e-12;
+
+    for _ in 0..max_iter {
+        let mut p = 0usize;
+        let mut q = 1usize;
+        let mut max_off = a[0][1].norm();
+        for i in 0..3 {
+            for j in (i + 1)..3 {
+                let off = a[i][j].norm();
+                if off > max_off {
+                    max_off = off;
+                    p = i;
+                    q = j;
+                }
+            }
+        }
+        if max_off < tol {
+            break;
+        }
+
+        let apq = a[p][q];
+        let gamma = apq.norm();
+        if gamma < tol {
+            continue;
+        }
+        let alpha = a[p][p].re;
+        let beta = a[q][q].re;
+        let tau = (beta - alpha) / (2.0 * gamma);
+        let t = if tau >= 0.0 {
+            1.0 / (tau + (1.0 + tau * tau).sqrt())
+        } else {
+            -1.0 / (-tau + (1.0 + tau * tau).sqrt())
+        };
+        let c = 1.0 / (1.0 + t * t).sqrt();
+        let s_abs = c * t;
+        let phase = Complex64::from_polar(1.0, apq.arg());
+        let s = phase * s_abs;
+
+        for k in 0..3 {
+            if k == p || k == q {
+                continue;
+            }
+            let akp = a[k][p];
+            let akq = a[k][q];
+            let new_kp = akp * c - akq * s.conj();
+            let new_kq = akp * s + akq * c;
+            a[k][p] = new_kp;
+            a[p][k] = new_kp.conj();
+            a[k][q] = new_kq;
+            a[q][k] = new_kq.conj();
+        }
+        a[p][p] = Complex64::new(alpha - t * gamma, 0.0);
+        a[q][q] = Complex64::new(beta + t * gamma, 0.0);
+        a[p][q] = Complex64::new(0.0, 0.0);
+        a[q][p] = Complex64::new(0.0, 0.0);
+
+        for row in &mut u {
+            let up = row[p];
+            let uq = row[q];
+            row[p] = up * c - uq * s.conj();
+            row[q] = up * s + uq * c;
+        }
+    }
+
+    let mut idx = [0usize, 1, 2];
+    idx.sort_by(|&i, &j| a[i][i].re.partial_cmp(&a[j][j].re).unwrap_or(std::cmp::Ordering::Equal));
+
+    let evals = [a[idx[0]][idx[0]].re, a[idx[1]][idx[1]].re, a[idx[2]][idx[2]].re];
+    let mut evecs = [[Complex64::new(0.0, 0.0); 3]; 3];
+    for col_new in 0..3 {
+        let col_old = idx[col_new];
+        for row in 0..3 {
+            evecs[row][col_new] = u[row][col_old];
+        }
+    }
+    (evals, evecs)
+}
+
+fn apply_column_phase(m: &mut CMat3, col: usize, phase: f64) {
+    let e = Complex64::from_polar(1.0, phase);
+    for row in m.iter_mut() {
+        row[col] *= e;
+    }
+}
+
+fn apply_row_phase(m: &mut CMat3, row: usize, phase: f64) {
+    let e = Complex64::from_polar(1.0, phase);
+    for j in 0..3 {
+        m[row][j] *= e;
+    }
+}
+
+/// Canonical rephasing (PDG-like): fix five removable phases.
+fn phase_fix_pdg(mut v: CMat3) -> CMat3 {
+    for j in 0..3 {
+        let phase = -v[0][j].arg();
+        apply_column_phase(&mut v, j, phase);
+    }
+    for i in 1..3 {
+        let phase = -v[i][0].arg();
+        apply_row_phase(&mut v, i, phase);
+    }
+    v
+}
+
+fn observables_from_unitary(v: &CMat3) -> MixingObservables {
+    let v = phase_fix_pdg(*v);
+    let (s12, s23, s13) = angles_from_unitary(&v);
+    let c12 = (1.0 - s12 * s12).sqrt();
+    let c23 = (1.0 - s23 * s23).sqrt();
+    let c13 = (1.0 - s13 * s13).sqrt();
+
+    let j = (v[0][0] * v[1][1] * v[0][1].conj() * v[1][0].conj()).im;
+    let denom = (c12 * c23 * c13 * c13 * s12 * s23 * s13).max(1e-18);
+    let sin_delta = clamp_unit(j / denom);
+
+    let vtd2 = v[2][0].norm_sqr();
+    let top = s12 * s12 * s23 * s23 + c12 * c12 * c23 * c23 * s13 * s13 - vtd2;
+    let bot = (2.0 * s12 * s23 * c12 * c23 * s13).max(1e-18);
+    let cos_delta = clamp_unit(top / bot);
+
+    let mut delta = sin_delta.atan2(cos_delta);
+    if delta < 0.0 {
+        delta += 2.0 * PI;
+    }
+    build_observables(s12, s23, s13, delta)
+}
+
+fn ckm_mass_textures_from_clifford() -> (CMat3, CMat3) {
+    let base = ckm_from_clifford();
+    let ud = unitary_from_observables(base);
+    let lambda = 1.0 / (CLIFFORD_DIM + SU2_DIM).sqrt();
+    let up_eigs = [lambda.powi(8), lambda.powi(4), 1.0];
+    let down_eigs = [lambda.powi(4), lambda.powi(2), 1.0];
+
+    let mu = hermitian_from_unitary(&c_identity(), up_eigs);
+    let md = hermitian_from_unitary(&ud, down_eigs);
+    (mu, md)
+}
+
+fn pmns_mass_textures_from_clifford() -> (CMat3, CMat3) {
+    let base = pmns_from_clifford();
+    let unu = unitary_from_observables(base);
+    let eps = 1.0 / LATTICE_SHIFT;
+    let l_eigs = [eps.powi(4), eps.powi(2), 1.0];
+    let nu_eigs = [eps.powi(2), eps, 1.0];
+
+    let ml = hermitian_from_unitary(&c_identity(), l_eigs);
+    let mnu = hermitian_from_unitary(&unu, nu_eigs);
+    (ml, mnu)
+}
+
+/// Derive CKM by diagonalizing explicit algebraic mass textures.
+pub fn ckm_from_textures() -> MixingObservables {
+    let (mu, md) = ckm_mass_textures_from_clifford();
+    let (_, uu) = jacobi_eigen_hermitian(mu);
+    let (_, ud) = jacobi_eigen_hermitian(md);
+    let v = c_mul(&c_conj_transpose(&uu), &ud);
+    observables_from_unitary(&v)
+}
+
+/// Derive PMNS by diagonalizing explicit algebraic mass textures.
+pub fn pmns_from_textures() -> MixingObservables {
+    let (ml, mnu) = pmns_mass_textures_from_clifford();
+    let (_, ul) = jacobi_eigen_hermitian(ml);
+    let (_, un) = jacobi_eigen_hermitian(mnu);
+    let u = c_mul(&c_conj_transpose(&ul), &un);
+    observables_from_unitary(&u)
 }
 
 fn build_observables(s12: f64, s23: f64, s13: f64, delta_rad: f64) -> MixingObservables {
@@ -163,5 +421,24 @@ mod tests {
         assert!(pmns.theta12_deg > ckm.theta12_deg);
         assert!(pmns.theta23_deg > ckm.theta23_deg);
         assert!(pmns.theta13_deg > ckm.theta13_deg);
+    }
+
+    #[test]
+    fn texture_diagonalization_recovers_ckm_window() {
+        let ckm = ckm_from_textures();
+        let r = residuals(ckm, CKM_TARGET);
+        assert!(r.d_theta12_deg.abs() < 2.0, "theta12 drift too large: {}", r.d_theta12_deg);
+        assert!(r.d_theta23_deg.abs() < 1.0, "theta23 drift too large: {}", r.d_theta23_deg);
+        assert!(r.d_theta13_deg.abs() < 0.5, "theta13 drift too large: {}", r.d_theta13_deg);
+        assert!(r.d_delta_deg.abs() < 30.0, "delta drift too large: {}", r.d_delta_deg);
+        assert!(r.d_jarlskog.abs() < 2e-5, "J drift too large: {}", r.d_jarlskog);
+    }
+
+    #[test]
+    fn texture_diagonalization_keeps_pmns_large() {
+        let pmns = pmns_from_textures();
+        assert!(pmns.theta12_deg > 25.0);
+        assert!(pmns.theta23_deg > 35.0);
+        assert!(pmns.theta13_deg > 4.0);
     }
 }
