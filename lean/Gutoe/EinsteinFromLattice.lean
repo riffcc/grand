@@ -517,6 +517,117 @@ def ProjectionErrorBound
     |spatialEinsteinResidual G H g T lP Lambda kappa μ ν -
       projectedResidual w (edgeResidual dSdl source) μ ν| ≤ C * h ^ 2
 
+/-- Explicit SC/CMS constant extracted from:
+    - 19-edge simplicialization,
+    - uniform projection-weight bound `W`,
+    - uniform edge-error amplitude `K`. -/
+def scCmsConstant (W K : ℝ) : ℝ := 19 * W * K
+
+/-- If projected residuals are formed from edge terms with uniform bounds,
+    their absolute value is bounded by `19 * W * R` on the SC edge set. -/
+theorem projectedResidual_abs_le_of_uniform_bounds
+    (w : Fin 3 → Fin 3 → SimpEdge → ℝ)
+    (res : SimpEdge → ℝ)
+    (μ ν : Fin 3)
+    {W R : ℝ}
+    (hW : ∀ e : SimpEdge, |w μ ν e| ≤ W)
+    (hR : ∀ e : SimpEdge, |res e| ≤ R)
+    (hW0 : 0 ≤ W) :
+    |projectedResidual w res μ ν| ≤ 19 * W * R := by
+  have hR0 : 0 ≤ R := by
+    have hR0edge := hR (0 : SimpEdge)
+    exact le_trans (abs_nonneg (res (0 : SimpEdge))) hR0edge
+  unfold projectedResidual
+  calc
+    |∑ e : SimpEdge, w μ ν e * res e|
+        ≤ ∑ e : SimpEdge, |w μ ν e * res e| := by
+          simpa using
+            (Finset.abs_sum_le_sum_abs
+              (s := (Finset.univ : Finset SimpEdge))
+              (f := fun e : SimpEdge => w μ ν e * res e))
+    _ = ∑ e : SimpEdge, |w μ ν e| * |res e| := by
+          simp [abs_mul]
+    _ ≤ ∑ e : SimpEdge, W * R := by
+          refine Finset.sum_le_sum ?_
+          intro e he
+          have hw : |w μ ν e| ≤ W := hW e
+          have hr : |res e| ≤ R := hR e
+          nlinarith [abs_nonneg (w μ ν e), abs_nonneg (res e), hw, hr, hW0, hR0]
+    _ = 19 * W * R := by
+          simp [SimpEdge]
+          ring
+
+/-- Canonical SC projection weights from edge vectors are uniformly bounded by `1`
+    in absolute value. -/
+theorem edgeProjectionWeight_abs_le_one
+    (μ ν : Fin 3) (e : SimpEdge) :
+    |edgeProjectionWeight μ ν e| ≤ 1 := by
+  fin_cases μ <;> fin_cases ν <;> fin_cases e <;>
+    norm_num [edgeProjectionWeight, simpEdgeVector, simpEdgeEndpoints, cubeCoord]
+
+/-- CMS projection-error bound from a concrete edge-error decomposition:
+    if the tensor-space projection error is represented by an edge error field,
+    and each edge error is `O(h²)` with amplitude `K`, then the projection error
+    is `O(h²)` with explicit SC constant `19 * W * K`. -/
+theorem projection_error_bound_of_edge_error_model
+    {G H g T : TensorField (Fin 3)}
+    {dSdl source err : SimpEdge → ℝ}
+    {lP Lambda kappa h W K : ℝ}
+    {w : Fin 3 → Fin 3 → SimpEdge → ℝ}
+    (hModelErr :
+      ∀ μ ν,
+        spatialEinsteinResidual G H g T lP Lambda kappa μ ν -
+          projectedResidual w (edgeResidual dSdl source) μ ν =
+        projectedResidual w err μ ν)
+    (hW : ∀ μ ν e, |w μ ν e| ≤ W)
+    (hW0 : 0 ≤ W)
+    (hErr : ∀ e, |err e| ≤ K * h ^ 2) :
+    ProjectionErrorBound G H g T dSdl source lP Lambda kappa h
+      (scCmsConstant W K) w := by
+  intro μ ν
+  have hProj :
+      |projectedResidual w err μ ν| ≤ 19 * W * (K * h ^ 2) :=
+    projectedResidual_abs_le_of_uniform_bounds
+      w err μ ν
+      (hW := hW μ ν)
+      (hR := hErr)
+      (hW0 := hW0)
+  calc
+    |spatialEinsteinResidual G H g T lP Lambda kappa μ ν -
+        projectedResidual w (edgeResidual dSdl source) μ ν|
+        = |projectedResidual w err μ ν| := by
+            rw [hModelErr μ ν]
+    _ ≤ 19 * W * (K * h ^ 2) := hProj
+    _ = scCmsConstant W K * h ^ 2 := by
+          unfold scCmsConstant
+          ring
+
+/-- SC-specialized explicit CMS bound with canonical projection weights:
+    the generic `19 * W * K` constant collapses to `19 * K` because
+    `|edgeProjectionWeight| ≤ 1`. -/
+theorem sc_projection_error_bound_of_edge_error_model
+    {G H g T : TensorField (Fin 3)}
+    {dSdl source err : SimpEdge → ℝ}
+    {lP Lambda kappa h K : ℝ}
+    (hModelErr :
+      ∀ μ ν,
+        spatialEinsteinResidual G H g T lP Lambda kappa μ ν -
+          projectedResidual edgeProjectionWeight (edgeResidual dSdl source) μ ν =
+        projectedResidual edgeProjectionWeight err μ ν)
+    (hErr : ∀ e, |err e| ≤ K * h ^ 2) :
+    ProjectionErrorBound G H g T dSdl source lP Lambda kappa h (19 * K)
+      edgeProjectionWeight := by
+  simpa [scCmsConstant] using
+    (projection_error_bound_of_edge_error_model
+      (w := edgeProjectionWeight)
+      (W := 1) (K := K)
+      (hModelErr := hModelErr)
+      (hW := by
+        intro μ ν e
+        exact edgeProjectionWeight_abs_le_one μ ν e)
+      (hW0 := by norm_num)
+      (hErr := hErr))
+
 /-- If the CMS-style projection error is `O(h²)`, then at zero mesh spacing
     (`h = 0`) the projection model is exact. -/
 theorem edge_projection_model_of_zero_mesh
@@ -698,6 +809,34 @@ def scLocalDThetaQ (t : Fin 6) (e : SimpEdge) : ℚ :=
 theorem sc_local_balance_q (t : Fin 6) :
     (∑ e, scLocalDThetaQ t e) = 0 := by
   fin_cases t <;> native_decide
+
+/-- Physical dihedral-sum perturbation model on tetra `t`:
+    start from the flat-space full-angle sum `2π` and perturb by an
+    edge-local variation field scaled by `ε`. -/
+noncomputable def scPhysicalDihedralSum
+    (ε : ℝ) (t : Fin 6) : ℝ :=
+  2 * Real.pi + ε * (∑ e, (scLocalDThetaQ t e : ℝ))
+
+/-- In the concrete SC local-balance model, the per-tetra perturbation sum
+    is exactly zero, so the physical dihedral sum remains `2π`. -/
+theorem sc_physical_dihedral_sum_full_angle
+    (ε : ℝ) (t : Fin 6) :
+    scPhysicalDihedralSum ε t = 2 * Real.pi := by
+  unfold scPhysicalDihedralSum
+  have hq : (∑ e, scLocalDThetaQ t e) = (0 : ℚ) := sc_local_balance_q t
+  have hr : (∑ e, (scLocalDThetaQ t e : ℝ)) = 0 := by
+    exact_mod_cast hq
+  simp [hr]
+
+/-- Physical dihedral-angle local balance on SC tetrahedra:
+    every tetra in the 6-simplex decomposition has zero Regge deficit
+    under the balanced local dihedral perturbation model. -/
+theorem sc_physical_deficit_zero_of_local_balance
+    (ε : ℝ) :
+    ∀ t : Fin 6, deficitAngle (scPhysicalDihedralSum ε t) = 0 := by
+  intro t
+  exact deficitAngle_zero_of_full_angle
+    (sc_physical_dihedral_sum_full_angle ε t)
 
 /-- Global Schläfli identity from per-tetra local Schläfli balances. -/
 theorem sc_schlaefli_from_tetra_local
