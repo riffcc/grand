@@ -13,6 +13,7 @@
 //   complement_dim = clifford_dim - su2_dim = 13
 
 use num_complex::Complex64;
+use serde::Serialize;
 use std::f64::consts::PI;
 
 const CLIFFORD_DIM: f64 = 16.0; // 2^4
@@ -23,7 +24,7 @@ const COMPLEMENT_DIM: f64 = CLIFFORD_DIM - SU2_DIM; // 13
 const AUGMENTED_DIM: f64 = CLIFFORD_DIM + 1.0; // 17
 const LATTICE_SHIFT: f64 = GRADE2_DIM + 1.0; // 7
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct MixingObservables {
     pub s12: f64,
     pub s23: f64,
@@ -36,7 +37,7 @@ pub struct MixingObservables {
     pub jarlskog: f64,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct MixingTargets {
     pub theta12_deg: f64,
     pub theta23_deg: f64,
@@ -45,7 +46,7 @@ pub struct MixingTargets {
     pub jarlskog: f64,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct MixingResiduals {
     pub d_theta12_deg: f64,
     pub d_theta23_deg: f64,

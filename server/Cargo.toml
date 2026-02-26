@@ -6,5 +6,9 @@ edition = "2021"
 [dependencies]
 axum = "0.7"
 tower = "0.4"
-tower-http = { version = "0.5", features = ["fs"] }
+tower-http = { version = "0.5", features = ["fs", "cors"] }
 tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+gutoe-em = { path = "../crates/gutoe-em" }
+gutoe-physics = { path = "../crates/gutoe-physics" }
