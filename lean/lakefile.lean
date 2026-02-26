@@ -42,6 +42,7 @@ lean_lib Gutoe where
              `Gutoe.FalsifiabilityCatalog,
              `Gutoe.AsymptoticFreedomEntropy,
              `Gutoe.YangMillsMassGap,
+             `Gutoe.YangMillsContinuumSurvival,
              `Gutoe.YangMillsStructuralGap,
              `Gutoe.SM.Rep,
              `Gutoe.SM.Anomalies,
