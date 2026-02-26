@@ -40,12 +40,13 @@ pub use su2_gauge::{
     su2_random_perturb, su2_re_tr, wilson_triangles_at, Su2, Su2Links,
 };
 pub use weak::{
-    sin2_weinberg, w_z_mass_ratio, higgs_vev, w_boson_mass, z_boson_mass,
-    fermi_constant, electroweak_summary, higgs_mu_sq, higgs_potential,
-    higgs_potential_derivative, higgs_nontrivial_vev, higgs_mass_from_vev,
-    electroweak_vev_from_fermi, weak_coupling_from_alpha, w_mass_from_vev_and_alpha,
-    z_mass_from_vev_and_alpha, ALPHA_EW_MZ, HIGGS_QUARTIC_LAMBDA,
-    HIGGS_CRITICAL_VOID_FRACTION, NEUTRINO_STATE, ELECTRON_STATE,
+    electroweak_summary, electroweak_vev_from_fermi, electroweak_vev_from_lattice_order_parameter,
+    electron_mass_from_proton_anchor, fermi_constant, higgs_mass_from_vev, higgs_mu_sq,
+    higgs_nontrivial_vev, higgs_potential, higgs_potential_derivative, higgs_vev,
+    normalized_higgs_order_parameter, sin2_weinberg, weak_coupling_from_alpha, w_boson_mass,
+    w_mass_from_vev_and_alpha, w_z_mass_ratio, z_boson_mass, z_mass_from_vev_and_alpha,
+    ALPHA_EW_MZ, ELECTRON_STATE, EWSB_SCALE_FACTOR, HIGGS_CRITICAL_VOID_FRACTION,
+    HIGGS_QUARTIC_LAMBDA, NEUTRINO_STATE, PROTON_MASS_ANCHOR_MEV, VEV_OVER_PROTON,
 };
 pub use sim::{
     alignment_rg, cycle_prob_rg, init_lattice, instanton_threshold, landau_pole,

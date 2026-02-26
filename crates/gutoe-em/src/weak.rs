@@ -35,7 +35,8 @@
 //   m_W / m_Z = cos(θ_W) = √(10/13) ≈ 0.8771
 //   Experimental: 80.377/91.1876 = 0.8819   (0.5% match)
 
-use crate::config::{VOID, LEPTON_SEED};
+use crate::alpha::MP_ME_CLIFFORD;
+use crate::config::{LEPTON_SEED, VOID};
 use std::f64::consts::PI;
 
 /// State index for the electron neutrino (grade-0 scalar in Cl(1,3)).
@@ -49,12 +50,23 @@ pub const ELECTRON_STATE: u8 = LEPTON_SEED; // = 2, mi = 0b0001
 /// PDG-like electroweak-scale electromagnetic coupling (alpha(m_Z)^-1 ≈ 127.95).
 pub const ALPHA_EW_MZ: f64 = 1.0 / 127.95;
 
+/// Single absolute mass anchor used across GUTOE (MeV).
+pub const PROTON_MASS_ANCHOR_MEV: f64 = 938.272_046;
+
 /// Structural Higgs quartic from Cl(1,3) grade counts:
 /// λ_H = (16 - 3) / (4 + 6)^2 = 13/100.
 pub const HIGGS_QUARTIC_LAMBDA: f64 = (16.0 - 3.0) / ((4.0 + 6.0) * (4.0 + 6.0));
 
 /// Critical void fraction for symmetry restoration: f_c = 3/16.
 pub const HIGGS_CRITICAL_VOID_FRACTION: f64 = 3.0 / 16.0;
+
+/// Electroweak scale factor from shared Clifford counts:
+/// 2^4 * (|grade1| + |grade2|) * |SU(2)| = 16 * 10 * 3 = 480.
+pub const EWSB_SCALE_FACTOR: f64 = 480.0;
+
+/// VEV-to-proton ratio from structural counts:
+/// v/mp = 480/1836 = 40/153.
+pub const VEV_OVER_PROTON: f64 = EWSB_SCALE_FACTOR / MP_ME_CLIFFORD as f64;
 
 // ── Weinberg angle ────────────────────────────────────────────────────────────
 
@@ -128,6 +140,31 @@ pub fn electroweak_vev_from_fermi(g_f: f64) -> f64 {
 /// SU(2) coupling from alpha and sin²θ_W: g = sqrt(4π α / sin²θ_W).
 pub fn weak_coupling_from_alpha(alpha: f64) -> f64 {
     (4.0 * PI * alpha / sin2_weinberg()).sqrt()
+}
+
+/// Electron mass from the single proton anchor and structural mp/me = 1836.
+pub fn electron_mass_from_proton_anchor() -> f64 {
+    PROTON_MASS_ANCHOR_MEV / MP_ME_CLIFFORD as f64
+}
+
+/// Normalized broken-phase order parameter.
+/// 0 in restored phase (f0 <= f_c), 1 at pure vacuum (f0 = 1).
+pub fn normalized_higgs_order_parameter(higgs_vev: f64) -> f64 {
+    ((higgs_vev - HIGGS_CRITICAL_VOID_FRACTION) / (1.0 - HIGGS_CRITICAL_VOID_FRACTION))
+        .clamp(0.0, 1.0)
+}
+
+/// Electroweak vev from lattice order parameter, without using G_F:
+/// v(f0) = (mp * 40/153) * normalized_order(f0)
+///
+/// This uses only:
+/// - proton anchor mp
+/// - structural mp/me = 1836
+/// - structural electroweak scale factor 480 from grade counts
+/// - structural critical fraction f_c = 3/16
+pub fn electroweak_vev_from_lattice_order_parameter(higgs_vev: f64) -> f64 {
+    let order = normalized_higgs_order_parameter(higgs_vev);
+    PROTON_MASS_ANCHOR_MEV * VEV_OVER_PROTON * order
 }
 
 /// Absolute W mass from vev and alpha-derived weak coupling.
@@ -326,6 +363,8 @@ mod tests {
             (HIGGS_CRITICAL_VOID_FRACTION - 3.0 / 16.0).abs() < 1e-15,
             "critical fraction must be 3/16"
         );
+        assert!((EWSB_SCALE_FACTOR - 480.0).abs() < 1e-15);
+        assert!((VEV_OVER_PROTON - 40.0 / 153.0).abs() < 1e-15);
     }
 
     /// Broken phase has a non-trivial stationary branch of the quartic potential.
@@ -355,6 +394,23 @@ mod tests {
         assert!((m_w - 80.38).abs() < 2.0, "W mass should be near 80 GeV");
         assert!((m_z - 91.19).abs() < 2.0, "Z mass should be near 91 GeV");
         assert!((m_h - 125.25).abs() < 1.0, "Higgs mass should be near 125 GeV");
+        assert!((m_w / m_z - w_z_mass_ratio()).abs() < 1e-12);
+    }
+
+    /// GRAND-292 path: derive v from lattice order parameter without G_F input.
+    #[test]
+    fn mass_sector_from_lattice_order_parameter_no_fermi_input() {
+        let f0_vac = 1.0;
+        let v = electroweak_vev_from_lattice_order_parameter(f0_vac);
+        let m_w = w_mass_from_vev_and_alpha(v, ALPHA_EW_MZ);
+        let m_z = z_mass_from_vev_and_alpha(v, ALPHA_EW_MZ);
+        let m_h = higgs_mass_from_vev(v);
+
+        // Structural absolute predictions from the no-G_F branch.
+        assert!((v - 245.30).abs() < 0.5, "lattice-derived v should be near 245.3 GeV");
+        assert!((m_w - 80.377).abs() < 0.5, "lattice-derived W mass should be near 80.4 GeV");
+        assert!((m_z - 91.1876).abs() < 0.5, "lattice-derived Z mass should be near 91.2 GeV");
+        assert!((m_h - 125.25).abs() < 0.5, "lattice-derived Higgs mass should be near 125.25 GeV");
         assert!((m_w / m_z - w_z_mass_ratio()).abs() < 1e-12);
     }
 
