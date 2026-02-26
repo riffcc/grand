@@ -123,6 +123,12 @@ pub fn lambda_micro_mode_count() -> f64 {
     EWSB_SCALE_FACTOR_STRUCTURAL + BIVECTOR_TOTAL_COUNT
 }
 
+/// Equivalent Clifford/Z3 count form:
+/// N_micro = 2 * |SU(2)|^5 = 2 * 3^5 = 486.
+pub fn lambda_micro_mode_count_from_ternary_depth() -> f64 {
+    2.0 * BIVECTOR_TIMELIKE_SPACELIKE_COUNT.powi(5)
+}
+
 /// GRAND-295 finite-mode rescale from subtracting the unique fixed mode:
 /// k_micro = N_micro / (N_micro - 1) = 486/485.
 pub fn lambda_micro_finite_mode_rescale() -> f64 {
@@ -260,6 +266,8 @@ mod tests {
         let ratio_struct = lambda_struct / LAMBDA_COSMOLOGICAL_OBSERVED;
         let ratio_candidate = lambda_candidate / LAMBDA_COSMOLOGICAL_OBSERVED;
         let ratio_full = lambda_full / LAMBDA_COSMOLOGICAL_OBSERVED;
+        let n_micro_ewsb = lambda_micro_mode_count();
+        let n_micro_ternary = lambda_micro_mode_count_from_ternary_depth();
         let k_micro = lambda_micro_finite_mode_rescale();
 
         // Structural-over-observed residual is near sqrt(2).
@@ -267,6 +275,11 @@ mod tests {
 
         // Candidate should be within 1% of observed (currently ~0.205%).
         assert!((ratio_candidate - 1.0).abs() < 0.01);
+
+        // GRAND-295 micro-count has equivalent forms.
+        assert!((n_micro_ewsb - 486.0).abs() < 1e-12);
+        assert!((n_micro_ternary - 486.0).abs() < 1e-12);
+        assert!((n_micro_ewsb - n_micro_ternary).abs() < 1e-12);
 
         // GRAND-295 finite-mode rescale is exact 486/485.
         assert!((k_micro - (486.0 / 485.0)).abs() < 1e-15);

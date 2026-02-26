@@ -44,6 +44,8 @@ where:
 - `486/485` from finite-mode correction
   `N_micro/(N_micro - N_fixed)` with
   `N_micro = 480 + 6` and `N_fixed = 1` (unique Z3-fixed grade-1 generator)
+- equivalent count identity:
+  `N_micro = 2 * |SU(2)|^5 = 2 * 3^5 = 486`
 - `l_P` shared Planck scale anchor
 
 ## Lean/Rust support added
@@ -59,6 +61,8 @@ where:
   - `lambdaCosmologicalSignatureFromSplit`
   - `z3FixedGrade1Count`
   - `microModeCount`
+  - `micro_mode_count_eq_two_mul_su2_dim_pow5`
+  - `micro_mode_minus_fixed_eq_485`
   - `microFiniteModeRescale`
   - `lambdaCosmologicalFullCandidate`
   - `lambda_signature_from_split_eq_candidate`

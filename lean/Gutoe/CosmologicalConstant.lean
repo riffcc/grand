@@ -173,6 +173,19 @@ theorem micro_mode_count_eq_486 : microModeCount = 486 := by
   have hg2 : grade2_4d.card = 6 := by native_decide
   rw [he, hg2]
 
+/-- Equivalent Clifford/Z₃ form of the micro-mode count:
+    N_micro = 2 * |SU(2)|^5 = 2 * 3^5 = 486. -/
+theorem micro_mode_count_eq_two_mul_su2_dim_pow5 :
+    microModeCount = 2 * magneticTriplet.card ^ 5 := by
+  have h3 : magneticTriplet.card = 3 := su2_dim
+  rw [h3, micro_mode_count_eq_486]
+  norm_num
+
+/-- Removing the unique fixed mode leaves 485 effective channels. -/
+theorem micro_mode_minus_fixed_eq_485 :
+    microModeCount - z3FixedGrade1Count = 485 := by
+  rw [micro_mode_count_eq_486, z3_fixed_grade1_count_eq_one]
+
 /-- Micro finite-mode rescale from subtracting the unique fixed mode:
     k_micro = N_micro / (N_micro - 1) = 486/485. -/
 def microFiniteModeRescale : ℚ :=
