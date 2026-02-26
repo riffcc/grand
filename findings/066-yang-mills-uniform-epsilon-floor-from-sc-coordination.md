@@ -22,12 +22,17 @@ In `YangMillsStructuralGap`:
 - `z3CanonicalLocalCounts`
 - `rowTotalsFromCounts`
 - `Z3SCLocalRegularCounts`
+- `Z3NearestNeighborTargets`
+- `z3NearestNeighborCounts`
+- `z3_nn_count_le_coordination`
+- `z3_nn_row_total_le_transfer_basis_mul_coordination`
 - `z3_canonical_local_counts_regular`
 - `z3CanonicalRowTotals`
 - `z3_canonical_row_totals_sc_regular`
 - `sc_regular_row_totals_of_z3_local_regular_counts`
 - `z3_canonical_row_total_eq_coordination`
 - `maxRowTotal_le_coordination_of_sc_bound`
+- `z3_nn_max_row_total_le_transfer_basis_mul_coordination`
 - `maxRowTotal_eq_coordination_of_sc_regular`
 - `minorization_eps_ge_sc_coordination_floor`
 - `minorization_eps_ge_bounded_max_row_total_floor`

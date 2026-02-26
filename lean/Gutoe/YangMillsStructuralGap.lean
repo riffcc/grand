@@ -58,6 +58,46 @@ every source-target pair carries the same structural multiplicity. -/
 def Z3SCLocalRegularCounts (counts : Fin 3 → Fin 3 → ℕ) : Prop :=
   ∀ i j, counts i j = z3LocalMultiplicity
 
+/-- Structural nearest-neighbor target map for a Z₃ transfer basis state:
+for each source basis state and each SC incident edge, returns a target basis
+state. This is the local (site-level) transition object. -/
+abbrev Z3NearestNeighborTargets :=
+  Fin 3 → Fin coordinationNumber → Fin 3
+
+/-- Local transition counts induced by nearest-neighbor target assignments:
+`counts i j` is the number of incident SC edges at source state `i` that map to
+target state `j`. -/
+def z3NearestNeighborCounts (target : Z3NearestNeighborTargets) :
+    Fin 3 → Fin 3 → ℕ :=
+  fun i j => (Finset.univ.filter (fun e : Fin coordinationNumber => target i e = j)).card
+
+/-- Local nearest-neighbor transition counts are bounded by SC coordination. -/
+theorem z3_nn_count_le_coordination
+    (target : Z3NearestNeighborTargets) (i j : Fin 3) :
+    z3NearestNeighborCounts target i j ≤ coordinationNumber := by
+  unfold z3NearestNeighborCounts
+  simpa using (Finset.card_filter_le (s := (Finset.univ : Finset (Fin coordinationNumber)))
+    (p := fun e : Fin coordinationNumber => target i e = j))
+
+/-- Row totals from nearest-neighbor counts are structurally bounded by
+`|Z3| * coordinationNumber` (`transferBasisDim * coordinationNumber`). -/
+theorem z3_nn_row_total_le_transfer_basis_mul_coordination
+    (target : Z3NearestNeighborTargets) :
+    ∀ i, rowTotalsFromCounts (z3NearestNeighborCounts target) i ≤
+      transferBasisDim * coordinationNumber := by
+  intro i
+  unfold rowTotalsFromCounts
+  rw [Fin.sum_univ_three]
+  have h0 : z3NearestNeighborCounts target i 0 ≤ coordinationNumber :=
+    z3_nn_count_le_coordination target i 0
+  have h1 : z3NearestNeighborCounts target i 1 ≤ coordinationNumber :=
+    z3_nn_count_le_coordination target i 1
+  have h2 : z3NearestNeighborCounts target i 2 ≤ coordinationNumber :=
+    z3_nn_count_le_coordination target i 2
+  have hdim : transferBasisDim = 3 := transfer_basis_dim_eq_three
+  rw [hdim]
+  nlinarith
+
 /-- Canonical per-row totals derived from the Z₃ local count model. -/
 def z3CanonicalRowTotals : Fin 3 → ℕ := rowTotalsFromCounts z3CanonicalLocalCounts
 
@@ -150,6 +190,18 @@ theorem rowTotal_le_maxRowTotal
     (rowTotals : Fin 3 → ℕ) (i : Fin 3) :
     rowTotals i ≤ maxRowTotal rowTotals := by
   fin_cases i <;> simp [maxRowTotal]
+
+/-- Max row-total bound from structural nearest-neighbor transitions:
+`maxRowTotal ≤ transferBasisDim * coordinationNumber`. -/
+theorem z3_nn_max_row_total_le_transfer_basis_mul_coordination
+    (target : Z3NearestNeighborTargets) :
+    maxRowTotal (rowTotalsFromCounts (z3NearestNeighborCounts target)) ≤
+      transferBasisDim * coordinationNumber := by
+  unfold maxRowTotal
+  have h0 := z3_nn_row_total_le_transfer_basis_mul_coordination target 0
+  have h1 := z3_nn_row_total_le_transfer_basis_mul_coordination target 1
+  have h2 := z3_nn_row_total_le_transfer_basis_mul_coordination target 2
+  exact max_le_iff.mpr ⟨h0, max_le_iff.mpr ⟨h1, h2⟩⟩
 
 /-- If each row total is bounded by the SC coordination number, `maxRowTotal`
 inherits the same bound. -/
