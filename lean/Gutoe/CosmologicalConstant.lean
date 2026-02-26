@@ -13,12 +13,14 @@ import Gutoe.EWSBHiggs
 import Gutoe.FineStructure
 import Gutoe.SignatureUniqueness
 import Gutoe.Z3Uniqueness
+import Gutoe.Chirality
 
 namespace Gutoe.CosmologicalConstant
 
 open Gutoe.EWSBHiggs
 open Gutoe.FineStructure
 open Gutoe.Z3Uniqueness
+open Gutoe.Chirality
 
 /-- Structural vacuum-energy suppression factor:
     s_Λ = λ_H^(α⁻¹_LO). -/
@@ -41,6 +43,33 @@ theorem lambda_suppression_lt_one : lambdaSuppression < 1 := by
   rw [lambda_suppression_eq_13_100_pow_137]
   norm_num
 
+/-- Canonical generator labels in `Fin 4`. -/
+def f0 : Fin 4 := ⟨0, by decide⟩
+def f1 : Fin 4 := ⟨1, by decide⟩
+def f2 : Fin 4 := ⟨2, by decide⟩
+def f3 : Fin 4 := ⟨3, by decide⟩
+
+/-- The six independent grade-2 generator pairs in Cl(1,3). -/
+def bivectorPairs13 : Finset (Fin 4 × Fin 4) :=
+  {(f0, f1), (f0, f2), (f0, f3), (f1, f2), (f1, f3), (f2, f3)}
+
+/-- Signature parity (`±1`) of each bivector pair. -/
+def bivectorPairSignature (p : Fin 4 × Fin 4) : ℤ :=
+  bivectorParity13 p.1 p.2
+
+/-- Timelike-spacelike bivectors: signature `-1`. -/
+def timelikeSpacelikePairs : Finset (Fin 4 × Fin 4) :=
+  bivectorPairs13.filter (fun p => bivectorPairSignature p = -1)
+
+/-- Spacelike-spacelike bivectors: signature `+1`. -/
+def spacelikeSpacelikePairs : Finset (Fin 4 × Fin 4) :=
+  bivectorPairs13.filter (fun p => bivectorPairSignature p = 1)
+
+/-- Cl(1,3) bivector signature split: 3 mixed-sign and 3 same-sign pairs. -/
+theorem bivector_signature_split_3_3 :
+    timelikeSpacelikePairs.card = 3 ∧ spacelikeSpacelikePairs.card = 3 := by
+  native_decide
+
 /-- Lorentzian bivector split normalization candidate:
     k_sig = sqrt(|grade-2| / |temporal-bivector-orbit|). -/
 noncomputable def lorentzSignatureNormalization : ℝ :=
@@ -56,6 +85,27 @@ theorem lorentz_signature_normalization_eq_sqrt2 :
   rw [hg2, hem]
   norm_num
   rfl
+
+/-- Equivalent signature normalization from explicit `(1,3)` bivector parity split:
+    sqrt(total bivectors / timelike-spacelike bivectors) = sqrt(6/3) = sqrt(2). -/
+noncomputable def lorentzSignatureNormalizationFromParity : ℝ :=
+  Real.sqrt ((bivectorPairs13.card : ℝ) / (timelikeSpacelikePairs.card : ℝ))
+
+/-- Exact value from the explicit parity split. -/
+theorem lorentz_signature_normalization_from_parity_eq_sqrt2 :
+    lorentzSignatureNormalizationFromParity = Real.sqrt 2 := by
+  unfold lorentzSignatureNormalizationFromParity
+  have hcard : bivectorPairs13.card = 6 := by native_decide
+  have hsplit : timelikeSpacelikePairs.card = 3 := (bivector_signature_split_3_3).1
+  rw [hcard, hsplit]
+  norm_num
+  rfl
+
+/-- The two normalization views are equal:
+    (orbit-count split) = (signature-parity split). -/
+theorem lorentz_signature_normalization_eq_from_parity :
+    lorentzSignatureNormalization = lorentzSignatureNormalizationFromParity := by
+  rw [lorentz_signature_normalization_eq_sqrt2, lorentz_signature_normalization_from_parity_eq_sqrt2]
 
 /-- Cosmological constant candidate from Planck curvature scaling:
     Λ_struct(l_P) = s_Λ / l_P². -/

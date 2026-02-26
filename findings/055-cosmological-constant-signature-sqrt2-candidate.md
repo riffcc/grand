@@ -13,6 +13,9 @@ This residual is numerically close to `√2 = 1.414213562...`.
 From `/tmp/bh_renders/lambda_cosmological_report.json`:
 - `ratio_struct_over_obs = 1.411306927110`
 - `sqrt2 = 1.414213562373`
+- `k_signature = sqrt(6/3) = 1.414213562373`
+- `k_required = Λ_struct / Λ_obs = 1.411306927110`
+- `k_required / k_signature = 0.997944698495`
 - relative gap vs `√2`: `0.20553%`
 - `residual_over_sqrt2 = 0.997944698495`
 
@@ -30,7 +33,7 @@ where:
 - `13/100` from `Gutoe.EWSBHiggs.higgs_quartic_eq_13_100`
 - `137` from `Gutoe.FineStructure.alpha_inverse_d4`
 - `√2` from the exact structural split factor
-  `sqrt(|grade2| / |emTriplet|) = sqrt(6/3) = sqrt(2)` (proved in Lean)
+  `sqrt(|grade2| / |timelike-spacelike bivectors|) = sqrt(6/3) = sqrt(2)` (proved in Lean)
 - `l_P` shared Planck scale anchor
 
 ## Lean/Rust support added
@@ -38,6 +41,10 @@ where:
   - `lean/Gutoe/CosmologicalConstant.lean`
   - `lorentzSignatureNormalization`
   - `lorentz_signature_normalization_eq_sqrt2`
+  - `bivector_signature_split_3_3`
+  - `lorentzSignatureNormalizationFromParity`
+  - `lorentz_signature_normalization_from_parity_eq_sqrt2`
+  - `lorentz_signature_normalization_eq_from_parity`
   - `lambdaCosmologicalSignatureCandidate`
   - `lambdaCosmologicalSignatureFromSplit`
   - `lambda_signature_from_split_eq_candidate`
@@ -52,6 +59,7 @@ where:
   - `crates/gutoe-physics/src/bin/lambda_cosmological_report.rs` now emits both structural and signature-candidate branches
 
 ## What remains for closure
-`GRAND-293` must derive the `√2` factor from Cl(1,3) geometry (signature/bivector normalization) rather than assuming it.
-
-Until then, this is reported as a constrained, testable candidate — not a final solved theorem.
+- `GRAND-293` (now closed): `√2` factor derived from Cl(1,3) signature split.
+- Remaining micro-residual tracked in `GRAND-295`:
+  - `k_micro = k_required / k_signature = 0.997944698495` (~0.2055%).
+  - target is a no-knob structural correction for this final factor.

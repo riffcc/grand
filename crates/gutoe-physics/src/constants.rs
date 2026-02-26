@@ -20,8 +20,6 @@
 //!
 //! From GUTOE.md - derived from vector rail simulations
 
-use std::f64::consts::SQRT_2;
-
 /// Planck length (in meters)
 pub const PLANCK_LENGTH: f64 = 1.616255e-35;
 
@@ -82,6 +80,17 @@ pub const ALPHA_INV_LEADING_ORDER: i32 = 137;
 /// λ_H = (16 - 3) / (4 + 6)^2 = 13/100.
 pub const HIGGS_QUARTIC_STRUCTURAL: f64 = (16.0 - 3.0) / ((4.0 + 6.0) * (4.0 + 6.0));
 
+/// Cl(1,3) grade-2 bivector count.
+pub const BIVECTOR_TOTAL_COUNT: f64 = 6.0;
+/// Timelike-spacelike bivector count in (1,3) signature.
+pub const BIVECTOR_TIMELIKE_SPACELIKE_COUNT: f64 = 3.0;
+
+/// Lorentz-signature normalization from explicit bivector split:
+/// sqrt(total / timelike-spacelike) = sqrt(6/3) = sqrt(2).
+pub fn lorentz_signature_factor_from_bivector_split() -> f64 {
+    (BIVECTOR_TOTAL_COUNT / BIVECTOR_TIMELIKE_SPACELIKE_COUNT).sqrt()
+}
+
 /// Structural cosmological suppression factor:
 /// s_Λ = λ_H^(α^{-1}_LO) = (13/100)^137.
 pub fn lambda_cosmological_suppression() -> f64 {
@@ -100,7 +109,7 @@ pub fn lambda_cosmological_structural() -> f64 {
 /// NOTE: Conjectural until the sqrt(2) factor is derived from the Cl(1,3)
 /// bivector/metric normalization chain in Lean.
 pub fn lambda_cosmological_signature_candidate() -> f64 {
-    lambda_cosmological_structural() / SQRT_2
+    lambda_cosmological_structural() / lorentz_signature_factor_from_bivector_split()
 }
 
 /// Observed cosmological constant reference (1/m²).
@@ -142,6 +151,7 @@ pub fn verify_light_relation() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::f64::consts::SQRT_2;
 
     #[test]
     fn test_lambda_qg_value() {
@@ -189,6 +199,12 @@ mod tests {
     #[test]
     fn test_higgs_quartic_structural_value() {
         assert!((HIGGS_QUARTIC_STRUCTURAL - 13.0 / 100.0).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_lorentz_signature_factor_from_bivector_split() {
+        let k = lorentz_signature_factor_from_bivector_split();
+        assert!((k - SQRT_2).abs() < 1e-15);
     }
 
     #[test]
