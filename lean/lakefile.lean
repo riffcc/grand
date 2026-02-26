@@ -46,6 +46,7 @@ lean_lib Gutoe where
              `Gutoe.YangMillsConstructiveQFT,
              `Gutoe.YangMillsConstructiveHardMode,
              `Gutoe.YangMillsOSTextbook,
+             `Gutoe.YangMillsOSCompletion,
              `Gutoe.YangMillsGaugeScope,
              `Gutoe.YangMillsStructuralGap,
              `Gutoe.YangMillsFullStateLift,
