@@ -14,12 +14,14 @@
 import Mathlib
 import Mathlib.LinearAlgebra.Matrix.Irreducible.Defs
 import Gutoe.Z3Uniqueness
+import Gutoe.LatticeGeometry
 
 namespace Gutoe.YangMillsStructuralGap
 
 open BigOperators
 open Matrix
 open Gutoe.Z3Uniqueness
+open Gutoe.LatticeGeometry
 open scoped Matrix
 
 /-- Transfer basis dimension from Cl(1,3) magnetic orbit cardinality. -/
@@ -89,6 +91,31 @@ theorem rowTotal_le_maxRowTotal
     (rowTotals : Fin 3 → ℕ) (i : Fin 3) :
     rowTotals i ≤ maxRowTotal rowTotals := by
   fin_cases i <;> simp [maxRowTotal]
+
+/-- Uniform SC regularity condition on 3-state transfer rows:
+every row carries the structural simple-cubic coordination count. -/
+def SCRegularRowTotals (rowTotals : Fin 3 → ℕ) : Prop :=
+  ∀ i, rowTotals i = coordinationNumber
+
+/-- If each row total is bounded by the SC coordination number, `maxRowTotal`
+inherits the same bound. -/
+theorem maxRowTotal_le_coordination_of_sc_bound
+    (rowTotals : Fin 3 → ℕ)
+    (hcoord : ∀ i, rowTotals i ≤ coordinationNumber) :
+    maxRowTotal rowTotals ≤ coordinationNumber := by
+  unfold maxRowTotal
+  exact max_le_iff.mpr ⟨hcoord 0, max_le_iff.mpr ⟨hcoord 1, hcoord 2⟩⟩
+
+/-- Exact `maxRowTotal` value for SC-regular rows. -/
+theorem maxRowTotal_eq_coordination_of_sc_regular
+    (rowTotals : Fin 3 → ℕ)
+    (hreg : SCRegularRowTotals rowTotals) :
+    maxRowTotal rowTotals = coordinationNumber := by
+  apply Nat.le_antisymm
+  · exact maxRowTotal_le_coordination_of_sc_bound rowTotals (fun i => (hreg i).le)
+  · have h0 : rowTotals 0 = coordinationNumber := hreg 0
+    rw [← h0]
+    exact rowTotal_le_maxRowTotal rowTotals 0
 
 /-- Global positive floor induced by Laplace smoothing. -/
 noncomputable def laplaceGlobalFloor
@@ -166,6 +193,46 @@ theorem minorization_eps_range
     have hη : laplaceGlobalFloor rowTotals alpha ≤ (1 : ℝ) / 3 :=
       laplace_global_floor_le_one_third counts rowTotals ha hrow
     nlinarith
+
+/-- Structural lower bound on the Doeblin minorization constant from SC
+coordination boundedness. This is the key floor witness used in GRAND-305. -/
+theorem minorization_eps_ge_sc_coordination_floor
+    (rowTotals : Fin 3 → ℕ)
+    {alpha : ℝ} (ha : 0 < alpha)
+    (hcoord : ∀ i, rowTotals i ≤ coordinationNumber) :
+    (3 * alpha) / ((coordinationNumber : ℝ) + 3 * alpha) ≤
+      minorizationEps rowTotals alpha := by
+  have hmaxNat : maxRowTotal rowTotals ≤ coordinationNumber :=
+    maxRowTotal_le_coordination_of_sc_bound rowTotals hcoord
+  have hmaxReal : (maxRowTotal rowTotals : ℝ) ≤ coordinationNumber := by
+    exact_mod_cast hmaxNat
+  have hdenMaxPos : 0 < (maxRowTotal rowTotals : ℝ) + 3 * alpha := by nlinarith
+  have hbase :
+      alpha / ((coordinationNumber : ℝ) + 3 * alpha) ≤
+        alpha / ((maxRowTotal rowTotals : ℝ) + 3 * alpha) := by
+    have hdenLe :
+        (maxRowTotal rowTotals : ℝ) + 3 * alpha ≤
+          (coordinationNumber : ℝ) + 3 * alpha := by
+      nlinarith
+    exact div_le_div_of_nonneg_left (le_of_lt ha) hdenMaxPos hdenLe
+  unfold minorizationEps laplaceGlobalFloor
+  calc
+    (3 * alpha) / ((coordinationNumber : ℝ) + 3 * alpha)
+        = 3 * (alpha / ((coordinationNumber : ℝ) + 3 * alpha)) := by ring
+    _ ≤ 3 * (alpha / ((maxRowTotal rowTotals : ℝ) + 3 * alpha)) := by
+          nlinarith [hbase]
+    _ = minorizationEps rowTotals alpha := by rfl
+
+/-- Exact minorization constant for SC-regular row totals. -/
+theorem minorization_eps_eq_sc_regular
+    (rowTotals : Fin 3 → ℕ)
+    (alpha : ℝ)
+    (hreg : SCRegularRowTotals rowTotals) :
+    minorizationEps rowTotals alpha =
+      (3 * alpha) / ((coordinationNumber : ℝ) + 3 * alpha) := by
+  unfold minorizationEps laplaceGlobalFloor
+  rw [maxRowTotal_eq_coordination_of_sc_regular rowTotals hreg]
+  ring
 
 /-- Uniform `3×3` kernel (all entries `1/3`). -/
 noncomputable def uniformKernel : Matrix (Fin 3) (Fin 3) ℝ :=
