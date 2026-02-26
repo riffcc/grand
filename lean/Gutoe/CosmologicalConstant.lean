@@ -11,6 +11,7 @@
 import Mathlib
 import Gutoe.EWSBHiggs
 import Gutoe.FineStructure
+import Gutoe.SignatureUniqueness
 
 namespace Gutoe.CosmologicalConstant
 
@@ -43,6 +44,15 @@ theorem lambda_suppression_lt_one : lambdaSuppression < 1 := by
 noncomputable def lambdaCosmologicalFromPlanck (lP : ℝ) : ℝ :=
   ((lambdaSuppression : ℚ) : ℝ) / (lP ^ 2)
 
+/-- GRAND-293 candidate normalization from Lorentzian signature:
+    Λ_sig(l_P) = Λ_struct(l_P) / √2.
+
+    This introduces no new continuous parameter: √2 is fixed and linked to
+    the Minkowski-signature branch selected in `SignatureUniqueness`.
+    (Conjectural bridge until the full bivector-normalization derivation closes.) -/
+noncomputable def lambdaCosmologicalSignatureCandidate (lP : ℝ) : ℝ :=
+  lambdaCosmologicalFromPlanck lP / Real.sqrt 2
+
 /-- Exact real-form structural cosmological candidate:
     Λ_struct(l_P) = ((13/100)^137) / l_P². -/
 theorem lambda_cosmological_from_planck_eq
@@ -51,6 +61,18 @@ theorem lambda_cosmological_from_planck_eq
       ((((13 : ℚ) / 100) ^ (137 : ℕ) : ℚ) : ℝ) / (lP ^ 2) := by
   unfold lambdaCosmologicalFromPlanck
   rw [lambda_suppression_eq_13_100_pow_137]
+
+/-- Signature-corrected candidate is exactly the structural term divided by √2. -/
+theorem lambda_cosmological_signature_candidate_eq
+    (lP : ℝ) :
+    lambdaCosmologicalSignatureCandidate lP =
+      ((((13 : ℚ) / 100) ^ (137 : ℕ) : ℚ) : ℝ) / (Real.sqrt 2 * (lP ^ 2)) := by
+  unfold lambdaCosmologicalSignatureCandidate
+  rw [lambda_cosmological_from_planck_eq]
+  have hs2 : (Real.sqrt 2) ≠ 0 := by
+    have hs2pos : 0 < Real.sqrt 2 := by positivity
+    exact ne_of_gt hs2pos
+  field_simp [hs2]
 
 /-- For nonzero Planck length, the structural Λ candidate is positive. -/
 theorem lambda_cosmological_from_planck_pos
@@ -64,5 +86,16 @@ theorem lambda_cosmological_from_planck_pos
   have hden : 0 < lP ^ 2 := by
     nlinarith [sq_pos_of_ne_zero hlP]
   exact div_pos hsuppR hden
+
+/-- Positive signature-corrected candidate for nonzero Planck length. -/
+theorem lambda_cosmological_signature_candidate_pos
+    {lP : ℝ}
+    (hlP : lP ≠ 0) :
+    0 < lambdaCosmologicalSignatureCandidate lP := by
+  unfold lambdaCosmologicalSignatureCandidate
+  have hbase : 0 < lambdaCosmologicalFromPlanck lP := lambda_cosmological_from_planck_pos hlP
+  have hs2 : 0 < Real.sqrt 2 := by
+    exact Real.sqrt_pos.2 (by norm_num)
+  exact div_pos hbase hs2
 
 end Gutoe.CosmologicalConstant

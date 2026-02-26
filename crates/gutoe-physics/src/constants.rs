@@ -20,6 +20,8 @@
 //!
 //! From GUTOE.md - derived from vector rail simulations
 
+use std::f64::consts::SQRT_2;
+
 /// Planck length (in meters)
 pub const PLANCK_LENGTH: f64 = 1.616255e-35;
 
@@ -90,6 +92,15 @@ pub fn lambda_cosmological_suppression() -> f64 {
 /// Λ_struct = λ_H^(α^{-1}_LO) / l_P^2.
 pub fn lambda_cosmological_structural() -> f64 {
     lambda_cosmological_suppression() / (PLANCK_LENGTH * PLANCK_LENGTH)
+}
+
+/// GRAND-293 candidate:
+/// apply a Lorentz-signature normalization factor 1/sqrt(2) to Λ_struct.
+///
+/// NOTE: Conjectural until the sqrt(2) factor is derived from the Cl(1,3)
+/// bivector/metric normalization chain in Lean.
+pub fn lambda_cosmological_signature_candidate() -> f64 {
+    lambda_cosmological_structural() / SQRT_2
 }
 
 /// Observed cosmological constant reference (1/m²).
@@ -199,5 +210,19 @@ mod tests {
             (LAMBDA_COSMOLOGICAL - lambda_struct).abs() / lambda_struct < 1e-12,
             "runtime Λ constant should match structural computation"
         );
+    }
+
+    #[test]
+    fn test_lambda_cosmological_signature_candidate_is_close_to_observed() {
+        let lambda_struct = lambda_cosmological_structural();
+        let lambda_candidate = lambda_cosmological_signature_candidate();
+        let ratio_struct = lambda_struct / LAMBDA_COSMOLOGICAL_OBSERVED;
+        let ratio_candidate = lambda_candidate / LAMBDA_COSMOLOGICAL_OBSERVED;
+
+        // Structural-over-observed residual is near sqrt(2).
+        assert!(((ratio_struct / SQRT_2) - 1.0).abs() < 0.01);
+
+        // Candidate should be within 1% of observed (currently ~0.205%).
+        assert!((ratio_candidate - 1.0).abs() < 0.01);
     }
 }
