@@ -12,6 +12,8 @@
 
 import Mathlib
 import Gutoe.YangMillsContinuumSurvival
+import Gutoe.YangMillsWilsonEquivalence
+import Gutoe.YangMillsStructuralGap
 
 noncomputable section
 
@@ -19,6 +21,9 @@ namespace Gutoe.YangMillsConstructiveQFT
 
 open Gutoe.YangMillsContinuumSurvival
 open Gutoe.YangMillsMassGap
+open Gutoe.YangMillsStructuralGap
+open Gutoe.YangMillsWilsonBridge
+open Gutoe.YangMillsWilsonEquivalence
 
 /-- Explicit OS-style axiom interface carried by the constructive lane. -/
 structure OSAxiomInterface where
@@ -195,5 +200,54 @@ theorem constructive_lane_gap_closure
     (∀ n, 0 < doeblinGapLowerBound (a_t n) (eps n)) ∧
     (¬ TendsToZeroSeq (fun n => doeblinGapLowerBound (a_t n) (eps n))) := by
   exact ⟨embedded_gap_positive_each_step M a_t eps h, embedded_gap_not_tends_to_zero M a_t eps h⟩
+
+/-- Canonical constructive embedding on the Wilson-equivalence lane:
+constructive targets + Wilson-equivalence domain imply a mass-gap embedding in
+the same constructive framework, with `eps` induced by the Wilson row schedule. -/
+theorem mass_gap_embedded_of_wilson_equivalence_domain
+    (M : ConstructiveYMModel)
+    (hTargets : constructiveTargetsSatisfied M)
+    (W : WilsonZ3Action)
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (hDom : WilsonEquivalenceDomain a_t alpha) :
+    massGapEmbeddedInConstructiveLane M a_t
+      (fun n => minorizationEps (wilsonRowTotalsSchedule W n) alpha) := by
+  refine ⟨hTargets, ?_, ?_⟩
+  · -- Continuum-survival hypotheses, specialized to the Wilson-induced row schedule.
+    exact continuum_hypotheses_of_z3_nn_schedule
+      a_t
+      W.targetSchedule
+      alpha
+      hDom.a_t_pos
+      hDom.a_t_cap
+      hDom.alpha_pos
+  · -- Uniform non-vanishing lower bound transferred through Theorem-C domain.
+    rcases c3_gap_correspondence_of_domain W a_t alpha hDom with ⟨c, hcPos, hcLe⟩
+    refine ⟨c, hcPos, ?_⟩
+    intro n
+    exact hcLe n
+
+/-- Wilson-equivalence specialization of the constructive-lane closure theorem. -/
+theorem constructive_lane_gap_closure_of_wilson_equivalence_domain
+    (M : ConstructiveYMModel)
+    (hTargets : constructiveTargetsSatisfied M)
+    (W : WilsonZ3Action)
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (hDom : WilsonEquivalenceDomain a_t alpha) :
+    (∀ n, 0 < doeblinGapLowerBound
+      (a_t n)
+      (minorizationEps (wilsonRowTotalsSchedule W n) alpha)) ∧
+    (¬ TendsToZeroSeq (fun n =>
+      doeblinGapLowerBound
+        (a_t n)
+        (minorizationEps (wilsonRowTotalsSchedule W n) alpha))) := by
+  exact constructive_lane_gap_closure
+    M
+    a_t
+    (fun n => minorizationEps (wilsonRowTotalsSchedule W n) alpha)
+    (mass_gap_embedded_of_wilson_equivalence_domain
+      M hTargets W a_t alpha hDom)
 
 end Gutoe.YangMillsConstructiveQFT
