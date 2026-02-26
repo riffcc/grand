@@ -90,6 +90,17 @@ pub const EWSB_SCALE_FACTOR_STRUCTURAL: f64 = 480.0;
 /// Unique Z3-fixed grade-1 generator count.
 pub const Z3_FIXED_GRADE1_COUNT: f64 = 1.0;
 
+/// GRAND-346 structural dark-sector split (Lean parity):
+/// visible states = 11, dark candidates = 5.
+pub const VISIBLE_STATE_COUNT_STRUCTURAL: f64 = 11.0;
+pub const DARK_STATE_COUNT_STRUCTURAL: f64 = 5.0;
+/// Dark/visible structural count ratio = 5/11.
+pub const DARK_TO_VISIBLE_COUNT_RATIO: f64 =
+    DARK_STATE_COUNT_STRUCTURAL / VISIBLE_STATE_COUNT_STRUCTURAL;
+/// Dark fraction in the visible+dark finite split = 5/16.
+pub const DARK_FRACTION_TOTAL_STATE_SPLIT: f64 =
+    DARK_STATE_COUNT_STRUCTURAL / (DARK_STATE_COUNT_STRUCTURAL + VISIBLE_STATE_COUNT_STRUCTURAL);
+
 /// Lorentz-signature normalization from explicit bivector split:
 /// sqrt(total / timelike-spacelike) = sqrt(6/3) = sqrt(2).
 pub fn lorentz_signature_factor_from_bivector_split() -> f64 {
@@ -286,5 +297,13 @@ mod tests {
 
         // Full candidate should be within 0.1% (currently ~2.3e-6).
         assert!((ratio_full - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_dark_sector_structural_split_constants() {
+        assert!((VISIBLE_STATE_COUNT_STRUCTURAL - 11.0).abs() < 1e-15);
+        assert!((DARK_STATE_COUNT_STRUCTURAL - 5.0).abs() < 1e-15);
+        assert!((DARK_TO_VISIBLE_COUNT_RATIO - 5.0 / 11.0).abs() < 1e-15);
+        assert!((DARK_FRACTION_TOTAL_STATE_SPLIT - 5.0 / 16.0).abs() < 1e-15);
     }
 }

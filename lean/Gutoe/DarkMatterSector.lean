@@ -79,4 +79,43 @@ theorem dark_to_visible_count_ratio_eq :
   rw [hVis, hDark]
   norm_num
 
+/-- Fraction of dark-sector candidate states in the (visible + dark) split. -/
+def darkFractionOfTotalStates : ℚ :=
+  (darkSectorCandidates.card : ℚ) /
+    ((darkSectorCandidates.card + visibleSectorStates.card : ℕ) : ℚ)
+
+/-- Exact finite-state dark fraction from the structural 11/5 split. -/
+theorem dark_fraction_of_total_states_eq :
+    darkFractionOfTotalStates = 5 / 16 := by
+  unfold darkFractionOfTotalStates
+  rcases visible_dark_state_count_split with ⟨hVis, hDark, _, hTot⟩
+  rw [hVis, hDark]
+  norm_num
+
+/-- Particle-branch effective dark density from the count ratio. -/
+def effectiveDarkDensityQ (rhoVisible : ℚ) : ℚ :=
+  darkToVisibleCountRatio * rhoVisible
+
+/-- Effective particle-branch dark density is nonnegative for nonnegative visible
+density. -/
+theorem effective_dark_density_nonneg
+    {rhoVisible : ℚ}
+    (hρ : 0 ≤ rhoVisible) :
+    0 ≤ effectiveDarkDensityQ rhoVisible := by
+  unfold effectiveDarkDensityQ
+  have hratio : 0 ≤ darkToVisibleCountRatio := by
+    rw [dark_to_visible_count_ratio_eq]
+    norm_num
+  exact mul_nonneg hratio hρ
+
+/-- Total (visible + effective-dark) density is nonnegative when visible density is
+nonnegative. -/
+theorem total_density_nonneg
+    {rhoVisible : ℚ}
+    (hρ : 0 ≤ rhoVisible) :
+    0 ≤ rhoVisible + effectiveDarkDensityQ rhoVisible := by
+  have hdark : 0 ≤ effectiveDarkDensityQ rhoVisible :=
+    effective_dark_density_nonneg hρ
+  linarith
+
 end Gutoe.DarkMatterSector
