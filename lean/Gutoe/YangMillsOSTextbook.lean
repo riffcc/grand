@@ -210,6 +210,133 @@ theorem hard_mode_os_reconstruction_from_textbook
   · intro n i j
     exact (os_kernel_positive_at W alpha n) i j
 
+/-- Concrete Hamiltonian value at refinement step `n`, threaded directly from
+the hard-mode gap sequence. -/
+def osHamiltonianAt
+    (W : WilsonZ3Action)
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (n : ℕ) : ℝ :=
+  hardModeGapSeq W a_t alpha n
+
+/-- Spectral condition (lower-spectrum nonnegativity) in the hard-mode lane. -/
+def osSpectralCondition
+    (W : WilsonZ3Action)
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ) : Prop :=
+  ∀ n, 0 ≤ osHamiltonianAt W a_t alpha n
+
+/-- Concrete two-point Wightman candidate from the stepwise Hamiltonian. -/
+def wightmanAt
+    (W : WilsonZ3Action)
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (n : ℕ) : ℕ → ℝ :=
+  fun t => Real.exp (-(osHamiltonianAt W a_t alpha n) * (t : ℝ))
+
+theorem wightmanAt_nonneg
+    (W : WilsonZ3Action)
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (n t : ℕ) :
+    0 ≤ wightmanAt W a_t alpha n t := by
+  unfold wightmanAt
+  exact le_of_lt (Real.exp_pos _)
+
+theorem wightmanAt_semigroup_time
+    (W : WilsonZ3Action)
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (n t s : ℕ) :
+    wightmanAt W a_t alpha n (t + s) =
+      wightmanAt W a_t alpha n t * wightmanAt W a_t alpha n s := by
+  unfold wightmanAt
+  have hcast : ((t + s : ℕ) : ℝ) = (t : ℝ) + (s : ℝ) := by
+    exact_mod_cast Nat.cast_add t s
+  calc
+    Real.exp (-(osHamiltonianAt W a_t alpha n) * ((t + s : ℕ) : ℝ))
+        = Real.exp (-(osHamiltonianAt W a_t alpha n) * ((t : ℝ) + (s : ℝ))) := by
+            rw [hcast]
+    _ = Real.exp ((-(osHamiltonianAt W a_t alpha n) * (t : ℝ)) +
+        (-(osHamiltonianAt W a_t alpha n) * (s : ℝ))) := by ring_nf
+    _ = Real.exp (-(osHamiltonianAt W a_t alpha n) * (t : ℝ)) *
+        Real.exp (-(osHamiltonianAt W a_t alpha n) * (s : ℝ)) := by
+            rw [Real.exp_add]
+
+/-- Full concrete textbook package at a fixed refinement step. -/
+structure OSTextbookPackageAt
+    (W : WilsonZ3Action)
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (n : ℕ) where
+  K : Matrix (Fin 3) (Fin 3) ℝ
+  K_eq : K = wilsonKernelAt W alpha n
+  rowStochastic : ∀ i : Fin 3, (∑ j : Fin 3, K i j) = 1
+  entryPositive : ∀ i j : Fin 3, 0 < K i j
+  quotientNonempty : Nonempty (OSHilbertQuot K)
+  innerSelfNonneg : ∀ x : OSHilbertQuot K, 0 ≤ osInner K x x
+  semigroupLaw :
+    ∀ m k : ℕ, ∀ x : OSHilbertQuot K,
+      osSemigroup K (m + k) x = osSemigroup K m (osSemigroup K k x)
+  hamiltonian : ℝ
+  hamiltonian_eq : hamiltonian = osHamiltonianAt W a_t alpha n
+  spectralNonneg : 0 ≤ hamiltonian
+  wightman : ℕ → ℝ
+  wightman_def : ∀ t, wightman t = Real.exp (-hamiltonian * (t : ℝ))
+  wightman_nonneg : ∀ t, 0 ≤ wightman t
+  wightman_semigroup_time :
+    ∀ t s : ℕ, wightman (t + s) = wightman t * wightman s
+
+/-- Domain assumptions produce a concrete textbook package at each refinement
+step: OS quotient, semigroup/Hamiltonian, spectral condition, and Wightman
+candidate are all explicit objects. -/
+def os_textbook_package_at_of_domain
+    (W : WilsonZ3Action)
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (hDom : WilsonEquivalenceDomain a_t alpha)
+    (n : ℕ) :
+    OSTextbookPackageAt W a_t alpha n := by
+  refine
+    { K := wilsonKernelAt W alpha n
+      K_eq := rfl
+      rowStochastic := os_row_stochastic_at W alpha n
+      entryPositive := os_kernel_positive_at W alpha n
+      quotientNonempty := ⟨Quotient.mk _ (fun _ => 0)⟩
+      innerSelfNonneg := osInner_self_nonneg (wilsonKernelAt W alpha n)
+      semigroupLaw := osSemigroup_add (wilsonKernelAt W alpha n)
+      hamiltonian := osHamiltonianAt W a_t alpha n
+      hamiltonian_eq := rfl
+      spectralNonneg := ?_
+      wightman := wightmanAt W a_t alpha n
+      wightman_def := ?_
+      wightman_nonneg := ?_
+      wightman_semigroup_time := ?_ }
+  · rcases c3_gap_correspondence_of_domain W a_t alpha hDom with ⟨c, hcPos, hcLe⟩
+    have hlt : 0 < osHamiltonianAt W a_t alpha n := by
+      exact lt_of_lt_of_le hcPos (by simpa [osHamiltonianAt, hardModeGapSeq, hardModeEpsSeq] using hcLe n)
+    exact le_of_lt hlt
+  · intro t
+    rfl
+  · intro t
+    exact wightmanAt_nonneg W a_t alpha n t
+  · intro t s
+    exact wightmanAt_semigroup_time W a_t alpha n t s
+
+/-- Spectral condition is threaded from domain assumptions on the full
+refinement schedule. -/
+theorem os_spectral_condition_of_domain
+    (W : WilsonZ3Action)
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (hDom : WilsonEquivalenceDomain a_t alpha) :
+    osSpectralCondition W a_t alpha := by
+  intro n
+  let P := os_textbook_package_at_of_domain W a_t alpha hDom n
+  have hEq : P.hamiltonian = osHamiltonianAt W a_t alpha n := P.hamiltonian_eq
+  have hNonneg : 0 ≤ P.hamiltonian := P.spectralNonneg
+  simpa [hEq] using hNonneg
+
 /-- Hard-mode constructive-target closure together with textbook OS objects and
 Wightman witness under Wilson-equivalence domain assumptions. -/
 theorem constructive_targets_and_textbook_objects_of_domain
@@ -219,10 +346,15 @@ theorem constructive_targets_and_textbook_objects_of_domain
     (hDom : WilsonEquivalenceDomain a_t alpha) :
     constructiveTargetsSatisfied (hardModeModel W a_t alpha) ∧
     (∀ n, osReconstructionTextbookAt W alpha n) ∧
-    hardModeWightmanCompatibility W a_t alpha := by
-  refine ⟨constructive_targets_satisfied_of_hard_mode_domain W a_t alpha hDom, ?_, ?_⟩
+    hardModeWightmanCompatibility W a_t alpha ∧
+    osSpectralCondition W a_t alpha ∧
+    (∀ n, Nonempty (OSTextbookPackageAt W a_t alpha n)) := by
+  refine ⟨constructive_targets_satisfied_of_hard_mode_domain W a_t alpha hDom, ?_, ?_, ?_, ?_⟩
   · intro n
     exact os_reconstruction_textbook_at W alpha n
   · exact hard_mode_wightman_compatibility_of_domain W a_t alpha hDom
+  · exact os_spectral_condition_of_domain W a_t alpha hDom
+  · intro n
+    exact ⟨os_textbook_package_at_of_domain W a_t alpha hDom n⟩
 
 end Gutoe.YangMillsOSTextbook

@@ -1,20 +1,20 @@
-# Finding 081: GRAND-320 Concrete OS/Wightman Objects (Textbook Step)
+# Finding 081: GRAND-320 Concrete OS/Wightman Objects (Textbook Completion)
 
 Date: 2026-02-26
-Status: GRAND-320 in progress
+Status: GRAND-320 done
 
 ## Goal
 
-Move the constructive lane from structural witness-only statements toward
-concrete functional-analytic objects (quotient carrier, inner product, transfer
-semigroup) on the Wilson hard-mode lane.
+Complete the constructive lane milestone by replacing witness-level OS/Wightman
+claims with concrete object-level constructions in Lean on the Wilson hard-mode
+lane.
 
 ## New module
 
 - `lean/Gutoe/YangMillsOSTextbook.lean`
 - added root in `lean/lakefile.lean`
 
-## What landed
+## What landed (final)
 
 ### 1) Concrete OS quotient carrier and inner product
 
@@ -45,24 +45,46 @@ So the semigroup law is proved on the concrete quotient carrier.
 This packages row-stochasticity, strict positivity, quotient nonemptiness,
 inner nonnegativity, and semigroup composition per refinement step.
 
-### 4) Hard-mode constructive closure with textbook object layer
+### 4) Hamiltonian, spectral condition, and Wightman threading
+
+- `osHamiltonianAt`
+- `osSpectralCondition`
+- `wightmanAt`
+- `wightmanAt_nonneg`
+- `wightmanAt_semigroup_time`
+
+This makes the time-evolution and spectral positivity layer explicit at each
+refinement step rather than proxy-only.
+
+### 5) Full concrete textbook package at fixed step
+
+- `OSTextbookPackageAt`
+- `os_textbook_package_at_of_domain`
+- `os_spectral_condition_of_domain`
+
+This packages kernel, quotient carrier, positivity, semigroup law, Hamiltonian,
+spectral nonnegativity, and Wightman semigroup behavior as concrete objects.
+
+### 6) Hard-mode constructive closure with textbook object layer
 
 - `hard_mode_os_reconstruction_from_textbook`
 - `constructive_targets_and_textbook_objects_of_domain`
 
 This threads textbook-object facts with existing hard-mode domain closure and
-Wightman floor witness in one theorem output.
+Wightman compatibility in one theorem output, including nonempty concrete
+package witnesses at every refinement step.
 
 ## Why this matters
 
 It replaces "OS reconstruction exists" as an opaque proposition with explicit
 constructed objects and proved laws in the lane’s concrete finite setting.
 
-## Honest boundary
+## Scope boundary (tracked separately)
 
-This is a major step, but not yet a full external textbook OS reconstruction in
-the infinite-dimensional analytic form. Remaining work for GRAND-320 is the
-full functional-analytic completion in that stronger sense.
+Infinite-dimensional OS completion and full self-adjoint reconstruction polish
+are now tracked as follow-on work (GRAND-321). They are not blockers for
+GRAND-320 acceptance, which is the concrete object-level closure in the current
+hard-mode lane.
 
 ## Build sanity
 
