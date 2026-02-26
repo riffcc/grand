@@ -364,6 +364,87 @@ theorem pp_thermal_average_uniform_positive
     exact_mod_cast Nat.succ_pos n
   exact div_pos hsum_pos hden
 
+/-- Uniform sampled thermal average on a fixed interval `[Emin, Emax]`.
+    The ladder spacing is `dE = (Emax - Emin)/(n+1)`. -/
+noncomputable def ppThermalAverageUniformInterval
+    (g f0 protonDensity mReduced T Emin Emax : ℝ) (n : ℕ) : ℝ :=
+  let dE := (Emax - Emin) / (n + 1 : ℝ)
+  ppThermalAverageUniform g f0 protonDensity mReduced T Emin dE n
+
+/-- Continuum interval-average thermal kernel on `[Emin, Emax]`. -/
+noncomputable def ppThermalAverageContinuumInterval
+    (g f0 protonDensity mReduced T Emin Emax : ℝ) : ℝ :=
+  (∫ E in Emin..Emax, ppThermalKernel g f0 protonDensity mReduced T E) / (Emax - Emin)
+
+/-- Every finite sampled interval average is strictly positive when
+    `Emin > 0` and `Emax ≥ Emin`. -/
+theorem pp_thermal_average_uniform_interval_positive
+    (g f0 protonDensity mReduced T Emin Emax : ℝ) (n : ℕ)
+    (hg : g ≠ 0)
+    (hf0 : f0 ≠ 0)
+    (hρp : 0 < protonDensity)
+    (hm : 0 < mReduced)
+    (hEmin : 0 < Emin)
+    (hRange : Emin ≤ Emax) :
+    0 < ppThermalAverageUniformInterval g f0 protonDensity mReduced T Emin Emax n := by
+  unfold ppThermalAverageUniformInterval
+  let dE : ℝ := (Emax - Emin) / (n + 1 : ℝ)
+  have hdE : 0 ≤ dE := by
+    unfold dE
+    have hnum : 0 ≤ Emax - Emin := sub_nonneg.mpr hRange
+    have hden : 0 ≤ (n + 1 : ℝ) := by positivity
+    exact div_nonneg hnum hden
+  simpa [dE] using
+    pp_thermal_average_uniform_positive
+      g f0 protonDensity mReduced T Emin dE n
+      hg hf0 hρp hm hEmin hdE
+
+/-- Continuum-limit positivity bridge:
+    if the interval-sampled thermal averages converge to `L`,
+    then `L` is nonnegative. -/
+theorem pp_thermal_average_interval_limit_nonneg
+    (g f0 protonDensity mReduced T Emin Emax : ℝ)
+    (L : ℝ)
+    (hConv :
+      Filter.Tendsto
+        (fun n : ℕ => ppThermalAverageUniformInterval g f0 protonDensity mReduced T Emin Emax n)
+        Filter.atTop (nhds L))
+    (hg : g ≠ 0)
+    (hf0 : f0 ≠ 0)
+    (hρp : 0 < protonDensity)
+    (hm : 0 < mReduced)
+    (hEmin : 0 < Emin)
+    (hRange : Emin ≤ Emax) :
+    0 ≤ L := by
+  have hEventually :
+      ∀ᶠ n : ℕ in Filter.atTop,
+        ppThermalAverageUniformInterval g f0 protonDensity mReduced T Emin Emax n ∈ Set.Ici (0 : ℝ) := by
+    exact Filter.Eventually.of_forall (fun n => le_of_lt <|
+      pp_thermal_average_uniform_interval_positive
+        g f0 protonDensity mReduced T Emin Emax n
+        hg hf0 hρp hm hEmin hRange)
+  exact (isClosed_Ici).mem_of_tendsto hConv hEventually
+
+/-- Continuum integral witness inherits nonnegativity from the finite sampled
+    thermal ladder once Riemann convergence is established. -/
+theorem pp_thermal_average_continuum_interval_nonneg_of_tendsto
+    (g f0 protonDensity mReduced T Emin Emax : ℝ)
+    (hConv :
+      Filter.Tendsto
+        (fun n : ℕ => ppThermalAverageUniformInterval g f0 protonDensity mReduced T Emin Emax n)
+        Filter.atTop (nhds (ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax)))
+    (hg : g ≠ 0)
+    (hf0 : f0 ≠ 0)
+    (hρp : 0 < protonDensity)
+    (hm : 0 < mReduced)
+    (hEmin : 0 < Emin)
+    (hRange : Emin ≤ Emax) :
+    0 ≤ ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax := by
+  exact pp_thermal_average_interval_limit_nonneg
+    g f0 protonDensity mReduced T Emin Emax
+    (ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax)
+    hConv hg hf0 hρp hm hEmin hRange
+
 -- ── 4) Ignition threshold + hydrostatic balance witness ─────────────────────
 
 /-- Minimal linearized core-temperature compression model:
