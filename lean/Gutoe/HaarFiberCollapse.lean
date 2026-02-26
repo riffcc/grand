@@ -126,6 +126,143 @@ theorem normalized_expectation_reduce_to_center
   exact normalized_expectation_collapse_of_common_factor
     μG μQ fG fQ c hInt hMass hc hMassQ
 
+section CenterNormalization
+
+variable {G : Type*}
+  [Group G] [TopologicalSpace G] [MeasurableSpace G] [BorelSpace G]
+  [IsTopologicalGroup G] [LocallyCompactSpace G] [PolishSpace G]
+  [Countable ↥(centerSubgroup (G := G))]
+  [T2Space (G ⧸ centerSubgroup (G := G))]
+  [SecondCountableTopology (G ⧸ centerSubgroup (G := G))]
+
+/-- GRAND-312 bridge:
+derive the common-factor hypotheses (`hInt`, `hMass`) from quotient
+decomposition and explicit center-fiber normalization equalities. -/
+theorem common_factor_hypotheses_of_center_quotient_normalization
+    (μG : Measure G) [μG.IsMulRightInvariant] [IsFiniteMeasure μG]
+    (𝓕 : Set G)
+    (h𝓕 : IsFundamentalDomain (centerSubgroup (G := G)).op 𝓕 μG)
+    (f : G → ℝ)
+    (fQ : G ⧸ centerSubgroup (G := G) → ℝ)
+    (c : ℝ)
+    (hfInt : Integrable f μG)
+    (hfAE :
+      AEStronglyMeasurable
+        (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ)
+        (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))))
+    (hOneAE :
+      AEStronglyMeasurable
+        (fiberExpectation (fun _ : G => (1 : ℝ)) : G ⧸ centerSubgroup (G := G) → ℝ)
+        (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))))
+    (hFiberObs :
+      (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ) = fun q => c * fQ q)
+    (hFiberMass :
+      (fiberExpectation (fun _ : G => (1 : ℝ)) : G ⧸ centerSubgroup (G := G) → ℝ) = fun _ => c) :
+    expectation μG f =
+      c * expectation (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) fQ ∧
+    (μG Set.univ).toReal =
+      c * ((Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) Set.univ).toReal := by
+  have hDecObs :
+      expectation μG f =
+        expectation (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G)))
+          (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ) :=
+    expectation_decomposition_over_center
+      (G := G) (μ := μG) (𝓕 := 𝓕) h𝓕 (f := f) hfInt hfAE
+  have hDecMass :
+      expectation μG (fun _ : G => (1 : ℝ)) =
+        expectation (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G)))
+          (fiberExpectation (fun _ : G => (1 : ℝ)) : G ⧸ centerSubgroup (G := G) → ℝ) :=
+    expectation_decomposition_over_center
+      (G := G) (μ := μG) (𝓕 := 𝓕)
+      h𝓕
+      (f := fun _ : G => (1 : ℝ))
+      (by simpa using (integrable_const (1 : ℝ)))
+      hOneAE
+  have hQObs :
+      expectation (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G)))
+          (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ) =
+        c * expectation (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) fQ := by
+    rw [hFiberObs]
+    simpa [expectation] using
+      (integral_const_mul c fQ :
+        ∫ x : G ⧸ centerSubgroup (G := G), c * fQ x ∂(Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕) =
+          c * ∫ x : G ⧸ centerSubgroup (G := G), fQ x ∂(Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕))
+  have hQMass :
+      expectation (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G)))
+          (fiberExpectation (fun _ : G => (1 : ℝ)) : G ⧸ centerSubgroup (G := G) → ℝ) =
+        c * ((Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) Set.univ).toReal := by
+    rw [hFiberMass]
+    calc
+      expectation (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G)))
+          (fun _ => c)
+          = ((Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) Set.univ).toReal * c := by
+            simp [expectation, Measure.real_def]
+      _ = c * ((Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) Set.univ).toReal := by
+            ring
+  have hInt :
+      expectation μG f =
+        c * expectation (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) fQ := by
+    calc
+      expectation μG f
+          = expectation (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G)))
+              (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ) := hDecObs
+      _ = c * expectation (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) fQ := hQObs
+  have hMass :
+      (μG Set.univ).toReal =
+        c * ((Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) Set.univ).toReal := by
+    calc
+      (μG Set.univ).toReal = expectation μG (fun _ : G => (1 : ℝ)) := by
+        simp [expectation, Measure.real_def]
+      _ = expectation (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G)))
+            (fiberExpectation (fun _ : G => (1 : ℝ)) : G ⧸ centerSubgroup (G := G) → ℝ) := hDecMass
+      _ = c * ((Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) Set.univ).toReal := hQMass
+  exact ⟨hInt, hMass⟩
+
+/-- GRAND-312 closure:
+normalized center-sector reduction with `hInt/hMass` discharged from quotient
+normalization data instead of assumed directly. -/
+theorem normalized_expectation_reduce_to_center_of_quotient_normalization
+    (μG : Measure G) [μG.IsMulRightInvariant] [IsFiniteMeasure μG]
+    (𝓕 : Set G)
+    (h𝓕 : IsFundamentalDomain (centerSubgroup (G := G)).op 𝓕 μG)
+    (f : G → ℝ)
+    (fQ : G ⧸ centerSubgroup (G := G) → ℝ)
+    (c : ℝ)
+    (hfInt : Integrable f μG)
+    (hfAE :
+      AEStronglyMeasurable
+        (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ)
+        (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))))
+    (hOneAE :
+      AEStronglyMeasurable
+        (fiberExpectation (fun _ : G => (1 : ℝ)) : G ⧸ centerSubgroup (G := G) → ℝ)
+        (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))))
+    (hFiberObs :
+      (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ) = fun q => c * fQ q)
+    (hFiberMass :
+      (fiberExpectation (fun _ : G => (1 : ℝ)) : G ⧸ centerSubgroup (G := G) → ℝ) = fun _ => c)
+    (hc : c ≠ 0)
+    (hMassQ :
+      ((Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) Set.univ).toReal ≠ 0) :
+    normalizedExpectation μG f =
+      normalizedExpectation
+        (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G))) fQ := by
+  rcases common_factor_hypotheses_of_center_quotient_normalization
+    (G := G) (μG := μG) (𝓕 := 𝓕) h𝓕 f fQ c hfInt hfAE hOneAE hFiberObs hFiberMass with
+    ⟨hInt, hMass⟩
+  exact normalized_expectation_reduce_to_center
+    μG
+    (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 : Measure (G ⧸ centerSubgroup (G := G)))
+    f
+    fQ
+    c
+    hInt
+    hMass
+    hc
+    hMassQ
+
+end CenterNormalization
+
 /-- Parity bridge theorem: the finite collapse statement used in GRAND-310 is
 identical to the transfer-lane collapse theorem. -/
 theorem finite_parity_bridge
