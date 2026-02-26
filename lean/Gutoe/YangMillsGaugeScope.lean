@@ -13,6 +13,7 @@
 import Mathlib
 import Gutoe.HaarExpectationDecomposition
 import Gutoe.HaarBridgeScaffold
+import Gutoe.HaarFiberCollapse
 import Gutoe.YangMillsContinuumSurvival
 
 noncomputable section
@@ -21,6 +22,7 @@ namespace Gutoe.YangMillsGaugeScope
 
 open Gutoe.HaarBridgeScaffold
 open Gutoe.HaarExpectationDecomposition
+open Gutoe.HaarFiberCollapse
 open Gutoe.YangMillsContinuumSurvival
 open Gutoe.YangMillsMassGap
 
@@ -111,6 +113,95 @@ theorem compact_simple_scope_supports_path2
   refine ⟨?_, ?_⟩
   · exact expectation_decomposition_over_center_of_finite_center
       (G := G) hScope.2 h𝓕 hf₁ hf₂
+  · exact compact_scope_continuum_gap_nonvanishing a_t eps hCont
+
+/-- Finite-center scope also supports the GRAND-312 normalized reduction step:
+if quotient-normalization equalities are provided, full and center normalized
+expectations coincide. -/
+theorem normalized_expectation_reduce_to_center_of_finite_center
+    (hFin : Finite (Subgroup.center G))
+    [SecondCountableTopology G]
+    [T2Space (G ⧸ centerSubgroup (G := G))]
+    [SecondCountableTopology (G ⧸ centerSubgroup (G := G))]
+    (μG : MeasureTheory.Measure G) [μG.IsMulRightInvariant] [MeasureTheory.IsFiniteMeasure μG]
+    (𝓕 : Set G)
+    (h𝓕 : MeasureTheory.IsFundamentalDomain (centerSubgroup (G := G)).op 𝓕 μG)
+    (f : G → ℝ)
+    (fQ : G ⧸ centerSubgroup (G := G) → ℝ)
+    (cNorm : ℝ)
+    (hfInt : MeasureTheory.Integrable f μG)
+    (hfAE : MeasureTheory.AEStronglyMeasurable
+      (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ)
+      (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 :
+        MeasureTheory.Measure (G ⧸ centerSubgroup (G := G))))
+    (hOneAE : MeasureTheory.AEStronglyMeasurable
+      (fiberExpectation (fun _ : G => (1 : ℝ)) : G ⧸ centerSubgroup (G := G) → ℝ)
+      (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 :
+        MeasureTheory.Measure (G ⧸ centerSubgroup (G := G))))
+    (hFiberObs :
+      (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ) = fun q => cNorm * fQ q)
+    (hFiberMass :
+      (fiberExpectation (fun _ : G => (1 : ℝ)) : G ⧸ centerSubgroup (G := G) → ℝ) = fun _ => cNorm)
+    (hc : cNorm ≠ 0)
+    (hMassQ :
+      ((Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 :
+        MeasureTheory.Measure (G ⧸ centerSubgroup (G := G))) Set.univ).toReal ≠ 0) :
+    normalizedExpectation μG f =
+      normalizedExpectation
+        (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 :
+          MeasureTheory.Measure (G ⧸ centerSubgroup (G := G))) fQ := by
+  haveI : Countable (Subgroup.center G) := finite_center_implies_countable_center hFin
+  exact normalized_expectation_reduce_to_center_of_quotient_normalization
+    μG 𝓕 h𝓕 f fQ cNorm hfInt hfAE hOneAE hFiberObs hFiberMass hc hMassQ
+
+/-- Full compact-simple scope package:
+Path-2 expectation decomposition, GRAND-312 normalized reduction, and
+group-agnostic continuum gap non-vanishing all hold under explicit hypotheses. -/
+theorem compact_simple_scope_supports_full_path2
+    (hScope : CompactSimpleGaugeScope G)
+    [SecondCountableTopology G]
+    [T2Space (G ⧸ centerSubgroup (G := G))]
+    [SecondCountableTopology (G ⧸ centerSubgroup (G := G))]
+    (μG : MeasureTheory.Measure G) [μG.IsMulRightInvariant] [MeasureTheory.IsFiniteMeasure μG]
+    (𝓕 : Set G)
+    (h𝓕 : MeasureTheory.IsFundamentalDomain (centerSubgroup (G := G)).op 𝓕 μG)
+    (f : G → ℝ)
+    (fQ : G ⧸ centerSubgroup (G := G) → ℝ)
+    (cNorm : ℝ)
+    (hfInt : MeasureTheory.Integrable f μG)
+    (hfAE : MeasureTheory.AEStronglyMeasurable
+      (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ)
+      (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 :
+        MeasureTheory.Measure (G ⧸ centerSubgroup (G := G))))
+    (hOneAE : MeasureTheory.AEStronglyMeasurable
+      (fiberExpectation (fun _ : G => (1 : ℝ)) : G ⧸ centerSubgroup (G := G) → ℝ)
+      (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 :
+        MeasureTheory.Measure (G ⧸ centerSubgroup (G := G))))
+    (hFiberObs :
+      (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ) = fun q => cNorm * fQ q)
+    (hFiberMass :
+      (fiberExpectation (fun _ : G => (1 : ℝ)) : G ⧸ centerSubgroup (G := G) → ℝ) = fun _ => cNorm)
+    (hc : cNorm ≠ 0)
+    (hMassQ :
+      ((Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 :
+        MeasureTheory.Measure (G ⧸ centerSubgroup (G := G))) Set.univ).toReal ≠ 0)
+    (a_t eps : ℕ → ℝ)
+    (hCont : ContinuumSurvivalHypotheses a_t eps) :
+    (expectation μG f =
+      expectation
+        (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 :
+          MeasureTheory.Measure (G ⧸ centerSubgroup (G := G)))
+        (fiberExpectation f : G ⧸ centerSubgroup (G := G) → ℝ)) ∧
+    (normalizedExpectation μG f =
+      normalizedExpectation
+        (Gutoe.HaarMeasureHooks.quotientFiberMeasure μG 𝓕 :
+          MeasureTheory.Measure (G ⧸ centerSubgroup (G := G))) fQ) ∧
+    (∃ cGap : ℝ, 0 < cGap ∧ ∀ n, cGap ≤ doeblinGapLowerBound (a_t n) (eps n)) := by
+  refine ⟨?_, ?_, ?_⟩
+  · exact expectation_decomposition_over_center_of_finite_center
+      (G := G) hScope.2 h𝓕 hfInt hfAE
+  · exact normalized_expectation_reduce_to_center_of_finite_center
+      (G := G) hScope.2 μG 𝓕 h𝓕 f fQ cNorm hfInt hfAE hOneAE hFiberObs hFiberMass hc hMassQ
   · exact compact_scope_continuum_gap_nonvanishing a_t eps hCont
 
 end GeneralScope
