@@ -98,6 +98,36 @@ theorem z3_nn_row_total_le_transfer_basis_mul_coordination
   rw [hdim]
   nlinarith
 
+/-- Nearest-neighbor counts are row-total SC-regular:
+for each source basis state, summing over all 3 targets counts all incident
+SC edges exactly once, giving coordination number `6`. -/
+theorem z3_nn_row_totals_sc_regular
+    (target : Z3NearestNeighborTargets) :
+    SCRegularRowTotals (rowTotalsFromCounts (z3NearestNeighborCounts target)) := by
+  intro i
+  have hmaps :
+      ((Finset.univ : Finset (Fin coordinationNumber)) : Set (Fin coordinationNumber)).MapsTo
+        (target i)
+        (Finset.univ : Finset (Fin 3)) := by
+    intro a ha
+    simp
+  have hcard :
+      (Finset.univ : Finset (Fin coordinationNumber)).card =
+        ∑ b ∈ (Finset.univ : Finset (Fin 3)),
+          (Finset.univ.filter (fun a : Fin coordinationNumber => target i a = b)).card :=
+    Finset.card_eq_sum_card_fiberwise (f := target i)
+      (s := (Finset.univ : Finset (Fin coordinationNumber)))
+      (t := (Finset.univ : Finset (Fin 3)))
+      hmaps
+  have hrow :
+      rowTotalsFromCounts (z3NearestNeighborCounts target) i =
+        (Finset.univ : Finset (Fin coordinationNumber)).card := by
+    simpa [rowTotalsFromCounts, z3NearestNeighborCounts, Finset.sum_attach] using hcard.symm
+  calc
+    rowTotalsFromCounts (z3NearestNeighborCounts target) i
+        = (Finset.univ : Finset (Fin coordinationNumber)).card := hrow
+    _ = coordinationNumber := by simp
+
 /-- Canonical per-row totals derived from the Z₃ local count model. -/
 def z3CanonicalRowTotals : Fin 3 → ℕ := rowTotalsFromCounts z3CanonicalLocalCounts
 
@@ -222,6 +252,14 @@ theorem maxRowTotal_eq_coordination_of_sc_regular
   · have h0 : rowTotals 0 = coordinationNumber := hreg 0
     rw [← h0]
     exact rowTotal_le_maxRowTotal rowTotals 0
+
+/-- Exact max row-total value from nearest-neighbor counts. -/
+theorem z3_nn_max_row_total_eq_coordination
+    (target : Z3NearestNeighborTargets) :
+    maxRowTotal (rowTotalsFromCounts (z3NearestNeighborCounts target)) = coordinationNumber := by
+  exact maxRowTotal_eq_coordination_of_sc_regular
+    (rowTotalsFromCounts (z3NearestNeighborCounts target))
+    (z3_nn_row_totals_sc_regular target)
 
 /-- Global positive floor induced by Laplace smoothing. -/
 noncomputable def laplaceGlobalFloor

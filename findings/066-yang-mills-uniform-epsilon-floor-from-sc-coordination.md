@@ -26,6 +26,7 @@ In `YangMillsStructuralGap`:
 - `z3NearestNeighborCounts`
 - `z3_nn_count_le_coordination`
 - `z3_nn_row_total_le_transfer_basis_mul_coordination`
+- `z3_nn_row_totals_sc_regular`
 - `z3_canonical_local_counts_regular`
 - `z3CanonicalRowTotals`
 - `z3_canonical_row_totals_sc_regular`
@@ -33,6 +34,7 @@ In `YangMillsStructuralGap`:
 - `z3_canonical_row_total_eq_coordination`
 - `maxRowTotal_le_coordination_of_sc_bound`
 - `z3_nn_max_row_total_le_transfer_basis_mul_coordination`
+- `z3_nn_max_row_total_eq_coordination`
 - `maxRowTotal_eq_coordination_of_sc_regular`
 - `minorization_eps_ge_sc_coordination_floor`
 - `minorization_eps_ge_bounded_max_row_total_floor`
@@ -46,6 +48,10 @@ In `YangMillsContinuumSurvival`:
 - `rowTotalsScheduleFromCountsSchedule`
 - `sc_regular_schedule_of_z3_local_regular_counts`
 - `uniform_eps_floor_of_z3_local_regular_schedule`
+- `z3NearestNeighborRowTotalsSchedule`
+- `z3_nn_schedule_sc_regular`
+- `continuum_hypotheses_of_z3_nn_schedule`
+- `continuum_survival_gap_nonvanishing_of_z3_nn_schedule`
 - `z3CanonicalRowTotalsSchedule`
 - `z3_canonical_schedule_sc_regular`
 - `uniform_eps_floor_of_z3_canonical_schedule`
@@ -84,6 +90,11 @@ directly to measured lanes.
 Layer-1 empirical lane now has an explicit theorem target: if measured
 refinement rows satisfy `maxRowTotal ≤ 846` and remain positive, the
 continuum-survival non-vanishing gap corollary follows with a computable floor.
+
+Layer-2 progress: a fully structural nearest-neighbor lane is now formalized.
+For any refinement-indexed `Z3NearestNeighborTargets`, row totals are proven
+SC-regular (`= coordinationNumber`), and this directly instantiates a
+non-vanishing continuum-survival gap theorem with no empirical max-row bound.
 
 ## Build verification
 

@@ -240,6 +240,58 @@ theorem uniform_eps_floor_of_z3_local_regular_schedule
     ha
     (sc_regular_schedule_of_z3_local_regular_counts countsSchedule hlocal)
 
+/-- Row-total schedule induced directly from a refinement-indexed nearest-neighbor
+target schedule over the Z₃ transfer basis. -/
+def z3NearestNeighborRowTotalsSchedule
+    (targetSchedule : ℕ → Z3NearestNeighborTargets) :
+    ℕ → Fin 3 → ℕ := fun n => rowTotalsFromCounts (z3NearestNeighborCounts (targetSchedule n))
+
+/-- Structural SC-regularity of nearest-neighbor-induced row totals at every
+refinement step. -/
+theorem z3_nn_schedule_sc_regular
+    (targetSchedule : ℕ → Z3NearestNeighborTargets) :
+    ∀ n, SCRegularRowTotals (z3NearestNeighborRowTotalsSchedule targetSchedule n) := by
+  intro n
+  exact z3_nn_row_totals_sc_regular (targetSchedule n)
+
+/-- Structural continuum-survival hypotheses from a nearest-neighbor Z₃ schedule.
+This is a fully algebraic lane: no empirical row-total bound is required. -/
+theorem continuum_hypotheses_of_z3_nn_schedule
+    (a_t : ℕ → ℝ)
+    (targetSchedule : ℕ → Z3NearestNeighborTargets)
+    (alpha : ℝ)
+    (ha_t_pos : ∀ n, 0 < a_t n)
+    (ha_t_cap : ∃ aCap, 0 < aCap ∧ ∀ n, a_t n ≤ aCap)
+    (ha : 0 < alpha) :
+    ContinuumSurvivalHypotheses a_t
+      (fun n => minorizationEps (z3NearestNeighborRowTotalsSchedule targetSchedule n) alpha) := by
+  exact continuum_hypotheses_of_sc_regular_schedule
+    a_t
+    (z3NearestNeighborRowTotalsSchedule targetSchedule)
+    alpha
+    ha_t_pos
+    ha_t_cap
+    ha
+    (z3_nn_schedule_sc_regular targetSchedule)
+
+/-- Structural non-vanishing continuum mass-gap lower bound from nearest-neighbor
+Z₃ schedule (no empirical max-row certificate). -/
+theorem continuum_survival_gap_nonvanishing_of_z3_nn_schedule
+    (a_t : ℕ → ℝ)
+    (targetSchedule : ℕ → Z3NearestNeighborTargets)
+    (alpha : ℝ)
+    (ha_t_pos : ∀ n, 0 < a_t n)
+    (ha_t_cap : ∃ aCap, 0 < aCap ∧ ∀ n, a_t n ≤ aCap)
+    (ha : 0 < alpha) :
+    ∃ c : ℝ, 0 < c ∧
+      ∀ n, c ≤ doeblinGapLowerBound (a_t n)
+        (minorizationEps (z3NearestNeighborRowTotalsSchedule targetSchedule n) alpha) := by
+  exact continuum_survival_gap_nonvanishing
+    a_t
+    (fun n => minorizationEps (z3NearestNeighborRowTotalsSchedule targetSchedule n) alpha)
+    (continuum_hypotheses_of_z3_nn_schedule
+      a_t targetSchedule alpha ha_t_pos ha_t_cap ha)
+
 /-- Refinement schedule induced by the canonical Z₃ local transfer construction:
 row totals are refinement-invariant and SC-regular at each step. -/
 def z3CanonicalRowTotalsSchedule : ℕ → Fin 3 → ℕ := fun _ => z3CanonicalRowTotals
