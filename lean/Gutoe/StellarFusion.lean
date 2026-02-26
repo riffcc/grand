@@ -1006,6 +1006,52 @@ theorem lane_emden_average_theta_le_one_of_deriv_nonpos_on_nonneg
       hcont hdiff hderiv_nonpos hθ0)
     (hξ0 := hξ0) (hdξ := hdξ)
 
+/-- Flux-derivative identity from the canonical integer-index Lane-Emden ODE
+    contract on a finite window: if `θ'` has derivative `θ''` and the
+    multiplied residual vanishes pointwise, then
+    `d/dξ (ξ² θ'(ξ)) = -ξ² θ(ξ)^m`. -/
+theorem lane_emden_flux_deriv_identity_nat_on_window
+    {m : ℕ} {a : ℝ} {θ θ' θ'' : ℝ → ℝ}
+    (hθ'' : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, HasDerivAt θ' (θ'' ξ) ξ)
+    (hResidual :
+      ∀ ξ ∈ Set.Ioo (0 : ℝ) a,
+        laneEmdenResidualNat m ξ (θ ξ) (θ' ξ) (θ'' ξ) = 0) :
+    ∀ ξ ∈ Set.Ioo (0 : ℝ) a,
+      deriv (fun t => t ^ 2 * θ' t) ξ = -(ξ ^ 2) * (θ ξ) ^ m := by
+  intro ξ hξ
+  have hPow : HasDerivAt (fun t : ℝ => t ^ 2) (2 * ξ) ξ := by
+    simpa [pow_two] using (hasDerivAt_pow 2 ξ)
+  have hMul : HasDerivAt (fun t : ℝ => t ^ 2 * θ' t)
+      ((2 * ξ) * θ' ξ + ξ ^ 2 * θ'' ξ) ξ :=
+    hPow.mul (hθ'' ξ hξ)
+  have hDeriv :
+      deriv (fun t : ℝ => t ^ 2 * θ' t) ξ =
+        (2 * ξ) * θ' ξ + ξ ^ 2 * θ'' ξ := by
+    exact hMul.deriv
+  have hResidualEq :
+      ξ ^ 2 * θ'' ξ + 2 * ξ * θ' ξ + ξ ^ 2 * (θ ξ) ^ m = 0 := by
+    simpa [laneEmdenResidualNat] using hResidual ξ hξ
+  have hCore :
+      (2 * ξ) * θ' ξ + ξ ^ 2 * θ'' ξ = -(ξ ^ 2) * (θ ξ) ^ m := by
+    linarith [hResidualEq]
+  simpa [hDeriv] using hCore
+
+/-- The same flux-derivative identity rewritten with `Real.rpow` so it can feed
+    directly into the real-index flux route. -/
+theorem lane_emden_flux_deriv_identity_nat_rpow_on_window
+    {m : ℕ} {a : ℝ} {θ θ' θ'' : ℝ → ℝ}
+    (hθ'' : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, HasDerivAt θ' (θ'' ξ) ξ)
+    (hResidual :
+      ∀ ξ ∈ Set.Ioo (0 : ℝ) a,
+        laneEmdenResidualNat m ξ (θ ξ) (θ' ξ) (θ'' ξ) = 0) :
+    ∀ ξ ∈ Set.Ioo (0 : ℝ) a,
+      deriv (fun t => t ^ 2 * θ' t) ξ = -(ξ ^ 2) * Real.rpow (θ ξ) (m : ℝ) := by
+  intro ξ hξ
+  have hNat :=
+    lane_emden_flux_deriv_identity_nat_on_window
+      (hθ'' := hθ'') (hResidual := hResidual) ξ hξ
+  simpa [Real.rpow_natCast] using hNat
+
 /-- ODE-driven sampled envelope bound on a finite window:
     if `flux(ξ)=ξ²θ'(ξ)` has strictly negative derivative in `(0,a)`,
     then sampled averages over points constrained to `[0,a]` are bounded by `1`.
@@ -1095,6 +1141,47 @@ theorem lane_emden_average_theta_le_one_of_flux_deriv_negative_on_window
     field_simp [show (k + 1 : ℝ) ≠ 0 by exact ne_of_gt hpos_den]
   simpa [s, hone] using hdiv
 
+/-- Canonical ODE-contract bridge (integer index):
+    discharges the flux-derivative identity assumption from Lane-Emden residual
+    equations and turns the finite-window flux route into an end-to-end theorem
+    for broad natural-polytrope classes. -/
+theorem lane_emden_average_theta_le_one_of_solution_nat_on_window
+    {m : ℕ} {a ξ0 dξ : ℝ} {k : ℕ} {θ θ' θ'' : ℝ → ℝ}
+    (ha : 0 < a)
+    (hθ_pos : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, 0 < θ ξ)
+    (hθ_cont : ContinuousOn θ (Set.Icc (0 : ℝ) a))
+    (hθ_diff : DifferentiableOn ℝ θ (Set.Ioo (0 : ℝ) a))
+    (hθ_deriv : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, deriv θ ξ = θ' ξ)
+    (hθ'0 : θ' 0 = 0)
+    (hflux_cont : ContinuousOn (fun ξ => ξ ^ 2 * θ' ξ) (Set.Icc (0 : ℝ) a))
+    (hθ'' : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, HasDerivAt θ' (θ'' ξ) ξ)
+    (hSol : LaneEmdenSolutionNat m θ θ' θ'')
+    (hsample : ∀ i : Fin (k + 1), ξ0 + (i : ℝ) * dξ ∈ Set.Icc (0 : ℝ) a) :
+    laneEmdenAverageTheta θ ξ0 dξ k ≤ 1 := by
+  have hθ0 : θ 0 = 1 := hSol.1.1
+  have hResidual :
+      ∀ ξ ∈ Set.Ioo (0 : ℝ) a,
+        laneEmdenResidualNat m ξ (θ ξ) (θ' ξ) (θ'' ξ) = 0 := by
+    intro ξ _hξ
+    exact hSol.2 ξ
+  have hflux_deriv :
+      ∀ ξ ∈ Set.Ioo (0 : ℝ) a,
+        deriv (fun t => t ^ 2 * θ' t) ξ = -(ξ ^ 2) * Real.rpow (θ ξ) (m : ℝ) :=
+    lane_emden_flux_deriv_identity_nat_rpow_on_window
+      (hθ'' := hθ'') (hResidual := hResidual)
+  exact lane_emden_average_theta_le_one_of_flux_deriv_negative_on_window
+    (n := (m : ℝ))
+    (ha := ha)
+    (hθ_pos := hθ_pos)
+    (hθ_cont := hθ_cont)
+    (hθ_diff := hθ_diff)
+    (hθ_deriv := hθ_deriv)
+    (hθ0 := hθ0)
+    (hθ'0 := hθ'0)
+    (hflux_cont := hflux_cont)
+    (hflux_deriv := hflux_deriv)
+    (hsample := hsample)
+
 /-- Profile-weighted compression witness from a sampled Lane-Emden profile. -/
 noncomputable def laneEmdenProfileCompression
     (M rhoCentral : ℝ) (θ : ℝ → ℝ) (ξ0 dξ : ℝ) (n : ℕ) : ℝ :=
@@ -1170,6 +1257,46 @@ theorem polytropic_ignition_from_lane_emden_profile_deriv_nonpos
     (hAvgUpper := lane_emden_average_theta_le_one_of_deriv_nonpos_on_nonneg
       (hcont := hcont) (hdiff := hdiff) (hderiv_nonpos := hderiv_nonpos)
       (hθ0 := hθ0) (hξ0 := hξ0) (hdξ := hdξ))
+    (hProfile := hProfile)
+
+/-- Full ODE-contract ignition bridge (integer-index Lane-Emden classes):
+    discharges the profile envelope from the canonical residual/regularity
+    contract on a finite positive window. -/
+theorem polytropic_ignition_from_lane_emden_profile_solution_nat_on_window
+    {m : ℕ}
+    {M rhoCentral G μ ξ TIgn a ξ0 dξ : ℝ} {n : ℕ}
+    {θ θ' θ'' : ℝ → ℝ}
+    (hG : 0 < G) (hμ : 0 < μ) (hξ : 0 < ξ) (hTIgn : 0 < TIgn)
+    (hProxyNonneg : 0 ≤ laneEmdenCompressionProxy M rhoCentral)
+    (ha : 0 < a)
+    (hθ_pos : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, 0 < θ ξ)
+    (hθ_cont : ContinuousOn θ (Set.Icc (0 : ℝ) a))
+    (hθ_diff : DifferentiableOn ℝ θ (Set.Ioo (0 : ℝ) a))
+    (hθ_deriv : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, deriv θ ξ = θ' ξ)
+    (hθ'0 : θ' 0 = 0)
+    (hflux_cont : ContinuousOn (fun ξ => ξ ^ 2 * θ' ξ) (Set.Icc (0 : ℝ) a))
+    (hθ'' : ∀ ξ ∈ Set.Ioo (0 : ℝ) a, HasDerivAt θ' (θ'' ξ) ξ)
+    (hSol : LaneEmdenSolutionNat m θ θ' θ'')
+    (hsample : ∀ i : Fin (n + 1), ξ0 + (i : ℝ) * dξ ∈ Set.Icc (0 : ℝ) a)
+    (hProfile :
+      laneEmdenProfileCompression M rhoCentral θ ξ0 dξ n ≥
+        minimumPolytropicCompression G μ ξ TIgn) :
+    coreTemperaturePolytropic G μ ξ M rhoCentral ≥ TIgn := by
+  exact polytropic_ignition_from_lane_emden_profile
+    (hG := hG) (hμ := hμ) (hξ := hξ) (hTIgn := hTIgn)
+    (hProxyNonneg := hProxyNonneg)
+    (hAvgUpper :=
+      lane_emden_average_theta_le_one_of_solution_nat_on_window
+        (ha := ha)
+        (hθ_pos := hθ_pos)
+        (hθ_cont := hθ_cont)
+        (hθ_diff := hθ_diff)
+        (hθ_deriv := hθ_deriv)
+        (hθ'0 := hθ'0)
+        (hflux_cont := hflux_cont)
+        (hθ'' := hθ'')
+        (hSol := hSol)
+        (hsample := hsample))
     (hProfile := hProfile)
 
 /-- Pointwise `n = 0` Lane-Emden profile never exceeds 1. -/
