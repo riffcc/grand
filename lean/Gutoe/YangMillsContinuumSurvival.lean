@@ -152,4 +152,55 @@ theorem continuum_hypotheses_of_sc_regular_schedule
       exact (div_lt_one hdenPos).2 hdenGtNum
   · exact uniform_eps_floor_of_sc_regular_schedule rowTotals alpha ha hreg
 
+/-- Row-total schedule induced by a refinement-indexed local-count schedule. -/
+def rowTotalsScheduleFromCountsSchedule
+    (countsSchedule : ℕ → Fin 3 → Fin 3 → ℕ) :
+    ℕ → Fin 3 → ℕ := fun n => rowTotalsFromCounts (countsSchedule n)
+
+/-- If each refinement step is locally Z₃-SC regular at the count level, then
+its induced row totals are SC-regular (`6`) at every step. -/
+theorem sc_regular_schedule_of_z3_local_regular_counts
+    (countsSchedule : ℕ → Fin 3 → Fin 3 → ℕ)
+    (hlocal : ∀ n, Z3SCLocalRegularCounts (countsSchedule n)) :
+    ∀ n, SCRegularRowTotals (rowTotalsScheduleFromCountsSchedule countsSchedule n) := by
+  intro n
+  exact sc_regular_row_totals_of_z3_local_regular_counts (countsSchedule n) (hlocal n)
+
+/-- Uniform epsilon-floor witness for any refinement schedule whose local
+count construction is Z₃-SC regular at each step. -/
+theorem uniform_eps_floor_of_z3_local_regular_schedule
+    (countsSchedule : ℕ → Fin 3 → Fin 3 → ℕ)
+    (alpha : ℝ)
+    (ha : 0 < alpha)
+    (hlocal : ∀ n, Z3SCLocalRegularCounts (countsSchedule n)) :
+    ∃ epsFloor : ℝ, 0 < epsFloor ∧
+      ∀ n, epsFloor ≤ minorizationEps (rowTotalsScheduleFromCountsSchedule countsSchedule n) alpha := by
+  exact uniform_eps_floor_of_sc_regular_schedule
+    (rowTotalsScheduleFromCountsSchedule countsSchedule)
+    alpha
+    ha
+    (sc_regular_schedule_of_z3_local_regular_counts countsSchedule hlocal)
+
+/-- Refinement schedule induced by the canonical Z₃ local transfer construction:
+row totals are refinement-invariant and SC-regular at each step. -/
+def z3CanonicalRowTotalsSchedule : ℕ → Fin 3 → ℕ := fun _ => z3CanonicalRowTotals
+
+/-- SC-regularity of the canonical Z₃ row-total schedule. -/
+theorem z3_canonical_schedule_sc_regular :
+    ∀ n, SCRegularRowTotals (z3CanonicalRowTotalsSchedule n) := by
+  intro n
+  simpa [z3CanonicalRowTotalsSchedule] using z3_canonical_row_totals_sc_regular
+
+/-- Uniform epsilon-floor witness specialized to the canonical Z₃ schedule. -/
+theorem uniform_eps_floor_of_z3_canonical_schedule
+    (alpha : ℝ)
+    (ha : 0 < alpha) :
+    ∃ epsFloor : ℝ, 0 < epsFloor ∧
+      ∀ n, epsFloor ≤ minorizationEps (z3CanonicalRowTotalsSchedule n) alpha := by
+  exact uniform_eps_floor_of_z3_local_regular_schedule
+    (fun _ => z3CanonicalLocalCounts)
+    alpha
+    ha
+    (fun _ => z3_canonical_local_counts_regular)
+
 end Gutoe.YangMillsContinuumSurvival

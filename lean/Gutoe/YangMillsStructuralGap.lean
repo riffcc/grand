@@ -27,10 +27,69 @@ open scoped Matrix
 /-- Transfer basis dimension from Cl(1,3) magnetic orbit cardinality. -/
 def transferBasisDim : ℕ := magneticTriplet.card
 
+/-- Uniform SC regularity condition on 3-state transfer rows:
+every row carries the structural simple-cubic coordination count. -/
+def SCRegularRowTotals (rowTotals : Fin 3 → ℕ) : Prop :=
+  ∀ i, rowTotals i = coordinationNumber
+
 /-- The Z₃ transfer basis is exactly 3-dimensional. -/
 theorem transfer_basis_dim_eq_three : transferBasisDim = 3 := by
   unfold transferBasisDim
   exact su2_dim
+
+/-- Local per-target multiplicity in the canonical Z₃-symmetric SC transfer
+construction: coordination split uniformly across the 3-state transfer basis. -/
+def z3LocalMultiplicity : ℕ := coordinationNumber / transferBasisDim
+
+/-- In Cl(1,3) SC geometry this multiplicity is exactly `2` since `6/3=2`. -/
+theorem z3_local_multiplicity_eq_two : z3LocalMultiplicity = 2 := by
+  simp [z3LocalMultiplicity, coordination_number_is_6, transfer_basis_dim_eq_three]
+
+/-- Canonical Z₃ local transition counts:
+each source state has equal local multiplicity to each target orbit state. -/
+def z3CanonicalLocalCounts : Fin 3 → Fin 3 → ℕ := fun _ _ => z3LocalMultiplicity
+
+/-- Row-total extraction from a local count matrix over the 3-state transfer basis. -/
+def rowTotalsFromCounts (counts : Fin 3 → Fin 3 → ℕ) : Fin 3 → ℕ :=
+  fun i => ∑ j : Fin 3, counts i j
+
+/-- Local Z₃-SC regularity of transfer counts:
+every source-target pair carries the same structural multiplicity. -/
+def Z3SCLocalRegularCounts (counts : Fin 3 → Fin 3 → ℕ) : Prop :=
+  ∀ i j, counts i j = z3LocalMultiplicity
+
+/-- Canonical per-row totals derived from the Z₃ local count model. -/
+def z3CanonicalRowTotals : Fin 3 → ℕ := rowTotalsFromCounts z3CanonicalLocalCounts
+
+/-- The canonical local count model is Z₃-SC local-regular by construction. -/
+theorem z3_canonical_local_counts_regular :
+    Z3SCLocalRegularCounts z3CanonicalLocalCounts := by
+  intro i j
+  rfl
+
+/-- Canonical Z₃ local transfer has SC row totals (`6`) on every row. -/
+theorem z3_canonical_row_totals_sc_regular :
+    SCRegularRowTotals z3CanonicalRowTotals := by
+  intro i
+  unfold z3CanonicalRowTotals rowTotalsFromCounts z3CanonicalLocalCounts
+  rw [Fin.sum_univ_three, z3_local_multiplicity_eq_two, coordination_number_is_6]
+
+/-- Any Z₃-SC local-regular count matrix has SC row totals (`6`) on every row. -/
+theorem sc_regular_row_totals_of_z3_local_regular_counts
+    (counts : Fin 3 → Fin 3 → ℕ)
+    (hlocal : Z3SCLocalRegularCounts counts) :
+    SCRegularRowTotals (rowTotalsFromCounts counts) := by
+  intro i
+  unfold rowTotalsFromCounts
+  have h0 : counts i 0 = z3LocalMultiplicity := hlocal i 0
+  have h1 : counts i 1 = z3LocalMultiplicity := hlocal i 1
+  have h2 : counts i 2 = z3LocalMultiplicity := hlocal i 2
+  rw [Fin.sum_univ_three, h0, h1, h2, z3_local_multiplicity_eq_two, coordination_number_is_6]
+
+/-- Canonical row totals are exactly coordination number (`6`) componentwise. -/
+theorem z3_canonical_row_total_eq_coordination (i : Fin 3) :
+    z3CanonicalRowTotals i = coordinationNumber := by
+  exact z3_canonical_row_totals_sc_regular i
 
 /-- Laplace-smoothed transition entry used in empirical kernel construction. -/
 noncomputable def smoothEntry (count rowTotal : ℕ) (alpha : ℝ) : ℝ :=
@@ -91,11 +150,6 @@ theorem rowTotal_le_maxRowTotal
     (rowTotals : Fin 3 → ℕ) (i : Fin 3) :
     rowTotals i ≤ maxRowTotal rowTotals := by
   fin_cases i <;> simp [maxRowTotal]
-
-/-- Uniform SC regularity condition on 3-state transfer rows:
-every row carries the structural simple-cubic coordination count. -/
-def SCRegularRowTotals (rowTotals : Fin 3 → ℕ) : Prop :=
-  ∀ i, rowTotals i = coordinationNumber
 
 /-- If each row total is bounded by the SC coordination number, `maxRowTotal`
 inherits the same bound. -/
