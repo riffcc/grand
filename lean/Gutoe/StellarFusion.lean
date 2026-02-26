@@ -376,6 +376,112 @@ noncomputable def ppThermalAverageContinuumInterval
     (g f0 protonDensity mReduced T Emin Emax : ℝ) : ℝ :=
   (∫ E in Emin..Emax, ppThermalKernel g f0 protonDensity mReduced T E) / (Emax - Emin)
 
+/-- Trapezoidal finite-sample interval average for the thermal kernel. Uses
+    `N = n+1` subintervals to avoid the `N = 0` degenerate case. -/
+noncomputable def ppThermalAverageTrapezoidalInterval
+    (g f0 protonDensity mReduced T Emin Emax : ℝ) (n : ℕ) : ℝ :=
+  trapezoidal_integral
+      (fun E => ppThermalKernel g f0 protonDensity mReduced T E)
+      (n + 1) Emin Emax / (Emax - Emin)
+
+/-- Exact identity: trapezoidal sampled average minus continuum average equals
+    normalized trapezoidal quadrature error. -/
+theorem pp_thermal_average_trapezoidal_sub_continuum_eq_error
+    (g f0 protonDensity mReduced T Emin Emax : ℝ) (n : ℕ) :
+    ppThermalAverageTrapezoidalInterval g f0 protonDensity mReduced T Emin Emax n
+      - ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax
+      =
+      trapezoidal_error
+        (fun E => ppThermalKernel g f0 protonDensity mReduced T E)
+        (n + 1) Emin Emax / (Emax - Emin) := by
+  unfold ppThermalAverageTrapezoidalInterval ppThermalAverageContinuumInterval trapezoidal_error
+  ring
+
+/-- Quantitative convergence bridge: with a `C²` bound on the thermal kernel over
+    `[Emin, Emax]`, trapezoidal sampled interval averages converge to the continuum
+    interval average as `n → ∞`. -/
+theorem pp_thermal_average_trapezoidal_interval_tendsto_continuum
+    (g f0 protonDensity mReduced T Emin Emax ζ : ℝ)
+    (hRange : Emin < Emax)
+    (hC2 : ContDiffOn ℝ 2
+      (fun E => ppThermalKernel g f0 protonDensity mReduced T E)
+      (Set.uIcc Emin Emax))
+    (hBound2 : ∀ E : ℝ,
+      |iteratedDerivWithin 2
+        (fun x => ppThermalKernel g f0 protonDensity mReduced T x)
+        (Set.uIcc Emin Emax) E| ≤ ζ) :
+    Filter.Tendsto
+      (fun n : ℕ => ppThermalAverageTrapezoidalInterval g f0 protonDensity mReduced T Emin Emax n)
+      Filter.atTop
+      (nhds (ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax)) := by
+  let C : ℝ := (|Emax - Emin| ^ 2 * ζ) / 12
+  have hΔpos : 0 < Emax - Emin := sub_pos.mpr hRange
+  have hAbsBound :
+      ∀ n : ℕ,
+        |ppThermalAverageTrapezoidalInterval g f0 protonDensity mReduced T Emin Emax n
+          - ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax|
+          ≤ C / ((((n + 1 : ℕ) : ℝ) ^ 2)) := by
+    intro n
+    have hErr :=
+      trapezoidal_error_le_of_c2
+        (f := fun E => ppThermalKernel g f0 protonDensity mReduced T E)
+        (a := Emin) (b := Emax) hC2 hBound2 (Nat.succ_pos n)
+    have hErr' :
+        |trapezoidal_error
+          (fun E => ppThermalKernel g f0 protonDensity mReduced T E)
+          (n + 1) Emin Emax|
+          ≤ |Emax - Emin| ^ 3 * ζ / (12 * ((((n + 1 : ℕ) : ℝ) ^ 2))) := by
+      simpa [Nat.succ_eq_add_one] using hErr
+    have hEqAbs :
+        |ppThermalAverageTrapezoidalInterval g f0 protonDensity mReduced T Emin Emax n
+          - ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax|
+          =
+          |trapezoidal_error
+            (fun E => ppThermalKernel g f0 protonDensity mReduced T E)
+            (n + 1) Emin Emax| / (Emax - Emin) := by
+      rw [pp_thermal_average_trapezoidal_sub_continuum_eq_error]
+      rw [abs_div, abs_of_pos hΔpos]
+    have hDiv :
+        |ppThermalAverageTrapezoidalInterval g f0 protonDensity mReduced T Emin Emax n
+          - ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax|
+        ≤
+        (|Emax - Emin| ^ 3 * ζ / (12 * ((((n + 1 : ℕ) : ℝ) ^ 2)))) / (Emax - Emin) := by
+      rw [hEqAbs]
+      exact div_le_div_of_nonneg_right hErr' (le_of_lt hΔpos)
+    have hNzPow : ((((n + 1 : ℕ) : ℝ) ^ 2)) ≠ 0 := by positivity
+    have hRewrite :
+        (|Emax - Emin| ^ 3 * ζ / (12 * ((((n + 1 : ℕ) : ℝ) ^ 2)))) / (Emax - Emin)
+          =
+        C / ((((n + 1 : ℕ) : ℝ) ^ 2)) := by
+      have hAbs : |Emax - Emin| = Emax - Emin := abs_of_pos hΔpos
+      dsimp [C]
+      rw [hAbs]
+      field_simp [hΔpos.ne', hNzPow]
+    exact hDiv.trans_eq hRewrite
+  have hNatPlus : Filter.Tendsto (fun n : ℕ => ((n + 1 : ℕ) : ℝ)) Filter.atTop Filter.atTop := by
+    exact tendsto_natCast_atTop_atTop.comp (Filter.tendsto_add_atTop_nat 1)
+  have hSq :
+      Filter.Tendsto (fun n : ℕ => ((((n + 1 : ℕ) : ℝ) ^ 2))) Filter.atTop Filter.atTop := by
+    exact (Filter.tendsto_pow_atTop (by decide : (2 : ℕ) ≠ 0)).comp hNatPlus
+  have hInvSq :
+      Filter.Tendsto (fun n : ℕ => ((((n + 1 : ℕ) : ℝ) ^ 2)⁻¹)) Filter.atTop (nhds 0) := by
+    exact tendsto_inv_atTop_zero.comp hSq
+  have hUpperZero :
+      Filter.Tendsto (fun n : ℕ => C / ((((n + 1 : ℕ) : ℝ) ^ 2))) Filter.atTop (nhds 0) := by
+    simpa [div_eq_mul_inv] using (hInvSq.const_mul C)
+  have hAbsZero :
+      Filter.Tendsto
+        (fun n : ℕ =>
+          |ppThermalAverageTrapezoidalInterval g f0 protonDensity mReduced T Emin Emax n
+            - ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax|)
+        Filter.atTop (nhds 0) := by
+    exact squeeze_zero
+      (fun n => abs_nonneg _)
+      hAbsBound
+      hUpperZero
+  exact (tendsto_iff_norm_sub_tendsto_zero).2 (by
+    simpa [Real.norm_eq_abs] using hAbsZero)
+
 /-- Every finite sampled interval average is strictly positive when
     `Emin > 0` and `Emax ≥ Emin`. -/
 theorem pp_thermal_average_uniform_interval_positive
