@@ -429,7 +429,7 @@ theorem pp_thermal_average_interval_limit_nonneg
     thermal ladder once Riemann convergence is established. -/
 theorem pp_thermal_average_continuum_interval_nonneg_of_tendsto
     (g f0 protonDensity mReduced T Emin Emax : ℝ)
-    (hConv :
+    (_hConv :
       Filter.Tendsto
         (fun n : ℕ => ppThermalAverageUniformInterval g f0 protonDensity mReduced T Emin Emax n)
         Filter.atTop (nhds (ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax)))
@@ -440,10 +440,39 @@ theorem pp_thermal_average_continuum_interval_nonneg_of_tendsto
     (hEmin : 0 < Emin)
     (hRange : Emin ≤ Emax) :
     0 ≤ ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax := by
-  exact pp_thermal_average_interval_limit_nonneg
-    g f0 protonDensity mReduced T Emin Emax
-    (ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax)
-    hConv hg hf0 hρp hm hEmin hRange
+  -- Strengthened route: continuum nonnegativity can be proven directly from
+  -- pointwise positivity on `[Emin, Emax]`, so no convergence witness is needed.
+  unfold ppThermalAverageContinuumInterval
+  have hIntegralNonneg :
+      0 ≤ ∫ E in Emin..Emax, ppThermalKernel g f0 protonDensity mReduced T E := by
+    refine intervalIntegral.integral_nonneg hRange ?_
+    intro E hE
+    have hEpos : 0 < E := lt_of_lt_of_le hEmin hE.1
+    exact le_of_lt <|
+      pp_thermal_kernel_positive g f0 protonDensity mReduced T E hg hf0 hρp hm hEpos
+  have hDenNonneg : 0 ≤ Emax - Emin := sub_nonneg.mpr hRange
+  exact div_nonneg hIntegralNonneg hDenNonneg
+
+/-- Unconditional continuum nonnegativity witness on a positive-energy interval. -/
+theorem pp_thermal_average_continuum_interval_nonneg
+    (g f0 protonDensity mReduced T Emin Emax : ℝ)
+    (hg : g ≠ 0)
+    (hf0 : f0 ≠ 0)
+    (hρp : 0 < protonDensity)
+    (hm : 0 < mReduced)
+    (hEmin : 0 < Emin)
+    (hRange : Emin ≤ Emax) :
+    0 ≤ ppThermalAverageContinuumInterval g f0 protonDensity mReduced T Emin Emax := by
+  unfold ppThermalAverageContinuumInterval
+  have hIntegralNonneg :
+      0 ≤ ∫ E in Emin..Emax, ppThermalKernel g f0 protonDensity mReduced T E := by
+    refine intervalIntegral.integral_nonneg hRange ?_
+    intro E hE
+    have hEpos : 0 < E := lt_of_lt_of_le hEmin hE.1
+    exact le_of_lt <|
+      pp_thermal_kernel_positive g f0 protonDensity mReduced T E hg hf0 hρp hm hEpos
+  have hDenNonneg : 0 ≤ Emax - Emin := sub_nonneg.mpr hRange
+  exact div_nonneg hIntegralNonneg hDenNonneg
 
 -- ── 4) Ignition threshold + hydrostatic balance witness ─────────────────────
 
