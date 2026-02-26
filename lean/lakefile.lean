@@ -15,6 +15,7 @@ lean_lib Gutoe where
              `Gutoe.FineStructure, `Gutoe.MassSpectrum, `Gutoe.DimensionalStructure,
              `Gutoe.Z3Uniqueness, `Gutoe.BellInequality, `Gutoe.ThreeGenerations,
              `Gutoe.KoideMasses, `Gutoe.LeptonMass, `Gutoe.PerturbativeSymmetry,
+             `Gutoe.FlavorMixing,
              `Gutoe.SignatureUniqueness, `Gutoe.LatticeGeometry, `Gutoe.InstantonMass,
              `Gutoe.Z3ForcedStructure,
              `Gutoe.GaugeGroupSU2, `Gutoe.GaugeGroupSU3, `Gutoe.GaugeGroupSM,
