@@ -35,6 +35,8 @@ struct VolumeRow {
     q2: f64,
     occupancy: [u64; 3],
     transitions: [[u64; 3]; 3],
+    row_totals: [u64; 3],
+    max_row_total: u64,
     surrogate_gap: TransferMatrixGapEstimate,
     gevp_gap: Option<TransferMatrixGapEstimate>,
     seed_surrogate_mean: Option<f64>,
@@ -152,6 +154,16 @@ fn bin3(x: f64, q1: f64, q2: f64) -> usize {
     } else {
         2
     }
+}
+
+fn transition_row_totals(trans: &[[u64; 3]; 3]) -> ([u64; 3], u64) {
+    let row_totals = [
+        trans[0][0] + trans[0][1] + trans[0][2],
+        trans[1][0] + trans[1][1] + trans[1][2],
+        trans[2][0] + trans[2][1] + trans[2][2],
+    ];
+    let max_row_total = row_totals[0].max(row_totals[1]).max(row_totals[2]);
+    (row_totals, max_row_total)
 }
 
 fn build_transfer_from_scalar_series(
@@ -492,6 +504,7 @@ fn main() {
         else {
             continue;
         };
+        let (row_totals, max_row_total) = transition_row_totals(&trans);
         let Some(diag_surr) = transfer_matrix_diagnostics(&tm_surr, a_t, max_iters, tol) else {
             continue;
         };
@@ -528,6 +541,8 @@ fn main() {
             q2,
             occupancy: occ,
             transitions: trans,
+            row_totals,
+            max_row_total,
             surrogate_gap,
             gevp_gap,
             seed_surrogate_mean: seed_surrogate_stats.map(|(m, _)| m),
@@ -568,8 +583,8 @@ fn main() {
     for r in &rows {
         writeln!(
             txt,
-            "L={:>2} n_sites={:>4} a2={:.6} q1={:.6e} q2={:.6e} occ={:?} trans={:?}",
-            r.side, r.n_sites, r.a2, r.q1, r.q2, r.occupancy, r.transitions
+            "L={:>2} n_sites={:>4} a2={:.6} q1={:.6e} q2={:.6e} occ={:?} trans={:?} row_totals={:?} max_row_total={}",
+            r.side, r.n_sites, r.a2, r.q1, r.q2, r.occupancy, r.transitions, r.row_totals, r.max_row_total
         )
         .expect("write");
         writeln!(
@@ -632,7 +647,7 @@ fn main() {
     for (idx, r) in rows.iter().enumerate() {
         writeln!(
             json,
-            "    {{\"L\":{},\"n_sites\":{},\"a2\":{:.12e},\"q1\":{:.12e},\"q2\":{:.12e},\"occupancy\":[{},{},{}],\"transitions\":[[{},{},{}],[{},{},{}],[{},{},{}]],\"surrogate_lambda0\":{:.12e},\"surrogate_lambda1\":{:.12e},\"surrogate_gap_est\":{:.12e},\"gevp_lambda0\":{},\"gevp_lambda1\":{},\"gevp_gap_est\":{},\"seed_surrogate_mean\":{},\"seed_surrogate_std\":{},\"seed_gevp_mean\":{},\"seed_gevp_std\":{},\"gap_source\":\"{}\",\"gap_est\":{:.12e},\"gap_lower_bound\":{:.12e},\"gap_err\":{:.12e}}}{}",
+            "    {{\"L\":{},\"n_sites\":{},\"a2\":{:.12e},\"q1\":{:.12e},\"q2\":{:.12e},\"occupancy\":[{},{},{}],\"transitions\":[[{},{},{}],[{},{},{}],[{},{},{}]],\"row_totals\":[{},{},{}],\"max_row_total\":{},\"surrogate_lambda0\":{:.12e},\"surrogate_lambda1\":{:.12e},\"surrogate_gap_est\":{:.12e},\"gevp_lambda0\":{},\"gevp_lambda1\":{},\"gevp_gap_est\":{},\"seed_surrogate_mean\":{},\"seed_surrogate_std\":{},\"seed_gevp_mean\":{},\"seed_gevp_std\":{},\"gap_source\":\"{}\",\"gap_est\":{:.12e},\"gap_lower_bound\":{:.12e},\"gap_err\":{:.12e}}}{}",
             r.side,
             r.n_sites,
             r.a2,
@@ -650,6 +665,10 @@ fn main() {
             r.transitions[2][0],
             r.transitions[2][1],
             r.transitions[2][2],
+            r.row_totals[0],
+            r.row_totals[1],
+            r.row_totals[2],
+            r.max_row_total,
             r.surrogate_gap.lambda0_est,
             r.surrogate_gap.lambda1_est,
             r.surrogate_gap.gap_est,
