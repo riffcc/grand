@@ -393,6 +393,33 @@ theorem reduced_mode_dominates_of_wilson_doeblin
       hEigP hEigR hRstoch hsum0 hvne
   simpa [epsN, rowTotals, counts, wilsonRowTotalsSchedule] using hle
 
+/-- Structural no-extra-unit-mode theorem on the Wilson-induced reduced kernel:
+there is no nontrivial zero-sum eigenmode with eigenvalue `1`. -/
+theorem wilson_no_extra_unit_mode_zero_sum
+    (W : WilsonZ3Action)
+    (alpha : ℝ)
+    (ha : 0 < alpha)
+    (n : ℕ)
+    (v : Fin 3 → ℝ)
+    (hEig : (wilsonReducedKernel W alpha n).mulVec v = (1 : ℝ) • v)
+    (hsum0 : v 0 + v 1 + v 2 = 0)
+    (hvne : v ≠ 0) :
+    False := by
+  have hle :
+      (1 : ℝ) ≤
+        1 - Gutoe.YangMillsStructuralGap.minorizationEps (wilsonRowTotalsSchedule W n) alpha :=
+    reduced_mode_dominates_of_wilson_doeblin
+      W alpha ha n 1 v hEig hsum0 hvne (by norm_num)
+  have heps_pos :
+      0 < Gutoe.YangMillsStructuralGap.minorizationEps (wilsonRowTotalsSchedule W n) alpha := by
+    rw [wilson_minorization_eps_closed_form W alpha n]
+    have hcoordPos : (0 : ℝ) < Gutoe.LatticeGeometry.coordinationNumber := by
+      norm_num [Gutoe.LatticeGeometry.coordination_number_is_6]
+    have hdenPos : 0 < (Gutoe.LatticeGeometry.coordinationNumber : ℝ) + 3 * alpha := by
+      nlinarith
+    exact div_pos (by nlinarith) hdenPos
+  linarith
+
 /-- Full-gap hypotheses where reduced-lane control is given at mode level
 instead of direct ratio-bound assumptions. -/
 structure WilsonCenterFullGapModeHypotheses
@@ -633,6 +660,40 @@ theorem full_gap_positive_all_steps_of_wilson_center_identified_mode
       (h0F := fun _ => rfl)
       (hFullMode := hModeFull)
       n
+
+/-- Unconditional full-state gap certificate on the Wilson/center lane:
+the Doeblin lower bound is strictly positive at every refinement step from
+structural epsilon alone (`alpha > 0`, SC row-total regularity). -/
+theorem full_doeblin_gap_positive_all_steps_of_wilson_center
+    (W : WilsonZ3Action)
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (ha : 0 < alpha)
+    (ha_t_pos : ∀ n, 0 < a_t n) :
+    ∀ n,
+      0 < doeblinGapLowerBound
+        (a_t n)
+        (Gutoe.YangMillsStructuralGap.minorizationEps (wilsonRowTotalsSchedule W n) alpha) := by
+  intro n
+  have heps_pos :
+      0 < Gutoe.YangMillsStructuralGap.minorizationEps (wilsonRowTotalsSchedule W n) alpha := by
+    rw [wilson_minorization_eps_closed_form W alpha n]
+    have hcoordPos : (0 : ℝ) < Gutoe.LatticeGeometry.coordinationNumber := by
+      norm_num [Gutoe.LatticeGeometry.coordination_number_is_6]
+    have hdenPos : 0 < (Gutoe.LatticeGeometry.coordinationNumber : ℝ) + 3 * alpha := by
+      nlinarith
+    exact div_pos (by nlinarith) hdenPos
+  have heps_lt_one :
+      Gutoe.YangMillsStructuralGap.minorizationEps (wilsonRowTotalsSchedule W n) alpha < 1 := by
+    rw [wilson_minorization_eps_closed_form W alpha n]
+    have hdenPos : 0 < (Gutoe.LatticeGeometry.coordinationNumber : ℝ) + 3 * alpha := by
+      nlinarith [show (0 : ℝ) < Gutoe.LatticeGeometry.coordinationNumber by
+        norm_num [Gutoe.LatticeGeometry.coordination_number_is_6]]
+    have hnumLt : 3 * alpha < (Gutoe.LatticeGeometry.coordinationNumber : ℝ) + 3 * alpha := by
+      nlinarith [show (0 : ℝ) < Gutoe.LatticeGeometry.coordinationNumber by
+        norm_num [Gutoe.LatticeGeometry.coordination_number_is_6]]
+    exact (div_lt_one hdenPos).2 hnumLt
+  exact doeblin_bound_positive (ha_t_pos n) heps_pos heps_lt_one
 
 /-- Derive full reduced→full lift obligations from the concrete Wilson/center
 construction plus the remaining spectral hypotheses. -/

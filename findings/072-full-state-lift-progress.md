@@ -105,6 +105,27 @@ reduced-kernel mode (`lambda0 = 1`), strict positivity now follows from one
 mode package (`WilsonReducedModeHypotheses`) plus structural Doeblin control.
 This removes an extra bookkeeping layer in the closure lane.
 
+### 10) Structural no-extra-unit-mode theorem (production kernel family)
+
+- `wilson_no_extra_unit_mode_zero_sum`
+
+This discharges the old "extra unit mode" concern on the Wilson-induced reduced
+kernel itself: for `alpha>0`, no nontrivial zero-sum eigenmode can have
+eigenvalue `1`. The result is purely structural (Doeblin + SC row totals), not
+a numerical certificate.
+
+### 11) Unconditional full-state Doeblin gap certificate
+
+- `full_doeblin_gap_positive_all_steps_of_wilson_center`
+
+This gives a fully structural, zero-assumption positivity certificate per step
+for the Wilson/center lane:
+`doeblinGapLowerBound(a_t n, eps_n) > 0` from only `a_t>0` and `alpha>0`.
+
+Interpretation: even when an explicit real full-mode witness is not yet
+constructed, strict positive full-state gap lower bounds are already proven at
+every refinement step.
+
 ## Cl(1,3) anchor
 
 - `reduced_transfer_basis_dim_eq_three` reuses transfer-basis dimension from
@@ -121,5 +142,5 @@ No `sorry` introduced.
 
 - Discharge full-mode realization constructively on the production kernel family
   (replace `hFullMode` with a structural spectral realization theorem).
-- Tighten "no extra unit mode" from counterexample guard to a structural theorem
-  for the production full-state kernel family.
+- Lift the reduced-kernel no-extra-unit result into the final full-state
+  realization statement without reintroducing spectral assumptions.
