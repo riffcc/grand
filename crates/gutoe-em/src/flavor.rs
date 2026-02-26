@@ -54,6 +54,20 @@ pub struct MixingResiduals {
     pub d_jarlskog: f64,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct MixingEnvelope {
+    pub theta12_min_deg: f64,
+    pub theta12_max_deg: f64,
+    pub theta23_min_deg: f64,
+    pub theta23_max_deg: f64,
+    pub theta13_min_deg: f64,
+    pub theta13_max_deg: f64,
+    pub delta_min_deg: f64,
+    pub delta_max_deg: f64,
+    pub jarlskog_min: f64,
+    pub jarlskog_max: f64,
+}
+
 pub const CKM_TARGET: MixingTargets = MixingTargets {
     theta12_deg: 13.0,
     theta23_deg: 2.4,
@@ -70,6 +84,33 @@ pub const PMNS_TARGET: MixingTargets = MixingTargets {
     // Use a representative center for diagnostics only.
     delta_deg: 197.0,
     jarlskog: -1.0e-2,
+};
+
+// Broad PDG-style CI envelopes for falsification gates.
+pub const CKM_PDG_ENVELOPE: MixingEnvelope = MixingEnvelope {
+    theta12_min_deg: 12.7,
+    theta12_max_deg: 13.3,
+    theta23_min_deg: 2.1,
+    theta23_max_deg: 2.7,
+    theta13_min_deg: 0.16,
+    theta13_max_deg: 0.27,
+    delta_min_deg: 60.0,
+    delta_max_deg: 76.0,
+    jarlskog_min: 2.4e-5,
+    jarlskog_max: 3.8e-5,
+};
+
+pub const PMNS_PDG_ENVELOPE: MixingEnvelope = MixingEnvelope {
+    theta12_min_deg: 30.0,
+    theta12_max_deg: 37.0,
+    theta23_min_deg: 40.0,
+    theta23_max_deg: 56.0,
+    theta13_min_deg: 7.0,
+    theta13_max_deg: 10.5,
+    delta_min_deg: 120.0,
+    delta_max_deg: 320.0,
+    jarlskog_min: -2.0e-2,
+    jarlskog_max: -3.0e-3,
 };
 
 fn jarlskog(s12: f64, s23: f64, s13: f64, delta_rad: f64) -> f64 {
@@ -392,6 +433,50 @@ pub fn residuals(pred: MixingObservables, target: MixingTargets) -> MixingResidu
     }
 }
 
+pub fn within_envelope(obs: MixingObservables, env: MixingEnvelope) -> Result<(), String> {
+    let checks = [
+        (
+            "theta12_deg",
+            obs.theta12_deg,
+            env.theta12_min_deg,
+            env.theta12_max_deg,
+        ),
+        (
+            "theta23_deg",
+            obs.theta23_deg,
+            env.theta23_min_deg,
+            env.theta23_max_deg,
+        ),
+        (
+            "theta13_deg",
+            obs.theta13_deg,
+            env.theta13_min_deg,
+            env.theta13_max_deg,
+        ),
+        (
+            "delta_deg",
+            obs.delta_deg,
+            env.delta_min_deg,
+            env.delta_max_deg,
+        ),
+        (
+            "jarlskog",
+            obs.jarlskog,
+            env.jarlskog_min,
+            env.jarlskog_max,
+        ),
+    ];
+
+    for (label, value, lo, hi) in checks {
+        if value < lo || value > hi {
+            return Err(format!(
+                "{label} out of envelope: value={value:.9}, range=[{lo:.9}, {hi:.9}]"
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -437,5 +522,29 @@ mod tests {
         assert!(pmns.theta12_deg > 25.0);
         assert!(pmns.theta23_deg > 35.0);
         assert!(pmns.theta13_deg > 4.0);
+    }
+
+    #[test]
+    fn ckm_direct_within_pdg_envelope() {
+        let ckm = ckm_from_clifford();
+        within_envelope(ckm, CKM_PDG_ENVELOPE).expect("direct CKM outside PDG envelope");
+    }
+
+    #[test]
+    fn ckm_texture_within_pdg_envelope() {
+        let ckm = ckm_from_textures();
+        within_envelope(ckm, CKM_PDG_ENVELOPE).expect("texture CKM outside PDG envelope");
+    }
+
+    #[test]
+    fn pmns_direct_within_pdg_envelope() {
+        let pmns = pmns_from_clifford();
+        within_envelope(pmns, PMNS_PDG_ENVELOPE).expect("direct PMNS outside PDG envelope");
+    }
+
+    #[test]
+    fn pmns_texture_within_pdg_envelope() {
+        let pmns = pmns_from_textures();
+        within_envelope(pmns, PMNS_PDG_ENVELOPE).expect("texture PMNS outside PDG envelope");
     }
 }

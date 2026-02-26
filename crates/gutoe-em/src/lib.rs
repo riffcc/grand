@@ -26,8 +26,8 @@ pub use config::{
 };
 pub use flavor::{
     ckm_from_clifford, ckm_from_textures, pmns_from_clifford, pmns_from_textures, residuals,
-    MixingObservables, MixingResiduals,
-    MixingTargets, CKM_TARGET, PMNS_TARGET,
+    within_envelope, MixingEnvelope, MixingObservables, MixingResiduals,
+    MixingTargets, CKM_PDG_ENVELOPE, CKM_TARGET, PMNS_PDG_ENVELOPE, PMNS_TARGET,
 };
 pub use gauge::{
     compute_charge_density, em_force_on_lepton, jacobi_poisson, maxwell_wave_step, update_gauge,
