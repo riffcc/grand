@@ -34,6 +34,9 @@ Rust harness additions:
 
 - `crates/gutoe-physics/src/dark_sector.rs`
 - `crates/gutoe-physics/src/bin/dark_matter_report.rs`
+- `crates/gutoe-physics/src/dark_matter_falsification.rs`
+- `crates/gutoe-physics/src/bin/dark_matter_falsification_report.rs`
+- `crates/gutoe-physics/data/sparc_massmodels_2016c_baryon.csv`
 
 Core runtime outputs:
 
@@ -47,6 +50,8 @@ Initial run artifact:
 
 - `/tmp/bh_renders/dark_matter_report.txt`
 - `/tmp/bh_renders/dark_matter_report.json`
+- `/tmp/bh_renders/dark_matter_falsification_report.txt`
+- `/tmp/bh_renders/dark_matter_falsification_report.json`
 
 Current headline from the report:
 
@@ -54,6 +59,10 @@ Current headline from the report:
 - Structural geometric branch gives dark matter fraction `60/71 = 0.84507`
 - Observed matter dark fraction baseline is `~0.84264`
 - Geometric branch delta is `+0.00243` (~0.29% high)
+- SPARC dataset-backed gate (3391 rows):
+  - Particle branch: rotation/lensing pass, CMB fraction fail
+  - Geometric branch: CMB fraction pass, rotation/lensing fail
+  - No branch currently passes all gates simultaneously
 
 ## Why this is real progress
 
@@ -62,6 +71,7 @@ This isolates a structurally defined sector that is:
 1. Z₃-stable
 2. disjoint from the current SM interaction carrier orbits in the finite lane
 3. counted from existing shared primitives only
+4. scored against a real galaxy rotation-curve dataset and explicit falsification windows
 
 No new physics constants were introduced; the geometric amplification is built
 from shared counts `16 - 4 = 12` (total Clifford states minus grade-1 states).
@@ -72,15 +82,17 @@ This is still a **candidate-sector derivation lane**, not yet a closure of
 dark-matter phenomenology.
 Remaining GRAND-346 closure work:
 
-1. Upgrade the report from proxy checks to dataset-backed scoring (rotation/lensing curves).
-2. Tighten the geometric branch by deriving `κ(r)` from the cosmology/metric lane instead of using a report-level proxy.
-3. Replace branch-level density proxies with a dynamical map tied to halo profiles and CMB constraints.
-4. Push branch comparison into a falsification gate with explicit pass/fail thresholds.
+1. Derive radius-dependent `κ(r)` from the Einstein/cosmology lane (no report-level proxy).
+2. Replace constant branch ratios with a structural halo profile map that can satisfy both SPARC and CMB gates.
+3. Add independent lensing datasets (cluster-scale) instead of rotation-derived lensing proxies.
+4. Promote dark-matter scorecard into CI falsification artifacts.
 
 ## Build sanity
 
 - `lake build Gutoe.DarkMatterSector` ✅
 - `lake build Gutoe` ✅
 - `cargo check -p gutoe-physics --bin dark_matter_report` ✅
+- `cargo check -p gutoe-physics --bin dark_matter_falsification_report` ✅
+- `cargo test -p gutoe-physics dark_matter_falsification` ✅
 
 No `sorry` introduced.
