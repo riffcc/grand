@@ -41,6 +41,8 @@ In `YangMillsContinuumSurvival`:
 - `z3CanonicalRowTotalsSchedule`
 - `z3_canonical_schedule_sc_regular`
 - `uniform_eps_floor_of_z3_canonical_schedule`
+- `continuum_hypotheses_of_z3_canonical_schedule`
+- `continuum_survival_gap_nonvanishing_of_z3_canonical_schedule`
 
 ## What is proven
 
@@ -60,7 +62,8 @@ index.
 
 This discharges the previous generic epsilon-floor gap at the theorem level for
 the SC-regular transfer schedule class, and plugs directly into the
-continuum-survival hypothesis package.
+continuum-survival hypothesis package, including a canonical Z3/SC non-vanishing
+mass-gap lower-bound corollary.
 
 The remaining practical bridge is proving the empirical transfer construction
 satisfies `Z3SCLocalRegularCounts` at each refinement step (or is bounded by a

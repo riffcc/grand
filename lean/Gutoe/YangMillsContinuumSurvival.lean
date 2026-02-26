@@ -203,4 +203,39 @@ theorem uniform_eps_floor_of_z3_canonical_schedule
     ha
     (fun _ => z3_canonical_local_counts_regular)
 
+/-- Full continuum-survival hypothesis package specialized to the canonical
+Z₃/SC row-total schedule. -/
+theorem continuum_hypotheses_of_z3_canonical_schedule
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (ha_t_pos : ∀ n, 0 < a_t n)
+    (ha_t_cap : ∃ aCap, 0 < aCap ∧ ∀ n, a_t n ≤ aCap)
+    (ha : 0 < alpha) :
+    ContinuumSurvivalHypotheses a_t
+      (fun n => minorizationEps (z3CanonicalRowTotalsSchedule n) alpha) := by
+  exact continuum_hypotheses_of_sc_regular_schedule
+    a_t
+    z3CanonicalRowTotalsSchedule
+    alpha
+    ha_t_pos
+    ha_t_cap
+    ha
+    z3_canonical_schedule_sc_regular
+
+/-- Canonical Z₃/SC continuum-survival corollary:
+with positive/capped `a_t`, the Doeblin mass-gap lower bound stays uniformly
+strictly positive across all refinements. -/
+theorem continuum_survival_gap_nonvanishing_of_z3_canonical_schedule
+    (a_t : ℕ → ℝ)
+    (alpha : ℝ)
+    (ha_t_pos : ∀ n, 0 < a_t n)
+    (ha_t_cap : ∃ aCap, 0 < aCap ∧ ∀ n, a_t n ≤ aCap)
+    (ha : 0 < alpha) :
+    ∃ c : ℝ, 0 < c ∧
+      ∀ n, c ≤ doeblinGapLowerBound (a_t n) (minorizationEps (z3CanonicalRowTotalsSchedule n) alpha) := by
+  exact continuum_survival_gap_nonvanishing
+    a_t
+    (fun n => minorizationEps (z3CanonicalRowTotalsSchedule n) alpha)
+    (continuum_hypotheses_of_z3_canonical_schedule a_t alpha ha_t_pos ha_t_cap ha)
+
 end Gutoe.YangMillsContinuumSurvival
