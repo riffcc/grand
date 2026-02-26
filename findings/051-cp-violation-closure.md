@@ -43,6 +43,13 @@ From `/tmp/bh_renders/flavor_mix_report.json` + `flavor_ci_gate` output:
 
 All branches pass CP witness thresholds and are outside CP-conserving phase neighborhoods (`0°, 180°` within `±5°`).
 
+## Honesty note on derivation quality
+The texture-diagonalization branch (the load-bearing derivation path) is less precise than the direct closed-form branch:
+- CKM texture keeps angle precision tight but shows larger phase drift (`delta ~ -3.16°` vs target center).
+- PMNS texture carries degree-scale angle/phase drifts (still envelope-safe).
+
+This is expected from the extra approximation layer (matrix texture construction + numerical diagonalization) and identifies the next refinement hotspot: phase fidelity in texture construction, especially `delta`.
+
 ## Lean support
 - `lean/Gutoe/FlavorMixing.lean`
   - `ckm_delta_in_open_pi`
