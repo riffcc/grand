@@ -29,17 +29,24 @@ Conjectural corrected formula:
 where:
 - `13/100` from `Gutoe.EWSBHiggs.higgs_quartic_eq_13_100`
 - `137` from `Gutoe.FineStructure.alpha_inverse_d4`
-- `√2` hypothesized as Lorentz-signature normalization from the Cl(1,3) bivector sector
+- `√2` from the exact structural split factor
+  `sqrt(|grade2| / |emTriplet|) = sqrt(6/3) = sqrt(2)` (proved in Lean)
 - `l_P` shared Planck scale anchor
 
 ## Lean/Rust support added
 - Lean:
   - `lean/Gutoe/CosmologicalConstant.lean`
+  - `lorentzSignatureNormalization`
+  - `lorentz_signature_normalization_eq_sqrt2`
   - `lambdaCosmologicalSignatureCandidate`
+  - `lambdaCosmologicalSignatureFromSplit`
+  - `lambda_signature_from_split_eq_candidate`
   - `lambda_cosmological_signature_candidate_eq`
   - `lambda_cosmological_signature_candidate_pos`
 - Rust:
   - `crates/gutoe-physics/src/constants.rs`
+  - `lambda_cosmological_suppression()`
+  - `lambda_cosmological_structural()`
   - `lambda_cosmological_signature_candidate()`
   - test `test_lambda_cosmological_signature_candidate_is_close_to_observed`
   - `crates/gutoe-physics/src/bin/lambda_cosmological_report.rs` now emits both structural and signature-candidate branches
