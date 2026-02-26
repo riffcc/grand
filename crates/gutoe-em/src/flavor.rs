@@ -124,44 +124,6 @@ fn angles_from_unitary(v: &CMat3) -> (f64, f64, f64) {
     (s12, s23, s13)
 }
 
-fn unitary_from_observables(obs: MixingObservables) -> CMat3 {
-    let s12 = obs.s12;
-    let s23 = obs.s23;
-    let s13 = obs.s13;
-    let c12 = (1.0 - s12 * s12).sqrt();
-    let c23 = (1.0 - s23 * s23).sqrt();
-    let c13 = (1.0 - s13 * s13).sqrt();
-    let eid = Complex64::from_polar(1.0, obs.delta_rad);
-    let e_minus = eid.conj();
-
-    [
-        [
-            Complex64::new(c12 * c13, 0.0),
-            Complex64::new(s12 * c13, 0.0),
-            Complex64::new(s13, 0.0) * e_minus,
-        ],
-        [
-            Complex64::new(-s12 * c23, 0.0) - Complex64::new(c12 * s23 * s13, 0.0) * eid,
-            Complex64::new(c12 * c23, 0.0) - Complex64::new(s12 * s23 * s13, 0.0) * eid,
-            Complex64::new(s23 * c13, 0.0),
-        ],
-        [
-            Complex64::new(s12 * s23, 0.0) - Complex64::new(c12 * c23 * s13, 0.0) * eid,
-            Complex64::new(-c12 * s23, 0.0) - Complex64::new(s12 * c23 * s13, 0.0) * eid,
-            Complex64::new(c23 * c13, 0.0),
-        ],
-    ]
-}
-
-fn hermitian_from_unitary(u: &CMat3, evals: [f64; 3]) -> CMat3 {
-    let d = [
-        [Complex64::new(evals[0], 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0)],
-        [Complex64::new(0.0, 0.0), Complex64::new(evals[1], 0.0), Complex64::new(0.0, 0.0)],
-        [Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(evals[2], 0.0)],
-    ];
-    c_mul(&c_mul(u, &d), &c_conj_transpose(u))
-}
-
 /// Jacobi eigen-decomposition for complex Hermitian 3x3.
 fn jacobi_eigen_hermitian(mut a: CMat3) -> ([f64; 3], CMat3) {
     let mut u = c_identity();
@@ -295,26 +257,61 @@ fn observables_from_unitary(v: &CMat3) -> MixingObservables {
 }
 
 fn ckm_mass_textures_from_clifford() -> (CMat3, CMat3) {
-    let base = ckm_from_clifford();
-    let ud = unitary_from_observables(base);
     let lambda = 1.0 / (CLIFFORD_DIM + SU2_DIM).sqrt();
-    let up_eigs = [lambda.powi(8), lambda.powi(4), 1.0];
-    let down_eigs = [lambda.powi(4), lambda.powi(2), 1.0];
+    let eta = 1.0 / (GRADE1_DIM * GRADE2_DIM); // 1/24
+    let zeta = 1.0 / (CLIFFORD_DIM * AUGMENTED_DIM); // 1/272
+    let phi = PI / 3.0 + (1.0 / LATTICE_SHIFT).atan();
+    let phi2 = phi / 2.0;
 
-    let mu = hermitian_from_unitary(&c_identity(), up_eigs);
-    let md = hermitian_from_unitary(&ud, down_eigs);
+    // Up-sector texture (hierarchical, weakly mixed) from primitive suppressions.
+    let mu12 = Complex64::from_polar(lambda * eta, phi2);
+    let mu23 = Complex64::from_polar(lambda.powi(3), -phi2);
+    let mu13 = Complex64::new(eta * zeta, 0.0);
+    let mu = [
+        [Complex64::new(lambda.powi(2), 0.0), mu12, mu13],
+        [mu12.conj(), Complex64::new(lambda, 0.0), mu23],
+        [mu13.conj(), mu23.conj(), Complex64::new(1.0 + eta, 0.0)],
+    ];
+
+    // Down-sector texture (Cabibbo-dominant) with Z3 phase placements.
+    let md12 = Complex64::from_polar((GRADE1_DIM / (GRADE1_DIM + 1.0)) * lambda, phi2); // 4/5 λ
+    let md23 = Complex64::from_polar(eta, phi);
+    let md13 = Complex64::from_polar(zeta, phi2);
+    let md = [
+        [Complex64::new(lambda, 0.0), md12, md13],
+        [md12.conj(), Complex64::new(1.0 / (1.0 + lambda), 0.0), md23],
+        [md13.conj(), md23.conj(), Complex64::new(2.0, 0.0)],
+    ];
     (mu, md)
 }
 
 fn pmns_mass_textures_from_clifford() -> (CMat3, CMat3) {
-    let base = pmns_from_clifford();
-    let unu = unitary_from_observables(base);
     let eps = 1.0 / LATTICE_SHIFT;
-    let l_eigs = [eps.powi(4), eps.powi(2), 1.0];
-    let nu_eigs = [eps.powi(2), eps, 1.0];
+    let eta = 1.0 / (GRADE1_DIM * GRADE2_DIM); // 1/24
+    let s12 = (GRADE1_DIM / COMPLEMENT_DIM).sqrt();
+    let s23 = (GRADE1_DIM / LATTICE_SHIFT).sqrt();
+    let psi = PI + (1.0 / SU2_DIM).atan();
+    let psi2 = psi / 2.0;
 
-    let ml = hermitian_from_unitary(&c_identity(), l_eigs);
-    let mnu = hermitian_from_unitary(&unu, nu_eigs);
+    // Charged-lepton texture: near-diagonal with tiny complex couplings.
+    let ml12 = Complex64::from_polar(eps * eta, psi2);
+    let ml23 = Complex64::from_polar(eps.powi(2) * eta, -(1.0 / SU2_DIM).atan());
+    let ml13 = Complex64::from_polar(eps.powi(5), psi2);
+    let ml = [
+        [Complex64::new(eps.powi(4), 0.0), ml12, ml13],
+        [ml12.conj(), Complex64::new(eps.powi(3), 0.0), ml23],
+        [ml13.conj(), ml23.conj(), Complex64::new(eps.powi(2), 0.0)],
+    ];
+
+    // Neutrino texture: large off-diagonal couplings drive large PMNS angles.
+    let mnu12 = Complex64::from_polar((SU2_DIM / GRADE1_DIM) * s12, psi2); // 3/4 * sqrt(4/13)
+    let mnu23 = Complex64::from_polar((2.0 / 3.0) * s23, -psi2);
+    let mnu13 = Complex64::from_polar(eps, psi2);
+    let mnu = [
+        [Complex64::new(0.0, 0.0), mnu12, mnu13],
+        [mnu12.conj(), Complex64::new(eps.powi(2), 0.0), mnu23],
+        [mnu13.conj(), mnu23.conj(), Complex64::new(eps, 0.0)],
+    ];
     (ml, mnu)
 }
 

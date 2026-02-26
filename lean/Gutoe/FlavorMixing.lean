@@ -38,6 +38,19 @@ noncomputable def pmnsSin13 : ℝ :=
 noncomputable def pmnsDelta : ℝ :=
   Real.pi + Real.arctan (1 / (magneticTriplet.card : ℝ))
 
+/-- CKM texture coupling `M_d(1,2)` coefficient = `(4/5) * λ` with `λ = 1/√19`. -/
+noncomputable def ckmMd12Coeff : ℝ :=
+  ((Nat.choose 4 1 : ℕ) : ℝ) / (((Nat.choose 4 1) + 1 : ℕ) : ℝ) *
+  (1 / Real.sqrt (((2 ^ 4) + magneticTriplet.card : ℕ) : ℝ))
+
+/-- PMNS texture coupling `M_ν(1,2)` coefficient = `(3/4) * √(4/13)`. -/
+noncomputable def pmnsMnu12Coeff : ℝ :=
+  (magneticTriplet.card : ℝ) / ((Nat.choose 4 1 : ℕ) : ℝ) * pmnsSin12
+
+/-- PMNS texture coupling `M_ν(2,3)` coefficient = `(2/3) * √(4/7)`. -/
+noncomputable def pmnsMnu23Coeff : ℝ :=
+  (2 : ℝ) / (magneticTriplet.card : ℝ) * pmnsSin23
+
 /-- Standard Jarlskog invariant from mixing entries and phase. -/
 noncomputable def jarlskog (s12 s23 s13 δ : ℝ) : ℝ :=
   let c12 := Real.sqrt (1 - s12 ^ 2)
@@ -54,6 +67,20 @@ theorem ckm_structural_values :
   constructor
   · simp [ckmSin23, h10, h20]
   · simp [ckmSin13]
+
+/-- Texture coupling coefficients used by Rust `*_from_textures` path. -/
+theorem texture_coeff_structural_values :
+    ckmMd12Coeff = (4 : ℝ) / 5 * (1 / Real.sqrt 19) ∧
+    pmnsMnu12Coeff = (3 : ℝ) / 4 * Real.sqrt ((4 : ℝ) / 13) ∧
+    pmnsMnu23Coeff = (2 : ℝ) / 3 * Real.sqrt ((4 : ℝ) / 7) := by
+  have hs : magneticTriplet.card = 3 := su2_dim
+  have h10 : (Nat.choose 4 1 : ℕ) = 4 := by native_decide
+  have h20 : (Nat.choose 4 2 : ℕ) = 6 := by native_decide
+  constructor
+  · simp [ckmMd12Coeff, h10, hs]
+  · constructor
+    · simp [pmnsMnu12Coeff, pmnsSin12, h10, hs]
+    · simp [pmnsMnu23Coeff, pmnsSin23, h10, h20, hs]
 
 /-- PMNS structural evaluations from the same Clifford counts. -/
 theorem pmns_structural_values :
