@@ -113,6 +113,10 @@ pub const PMNS_PDG_ENVELOPE: MixingEnvelope = MixingEnvelope {
     jarlskog_max: -3.0e-3,
 };
 
+pub const CKM_CP_J_MIN: f64 = 1.0e-6;
+pub const PMNS_CP_J_MIN: f64 = 1.0e-3;
+pub const CP_PHASE_TOL_DEG: f64 = 5.0;
+
 fn jarlskog(s12: f64, s23: f64, s13: f64, delta_rad: f64) -> f64 {
     let c12 = (1.0 - s12 * s12).sqrt();
     let c23 = (1.0 - s23 * s23).sqrt();
@@ -477,6 +481,37 @@ pub fn within_envelope(obs: MixingObservables, env: MixingEnvelope) -> Result<()
     Ok(())
 }
 
+fn delta_distance_to_cp_conserving_deg(delta_deg: f64) -> f64 {
+    let wrapped = ((delta_deg % 360.0) + 360.0) % 360.0;
+    let d0 = wrapped.min((360.0 - wrapped).abs());
+    let d180 = (wrapped - 180.0).abs();
+    d0.min(d180)
+}
+
+pub fn cp_violation_witness(
+    obs: MixingObservables,
+    j_abs_min: f64,
+    phase_tol_deg: f64,
+) -> Result<(), String> {
+    if obs.jarlskog.abs() <= j_abs_min {
+        return Err(format!(
+            "Jarlskog too small for CPV witness: |J|={:.12e}, min={:.12e}",
+            obs.jarlskog.abs(),
+            j_abs_min
+        ));
+    }
+
+    let dist = delta_distance_to_cp_conserving_deg(obs.delta_deg);
+    if dist <= phase_tol_deg {
+        return Err(format!(
+            "phase too close to CP-conserving branch: delta={:.9} deg, dist={:.9} deg, tol={:.9} deg",
+            obs.delta_deg, dist, phase_tol_deg
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -546,5 +581,33 @@ mod tests {
     fn pmns_texture_within_pdg_envelope() {
         let pmns = pmns_from_textures();
         within_envelope(pmns, PMNS_PDG_ENVELOPE).expect("texture PMNS outside PDG envelope");
+    }
+
+    #[test]
+    fn ckm_direct_has_cpv_witness() {
+        let ckm = ckm_from_clifford();
+        cp_violation_witness(ckm, CKM_CP_J_MIN, CP_PHASE_TOL_DEG)
+            .expect("direct CKM missing CPV witness");
+    }
+
+    #[test]
+    fn ckm_texture_has_cpv_witness() {
+        let ckm = ckm_from_textures();
+        cp_violation_witness(ckm, CKM_CP_J_MIN, CP_PHASE_TOL_DEG)
+            .expect("texture CKM missing CPV witness");
+    }
+
+    #[test]
+    fn pmns_direct_has_cpv_witness() {
+        let pmns = pmns_from_clifford();
+        cp_violation_witness(pmns, PMNS_CP_J_MIN, CP_PHASE_TOL_DEG)
+            .expect("direct PMNS missing CPV witness");
+    }
+
+    #[test]
+    fn pmns_texture_has_cpv_witness() {
+        let pmns = pmns_from_textures();
+        cp_violation_witness(pmns, PMNS_CP_J_MIN, CP_PHASE_TOL_DEG)
+            .expect("texture PMNS missing CPV witness");
     }
 }

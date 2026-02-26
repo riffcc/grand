@@ -4,15 +4,22 @@
 //! fixed PDG envelope bands.
 
 use gutoe_em::{
-    ckm_from_clifford, ckm_from_textures, pmns_from_clifford, pmns_from_textures,
-    within_envelope, MixingEnvelope, MixingObservables, CKM_PDG_ENVELOPE, PMNS_PDG_ENVELOPE,
+    ckm_from_clifford, ckm_from_textures, cp_violation_witness, pmns_from_clifford,
+    pmns_from_textures, within_envelope, MixingEnvelope, MixingObservables, CP_PHASE_TOL_DEG,
+    CKM_CP_J_MIN, CKM_PDG_ENVELOPE, PMNS_CP_J_MIN, PMNS_PDG_ENVELOPE,
 };
 use std::fs::{self, File};
 use std::io::Write;
 use std::process;
 
-fn status_line(label: &str, obs: MixingObservables, env: MixingEnvelope) -> Result<String, String> {
+fn status_line(
+    label: &str,
+    obs: MixingObservables,
+    env: MixingEnvelope,
+    cp_j_min: f64,
+) -> Result<String, String> {
     within_envelope(obs, env)?;
+    cp_violation_witness(obs, cp_j_min, CP_PHASE_TOL_DEG)?;
     Ok(format!(
         "{label}: pass (θ12={:.3}°, θ23={:.3}°, θ13={:.3}°, δ={:.3}°, J={:.3e})",
         obs.theta12_deg, obs.theta23_deg, obs.theta13_deg, obs.delta_deg, obs.jarlskog
@@ -28,22 +35,27 @@ fn main() {
     let checks = [
         (
             "ckm_direct",
-            status_line("ckm_direct", ckm_direct, CKM_PDG_ENVELOPE),
+            status_line("ckm_direct", ckm_direct, CKM_PDG_ENVELOPE, CKM_CP_J_MIN),
             ckm_direct,
         ),
         (
             "ckm_texture",
-            status_line("ckm_texture", ckm_texture, CKM_PDG_ENVELOPE),
+            status_line("ckm_texture", ckm_texture, CKM_PDG_ENVELOPE, CKM_CP_J_MIN),
             ckm_texture,
         ),
         (
             "pmns_direct",
-            status_line("pmns_direct", pmns_direct, PMNS_PDG_ENVELOPE),
+            status_line("pmns_direct", pmns_direct, PMNS_PDG_ENVELOPE, PMNS_CP_J_MIN),
             pmns_direct,
         ),
         (
             "pmns_texture",
-            status_line("pmns_texture", pmns_texture, PMNS_PDG_ENVELOPE),
+            status_line(
+                "pmns_texture",
+                pmns_texture,
+                PMNS_PDG_ENVELOPE,
+                PMNS_CP_J_MIN,
+            ),
             pmns_texture,
         ),
     ];
