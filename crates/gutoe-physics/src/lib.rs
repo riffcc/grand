@@ -39,6 +39,7 @@ pub mod multi_zone;
 pub mod spectral_synthesis;
 pub mod star_catalog;
 pub mod nuclear_chart;
+pub mod mass_gap;
 
 pub use equations::*;
 pub use constants::*;
@@ -54,3 +55,4 @@ pub use multi_zone::*;
 pub use spectral_synthesis::*;
 pub use star_catalog::*;
 pub use nuclear_chart::*;
+pub use mass_gap::*;
