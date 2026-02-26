@@ -8,6 +8,8 @@ use crate::{SingleZoneBurn, Species, ZoneState};
 pub struct MultiZoneConfig {
     pub diffusion_coeff: f64,
     pub zone_temperatures_t9: Vec<f64>,
+    /// Relative reaction-rate scale per zone (e.g., density^2 weighting).
+    pub zone_rate_scales: Vec<f64>,
 }
 
 impl Default for MultiZoneConfig {
@@ -15,6 +17,7 @@ impl Default for MultiZoneConfig {
         Self {
             diffusion_coeff: 1.0e-10,
             zone_temperatures_t9: vec![0.04, 0.03, 0.02],
+            zone_rate_scales: vec![1.0, 1.0, 1.0],
         }
     }
 }
@@ -49,7 +52,15 @@ impl MultiZoneBurn {
                 .copied()
                 .or_else(|| self.cfg.zone_temperatures_t9.last().copied())
                 .unwrap_or(0.02);
-            self.core.step(z, t9, dt);
+            let rate_scale = self
+                .cfg
+                .zone_rate_scales
+                .get(i)
+                .copied()
+                .or_else(|| self.cfg.zone_rate_scales.last().copied())
+                .unwrap_or(1.0)
+                .max(0.0);
+            self.core.step(z, t9, dt * rate_scale);
         }
         self.mix_adjacent(zones, dt);
     }

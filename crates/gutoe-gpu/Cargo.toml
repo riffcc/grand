@@ -35,6 +35,10 @@ path = "src/bin/bh_render.rs"
 name = "bh_kerr_report"
 path = "src/bin/bh_kerr_report.rs"
 
+[[bin]]
+name = "fusion_viewer"
+path = "src/bin/fusion_viewer.rs"
+
 [features]
 default = []
 cuda  = []   # NVIDIA CUDA: compile kernels with nvcc

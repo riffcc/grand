@@ -138,34 +138,45 @@ fn hash31(p: vec3<f32>) -> f32 {
     return fract((q.x + q.y) * q.z);
 }
 
-fn local_star_volume(cam: vec3<f32>, dir: vec3<f32>, depth: f32, scale: f32) -> vec3<f32> {
-    let p = (cam + dir * depth) * scale;
-    let cell = floor(p);
-    let local = fract(p) - vec3(0.5);
-    let gate = hash31(cell + vec3(depth * 0.13, depth * 0.07, depth * 0.19));
-    if gate > 0.050 {
-        return vec3(0.0);
+fn local_star_volume(cam: vec3<f32>, dir: vec3<f32>, depth: f32, scale: f32, quality: f32) -> vec3<f32> {
+    let steps = select(select(6u, 10u, quality >= 1.0), 14u, quality >= 1.5);
+    let star_prob = mix(0.0018, 0.0030, clamp(quality / 2.0, 0.0, 1.0));
+    var c = vec3(0.0);
+    let inv = 1.0 / max(f32(steps), 1.0);
+    for (var i = 0u; i < 20u; i++) {
+        if (i >= steps) {
+            break;
+        }
+        let t = (f32(i) + 0.5) * depth * inv;
+        let p = (cam + dir * t) * scale;
+        let cell = floor(p);
+        let local = fract(p) - vec3(0.5);
+        let gate = hash31(cell + vec3(17.0 + f32(i) * 3.7, 31.0, 47.0));
+        if gate > star_prob {
+            continue;
+        }
+        let center = vec3(
+            hash31(cell + vec3(1.3, 2.1, 3.7)),
+            hash31(cell + vec3(4.1, 5.9, 6.8)),
+            hash31(cell + vec3(7.2, 8.6, 9.4))
+        ) - vec3(0.5);
+        let d = local - center;
+        let r2 = dot(d, d);
+        let psf = exp(-r2 * 52.0);
+        let temp = hash31(cell + vec3(0.9, 1.1, 1.7));
+        let star_col = select(
+            select(
+                select(vec3(1.00, 0.62, 0.35), vec3(1.00, 0.92, 0.78), temp > 0.20),
+                vec3(1.00, 1.00, 1.00),
+                temp > 0.45
+            ),
+            vec3(0.78, 0.86, 1.00),
+            temp > 0.75
+        );
+        let bright = (0.06 + 0.34 * pow(hash31(cell + vec3(3.9, 2.7, 1.5)), 2.0)) * (1.0 + 0.35 * quality);
+        c += star_col * bright * psf * inv * 2.4;
     }
-    let center = vec3(
-        hash31(cell + vec3(1.3, 2.1, 3.7)),
-        hash31(cell + vec3(4.1, 5.9, 6.8)),
-        hash31(cell + vec3(7.2, 8.6, 9.4))
-    ) - vec3(0.5);
-    let d = local - center;
-    let r2 = dot(d, d);
-    let psf = exp(-r2 * 34.0);
-    let temp = hash31(cell + vec3(0.9, 1.1, 1.7));
-    let star_col = select(
-        select(
-            select(vec3(1.00, 0.62, 0.35), vec3(1.00, 0.92, 0.78), temp > 0.20),
-            vec3(1.00, 1.00, 1.00),
-            temp > 0.45
-        ),
-        vec3(0.78, 0.86, 1.00),
-        temp > 0.75
-    );
-    let bright = 0.08 + 0.30 * pow(hash31(cell + vec3(3.9, 2.7, 1.5)), 2.0);
-    return star_col * bright * psf;
+    return c;
 }
 
 // ── Star field ────────────────────────────────────────────────────────────────
@@ -274,15 +285,18 @@ fn starfield_from_dir(dir_in: vec3<f32>) -> vec3<f32> {
     let map_mix = 0.88 * clamp(map_sample.a, 0.0, 1.0);
     col = mix(col, map_col, map_mix);
 
-    // Local 3D stellar volume shells: introduces real camera-position parallax
-    // for nearby stars while keeping far-field catalog/procedural sky intact.
-    let cam = vec3(P.cam_x, P.cam_y, P.cam_z);
-    col += local_star_volume(cam, dir, 18.0 * max(P.r_s, 1.0), 0.22);
-    if (P.local_stars > 0.5 && P.quality_tier >= 1.0) {
-        col += local_star_volume(cam, dir, 36.0 * max(P.r_s, 1.0), 0.14);
-    }
-    if (P.local_stars > 0.5 && P.quality_tier >= 1.5) {
-        col += local_star_volume(cam, dir, 72.0 * max(P.r_s, 1.0), 0.09);
+    // Local 3D stellar volume shells: introduces coherent camera parallax for
+    // nearby stars while preserving the far-field map/procedural sky.
+    if (P.local_stars > 0.5) {
+        let cam = vec3(P.cam_x, P.cam_y, P.cam_z);
+        let rs = max(P.r_s, 1.0);
+        col += local_star_volume(cam, dir, 24.0 * rs, 0.20, P.quality_tier) * 0.16;
+        if (P.quality_tier >= 1.0) {
+            col += local_star_volume(cam, dir, 52.0 * rs, 0.12, P.quality_tier) * 0.10;
+        }
+        if (P.quality_tier >= 1.5) {
+            col += local_star_volume(cam, dir, 96.0 * rs, 0.08, P.quality_tier) * 0.06;
+        }
     }
     return col;
 }
@@ -537,8 +551,12 @@ fn trace_true3d(sx: f32, sy: f32) -> TraceHit3D {
     return TraceHit3D(vec4(0.0, 0.0, 0.0, 0.0), ray);
 }
 
-fn kerr_mass(r_s: f32) -> f32 { 0.5 * r_s }
-fn kerr_a(r_s: f32, a_star: f32) -> f32 { a_star * kerr_mass(r_s) }
+fn kerr_mass(r_s: f32) -> f32 {
+    return 0.5 * r_s;
+}
+fn kerr_a(r_s: f32, a_star: f32) -> f32 {
+    return a_star * kerr_mass(r_s);
+}
 fn kerr_sigma(r: f32, th: f32, a: f32) -> f32 {
     let c = cos(th);
     r * r + a * a * c * c
@@ -832,30 +850,50 @@ fn riaf_volume_color(sx_raw: f32, sy_raw: f32, bg_stars: vec3<f32>) -> vec3<f32>
     let sx = cos(P.az) * sx_raw - sin(P.az) * sy_raw;
     let sy = sin(P.az) * sx_raw + cos(P.az) * sy_raw;
     let b = sqrt(sx * sx + (sy * P.sin_inc) * (sy * P.sin_inc));
-    let r_eff = sqrt(b * b + P.r_c * P.r_c);
     let r_s = max(P.r_s, 1e-6);
-
-    // Broad torus-like envelope around a few Schwarzschild radii.
-    let r_peak = 6.0 * r_s;
-    let r_width = 7.0 * r_s;
-    let radial_env = exp(-pow((r_eff - r_peak) / max(r_width, 1e-6), 2.0));
-
-    // Give the flow finite scale height (thick RIAF, not a razor-thin plane).
+    let q = clamp(P.quality_tier, 0.0, 2.0);
+    let steps = select(select(6u, 10u, q >= 1.0), 14u, q >= 1.5);
+    let u_max = select(select(16.0 * r_s, 24.0 * r_s, q >= 1.0), 32.0 * r_s, q >= 1.5);
     let h = 0.45 + 0.35 * (1.0 - P.sin_inc);
-    let vertical_env = exp(-pow(sy / max(h * r_s, 1e-6), 2.0));
+    var i_obs = vec3(0.0);
+    var trans = 1.0;
+    for (var i = 0u; i < 20u; i++) {
+        if (i >= steps) {
+            break;
+        }
+        let fu = (f32(i) + 0.5) / max(f32(steps), 1.0);
+        let u = mix(-u_max, u_max, fu);
+        let r_eff = sqrt(b * b + u * u + P.r_c * P.r_c);
 
-    let transfer = pow(max(disk_transfer_factor(max(r_eff, 3.0 * r_s), r_s, sx, P.sin_inc), 1e-9), 0.6);
-    let source = max(0.28 * radial_env * vertical_env * transfer, 0.0);
-    let tau = max(P.tau_scale, 0.0) * 0.24 * radial_env * (0.5 + 0.5 * vertical_env);
-    let trans = clamp(exp(-tau), 0.0, 1.0);
+        let r_peak = 6.0 * r_s;
+        let r_width = 7.2 * r_s;
+        let radial_env = exp(-pow((r_eff - r_peak) / max(r_width, 1e-6), 2.0));
+        let z_los = sy + 0.17 * u * (1.0 - P.sin_inc);
+        let vertical_env = exp(-pow(z_los / max(h * r_s, 1e-6), 2.0));
+        let turb = 0.78 + 0.22 * hash31(vec3(floor(vec2(sx, sy) * 11.0), f32(i) * 3.7));
+        let transfer = pow(max(disk_transfer_factor(max(r_eff, 3.0 * r_s), r_s, sx, P.sin_inc), 1e-9), 0.58);
+        let source = max(0.30 * radial_env * vertical_env * transfer * turb, 0.0);
+        let bmap = source / (1.0 + source);
+        let glow = vec3(
+            clamp(pow(bmap, 0.38), 0.0, 1.0),
+            clamp((220.0 / 255.0) * pow(bmap, 0.62), 0.0, 1.0),
+            clamp((120.0 / 255.0) * pow(bmap, 1.55), 0.0, 1.0)
+        );
 
-    let bmap = source / (1.0 + source);
-    let glow = vec3(
-        clamp(pow(bmap, 0.38), 0.0, 1.0),
-        clamp((220.0 / 255.0) * pow(bmap, 0.62), 0.0, 1.0),
-        clamp((120.0 / 255.0) * pow(bmap, 1.55), 0.0, 1.0)
-    );
-    return mix(glow, bg_stars, trans);
+        let path = u_max / max(f32(steps) * r_s, 1e-6);
+        let tau_seg = max(P.tau_scale, 0.0)
+            * (0.12 + 0.10 * radial_env)
+            * radial_env
+            * (0.45 + 0.55 * vertical_env)
+            * path;
+        let e = clamp(exp(-max(tau_seg, 0.0)), 0.0, 1.0);
+        i_obs = i_obs * e + glow * (1.0 - e);
+        trans *= e;
+        if trans < 0.02 {
+            break;
+        }
+    }
+    return mix(i_obs, bg_stars, clamp(trans, 0.0, 1.0));
 }
 
 // ── Vertex / Fragment ─────────────────────────────────────────────────────────
