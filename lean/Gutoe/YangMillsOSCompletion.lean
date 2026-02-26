@@ -120,16 +120,61 @@ noncomputable def osScalarTransferOnCompletion
     OSCauchyCompletion K → OSCauchyCompletion K :=
   UniformSpace.Completion.map (osScalarTransfer K h t)
 
+/-- Scalar transfer intertwines with the quotient-to-range realization. -/
+theorem osQuotToRangeHilbert_scalar_transfer
+    (K : Matrix (Fin 3) (Fin 3) ℝ)
+    (h t : ℝ)
+    (x : OSHilbertQuot K) :
+    osQuotToRangeHilbert K (osScalarTransfer K h t x) =
+      (Real.exp (-h * t)) • osQuotToRangeHilbert K x := by
+  refine Quotient.inductionOn x ?_
+  intro f
+  apply Subtype.ext
+  ext i
+  simp [osQuotToRangeHilbert, osScalarTransfer, kernelImageHilbert, vecToHilbert,
+    Matrix.mulVec_smul]
+
+/-- Scalar transfer on the quotient carrier is uniformly continuous. -/
+theorem osScalarTransfer_uniformContinuous
+    (K : Matrix (Fin 3) (Fin 3) ℝ)
+    (h t : ℝ) :
+    UniformContinuous (osScalarTransfer K h t) := by
+  let c : ℝ := Real.exp (-h * t)
+  have hLip : LipschitzWith (Real.toNNReal |c|) (osScalarTransfer K h t) := by
+    refine LipschitzWith.of_dist_le_mul ?_
+    intro x y
+    change
+      dist (osQuotToRangeHilbert K (osScalarTransfer K h t x))
+        (osQuotToRangeHilbert K (osScalarTransfer K h t y))
+        ≤ (Real.toNNReal |c| : ℝ) *
+          dist (osQuotToRangeHilbert K x) (osQuotToRangeHilbert K y)
+    have hEq :
+        dist (osQuotToRangeHilbert K (osScalarTransfer K h t x))
+            (osQuotToRangeHilbert K (osScalarTransfer K h t y))
+          = (Real.toNNReal |c| : ℝ) *
+              dist (osQuotToRangeHilbert K x) (osQuotToRangeHilbert K y) := by
+      calc
+        dist (osQuotToRangeHilbert K (osScalarTransfer K h t x))
+            (osQuotToRangeHilbert K (osScalarTransfer K h t y))
+            = dist (c • osQuotToRangeHilbert K x) (c • osQuotToRangeHilbert K y) := by
+              simp [c, osQuotToRangeHilbert_scalar_transfer]
+        _ = ‖c‖ * dist (osQuotToRangeHilbert K x) (osQuotToRangeHilbert K y) := by
+              simpa using dist_smul₀ c (osQuotToRangeHilbert K x) (osQuotToRangeHilbert K y)
+        _ = (Real.toNNReal |c| : ℝ) *
+              dist (osQuotToRangeHilbert K x) (osQuotToRangeHilbert K y) := by
+              simp [Real.norm_eq_abs]
+    exact hEq.le
+  exact hLip.uniformContinuous
+
 /-- At fixed time `t`, the completion transfer extends the quotient transfer. -/
 theorem osScalarTransferOnCompletion_extends
     (K : Matrix (Fin 3) (Fin 3) ℝ)
     (h t : ℝ)
-    (huc : UniformContinuous (osScalarTransfer K h t))
     (x : OSHilbertQuot K) :
     osScalarTransferOnCompletion K h t (x : OSCauchyCompletion K) =
       (osScalarTransfer K h t x : OSCauchyCompletion K) := by
   simpa [osScalarTransferOnCompletion] using
-    UniformSpace.Completion.map_coe (hf := huc) x
+    UniformSpace.Completion.map_coe (hf := osScalarTransfer_uniformContinuous K h t) x
 
 /-- Scalar transfer semigroup operator on the Hilbert realization. -/
 noncomputable def scalarSemigroupOp (h : ℝ) (t : ℝ) :

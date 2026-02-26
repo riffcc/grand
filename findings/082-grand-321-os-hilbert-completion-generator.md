@@ -1,7 +1,7 @@
 # Finding 082: GRAND-321 OS Hilbert Completion + Self-Adjoint Generator
 
 Date: 2026-02-26
-Status: GRAND-321 in progress
+Status: GRAND-321 in progress (UC completion-lift obligation discharged)
 
 ## Goal
 
@@ -68,12 +68,16 @@ intertwining theorem for the scalar transfer family.
 This threads the existing hard-mode nonvanishing gap floor into the generator
 lane as a strict positive lower bound.
 
-## Honest boundary
+## Obligation discharge
 
-`osScalarTransferOnCompletion_extends` needs the explicit
-`UniformContinuous (osScalarTransfer ...)` witness at fixed `t`.
-This is now isolated as a single analysis obligation rather than spread through
-the chain.
+The final analysis obligation on the completion-lift lane is now discharged:
+
+- `osQuotToRangeHilbert_scalar_transfer`
+- `osScalarTransfer_uniformContinuous`
+
+`osScalarTransferOnCompletion_extends` no longer takes an external
+`UniformContinuous` hypothesis; the witness is derived internally via a
+Lipschitz bound on the induced quotient pseudometric.
 
 ## Build sanity
 
