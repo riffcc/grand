@@ -9,8 +9,12 @@
  */
 
 use crate::constants::{
-    C, G, DARK_TO_VISIBLE_COUNT_RATIO, DARK_TO_VISIBLE_GEOMETRIC_RATIO, LAMBDA_QG,
+    C, G, DARK_TO_VISIBLE_COUNT_RATIO, DARK_TO_VISIBLE_GEOMETRIC_RATIO, LAMBDA_COSMOLOGICAL,
+    LAMBDA_QG, PLANCK_LENGTH,
 };
+
+/// Unit conversion.
+pub const METER_PER_KPC: f64 = 3.085_677_581_491_367e19;
 
 /// Dark-sector modeling branch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,12 +30,53 @@ pub fn dark_density_particle(visible_density: f64) -> f64 {
 
 /// Curvature proxy from the lattice correction scale.
 ///
-/// κ(r) = 1 + λ_QG (r_core / r)^2, clamped to nonnegative inputs.
-pub fn curvature_proxy(r: f64, r_core: f64) -> f64 {
-    if r <= 0.0 || r_core <= 0.0 {
+/// ρ_Λ = Λ c² / (8πG).
+pub fn vacuum_energy_density_from_lambda(lambda: f64) -> Option<f64> {
+    if lambda < 0.0 {
+        return None;
+    }
+    Some(lambda * C * C / (8.0 * std::f64::consts::PI * G))
+}
+
+/// Structural vacuum-energy density from the derived cosmological term.
+pub fn vacuum_energy_density_structural() -> f64 {
+    vacuum_energy_density_from_lambda(LAMBDA_COSMOLOGICAL).unwrap_or(0.0)
+}
+
+/// Baryonic density estimate from circular velocity and radius:
+/// M(r) = v²r/G and ρ = 3M/(4πr³) = 3v²/(4πGr²).
+pub fn baryon_density_from_rotation(v_baryon_kms: f64, radius_kpc: f64) -> Option<f64> {
+    if v_baryon_kms <= 0.0 || radius_kpc <= 0.0 {
+        return None;
+    }
+    let v = v_baryon_kms * 1.0e3;
+    let r = radius_kpc * METER_PER_KPC;
+    Some(3.0 * v * v / (4.0 * std::f64::consts::PI * G * r * r))
+}
+
+/// Curvature amplification derived from modified Einstein + cosmology terms:
+///
+/// κ(r) = (1 + λ_QG (l_P/r)^2) * (1 + ρ_Λ / ρ_visible(r))
+///
+/// where ρ_Λ = Λ c² /(8πG). This replaces the report-level ad hoc proxy.
+pub fn curvature_factor_from_einstein_cosmology(rho_visible: f64, radius_m: f64) -> f64 {
+    if rho_visible <= 0.0 || radius_m <= 0.0 {
         return 1.0;
     }
-    1.0 + LAMBDA_QG * (r_core / r).powi(2)
+    let rho_lambda = vacuum_energy_density_structural();
+    let uv = 1.0 + LAMBDA_QG * (PLANCK_LENGTH / radius_m).powi(2);
+    let source = 1.0 + rho_lambda / rho_visible;
+    uv * source
+}
+
+/// Row-wise κ(r) from baryonic rotation decomposition.
+pub fn curvature_factor_from_rotation(v_baryon_kms: f64, radius_kpc: f64) -> f64 {
+    let rho_visible = match baryon_density_from_rotation(v_baryon_kms, radius_kpc) {
+        Some(v) if v > 0.0 => v,
+        _ => return 1.0,
+    };
+    let radius_m = radius_kpc * METER_PER_KPC;
+    curvature_factor_from_einstein_cosmology(rho_visible, radius_m)
 }
 
 /// Geometric-branch effective dark density from structural amplification

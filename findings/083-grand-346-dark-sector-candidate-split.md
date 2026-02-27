@@ -45,6 +45,9 @@ Core runtime outputs:
 - rotation/lensing proxies from enclosed mass
 - CMB-era matter-fraction consistency report from structural ratio
 - geometric branch using structural amplification from shared Cl(1,3) counts
+- `κ(r)` now derived from Einstein/cosmology source terms:
+  - `κ(r) = (1 + λ_QG (l_P/r)^2) * (1 + ρ_Λ/ρ_visible(r))`
+  - `ρ_Λ = Λ c²/(8πG)`
 
 Initial run artifact:
 
@@ -63,6 +66,8 @@ Current headline from the report:
   - Particle branch: rotation/lensing pass, CMB fraction fail
   - Geometric branch: CMB fraction pass, rotation/lensing fail
   - No branch currently passes all gates simultaneously
+- Einstein/cosmology-derived `κ(r)` is now wired end-to-end in report + gate
+  (numerically close to unity at galaxy scales, as expected from source-term ratios).
 
 ## Why this is real progress
 
@@ -82,10 +87,9 @@ This is still a **candidate-sector derivation lane**, not yet a closure of
 dark-matter phenomenology.
 Remaining GRAND-346 closure work:
 
-1. Derive radius-dependent `κ(r)` from the Einstein/cosmology lane (no report-level proxy).
-2. Replace constant branch ratios with a structural halo profile map that can satisfy both SPARC and CMB gates.
-3. Add independent lensing datasets (cluster-scale) instead of rotation-derived lensing proxies.
-4. Promote dark-matter scorecard into CI falsification artifacts.
+1. Replace constant branch ratios with a structural halo profile map that can satisfy both SPARC and CMB gates.
+2. Add independent lensing datasets (cluster-scale) instead of rotation-derived lensing proxies.
+3. Promote dark-matter scorecard into CI falsification artifacts.
 
 ## Build sanity
 

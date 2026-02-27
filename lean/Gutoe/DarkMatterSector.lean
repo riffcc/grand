@@ -14,12 +14,14 @@
 import Mathlib
 import Gutoe.GaugeGroupSM
 import Gutoe.Z3Uniqueness
+import Gutoe.GravityMetric
 
 namespace Gutoe.DarkMatterSector
 
 open Gutoe.DimensionalStructure
 open Gutoe.GaugeGroupSM
 open Gutoe.Z3Uniqueness
+open Gutoe.GravityMetric
 
 /-- Low-grade Z₃ singlet pair used in the visible lane (`scalar + lepton`). -/
 def lowSingletPair : Finset ℕ := {1, 2}
@@ -167,5 +169,64 @@ theorem total_density_nonneg
   have hdark : 0 ≤ effectiveDarkDensityQ rhoVisible :=
     effective_dark_density_nonneg hρ
   linarith
+
+/-- Vacuum-source curvature factor from Einstein source-term split:
+    `1 + ρ_Λ / ρ_visible`. -/
+noncomputable def vacuumCurvatureBoost (rhoVisible rhoVacuum : ℝ) : ℝ :=
+  1 + rhoVacuum / rhoVisible
+
+/-- UV curvature factor from the shared lattice correction:
+    `1 + λ_QG (l_P / r)^2`. -/
+noncomputable def uvCurvatureBoost (lP r : ℝ) : ℝ :=
+  1 + lambda_qg * (lP / r) ^ 2
+
+/-- Derived Einstein/cosmology curvature factor used by GRAND-346:
+    `κ(r) = uv * vacuum-source`. -/
+noncomputable def einsteinCosmologyKappa (rhoVisible rhoVacuum lP r : ℝ) : ℝ :=
+  uvCurvatureBoost lP r * vacuumCurvatureBoost rhoVisible rhoVacuum
+
+/-- The vacuum-source factor is ≥ 1 when visible density is positive and vacuum
+    density is nonnegative. -/
+theorem vacuum_curvature_boost_ge_one
+    {rhoVisible rhoVacuum : ℝ}
+    (hVis : 0 < rhoVisible)
+    (hVac : 0 ≤ rhoVacuum) :
+    1 ≤ vacuumCurvatureBoost rhoVisible rhoVacuum := by
+  unfold vacuumCurvatureBoost
+  have hdiv : 0 ≤ rhoVacuum / rhoVisible := by
+    exact div_nonneg hVac (le_of_lt hVis)
+  linarith
+
+/-- The UV factor is ≥ 1 away from `r = 0`. -/
+theorem uv_curvature_boost_ge_one
+    {lP r : ℝ}
+    (hr : r ≠ 0) :
+    1 ≤ uvCurvatureBoost lP r := by
+  have _hr := hr
+  unfold uvCurvatureBoost
+  have hLam : 0 ≤ lambda_qg := le_of_lt lambda_qg_pos
+  have hsq : 0 ≤ (lP / r) ^ 2 := sq_nonneg (lP / r)
+  have hprod : 0 ≤ lambda_qg * (lP / r) ^ 2 := mul_nonneg hLam hsq
+  linarith
+
+/-- The combined Einstein/cosmology curvature factor is ≥ 1 under the physical
+    positivity assumptions. -/
+theorem einstein_cosmology_kappa_ge_one
+    {rhoVisible rhoVacuum lP r : ℝ}
+    (hVis : 0 < rhoVisible)
+    (hVac : 0 ≤ rhoVacuum)
+    (hr : r ≠ 0) :
+    1 ≤ einsteinCosmologyKappa rhoVisible rhoVacuum lP r := by
+  unfold einsteinCosmologyKappa
+  have huv : 1 ≤ uvCurvatureBoost lP r := uv_curvature_boost_ge_one hr
+  have hvac : 1 ≤ vacuumCurvatureBoost rhoVisible rhoVacuum :=
+    vacuum_curvature_boost_ge_one hVis hVac
+  have huv_nonneg : 0 ≤ uvCurvatureBoost lP r := by linarith
+  have hone_nonneg : 0 ≤ (1 : ℝ) := by norm_num
+  calc
+    1 = 1 * 1 := by ring
+    _ ≤ uvCurvatureBoost lP r * vacuumCurvatureBoost rhoVisible rhoVacuum := by
+      exact mul_le_mul huv hvac hone_nonneg huv_nonneg
+    _ = einsteinCosmologyKappa rhoVisible rhoVacuum lP r := by rfl
 
 end Gutoe.DarkMatterSector

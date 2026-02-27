@@ -5,7 +5,7 @@ use gutoe_physics::constants::{
     DARK_GEOMETRIC_AMPLIFICATION, DARK_TO_VISIBLE_COUNT_RATIO, DARK_TO_VISIBLE_GEOMETRIC_RATIO,
 };
 use gutoe_physics::dark_sector::{
-    circular_velocity, curvature_proxy, dark_density, enclosed_mass_constant_density,
+    circular_velocity, curvature_factor_from_einstein_cosmology, dark_density, enclosed_mass_constant_density,
     lensing_deflection, DarkSectorBranch,
 };
 use std::fs::{self, File};
@@ -25,10 +25,9 @@ fn env_f64(name: &str, default: f64) -> f64 {
 fn main() {
     let rho_visible = env_f64("GUTOE_DM_RHO_VISIBLE", 1.0e-21);
     let radius = env_f64("GUTOE_DM_RADIUS_M", 3.0e20);
-    let r_core = env_f64("GUTOE_DM_R_CORE_M", 5.0e19);
     let impact = env_f64("GUTOE_DM_IMPACT_M", 3.0e20);
 
-    let kappa = curvature_proxy(radius, r_core);
+    let kappa = curvature_factor_from_einstein_cosmology(rho_visible, radius);
     let rho_dark_particle = dark_density(DarkSectorBranch::Particle, rho_visible, 1.0);
     let rho_dark_geometric = dark_density(DarkSectorBranch::Geometric, rho_visible, kappa);
 
@@ -72,9 +71,8 @@ fn main() {
     writeln!(txt, "[inputs]").expect("write");
     writeln!(txt, "rho_visible = {:.6e} kg/m^3", rho_visible).expect("write");
     writeln!(txt, "radius = {:.6e} m", radius).expect("write");
-    writeln!(txt, "r_core = {:.6e} m", r_core).expect("write");
     writeln!(txt, "impact = {:.6e} m", impact).expect("write");
-    writeln!(txt, "curvature_proxy = {:.9}", kappa).expect("write");
+    writeln!(txt, "kappa_einstein_cosmology = {:.9}", kappa).expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[branch_densities]").expect("write");
     writeln!(txt, "rho_dark_particle = {:.6e}", rho_dark_particle).expect("write");
@@ -140,8 +138,8 @@ fn main() {
     .expect("write");
     writeln!(
         json,
-        "  \"inputs\": {{\"rho_visible\": {:.12e}, \"radius_m\": {:.12e}, \"r_core_m\": {:.12e}, \"impact_m\": {:.12e}, \"curvature_proxy\": {:.12}}},",
-        rho_visible, radius, r_core, impact, kappa
+        "  \"inputs\": {{\"rho_visible\": {:.12e}, \"radius_m\": {:.12e}, \"impact_m\": {:.12e}, \"kappa_einstein_cosmology\": {:.12}}},",
+        rho_visible, radius, impact, kappa
     )
     .expect("write");
     writeln!(

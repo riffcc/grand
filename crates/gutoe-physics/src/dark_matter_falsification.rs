@@ -8,7 +8,7 @@
  */
 
 use crate::constants::{C, DARK_TO_VISIBLE_COUNT_RATIO, DARK_TO_VISIBLE_GEOMETRIC_RATIO};
-use crate::dark_sector::DarkSectorBranch;
+use crate::dark_sector::{curvature_factor_from_rotation, DarkSectorBranch};
 
 /// Observed baryon and dark-matter density fractions (Planck-era baseline used
 /// across the existing GRAND-346 harness).
@@ -135,6 +135,18 @@ pub fn branch_dark_to_visible_ratio(branch: DarkSectorBranch) -> f64 {
     }
 }
 
+/// Row-wise dark/visible ratio. Geometric branch is modulated by the
+/// Einstein/cosmology-derived κ(r) profile.
+pub fn branch_dark_to_visible_ratio_at_row(branch: DarkSectorBranch, row: &SparcMassRow) -> f64 {
+    match branch {
+        DarkSectorBranch::Particle => DARK_TO_VISIBLE_COUNT_RATIO,
+        DarkSectorBranch::Geometric => {
+            let kappa = curvature_factor_from_rotation(row.v_baryon_kms, row.radius_kpc);
+            DARK_TO_VISIBLE_GEOMETRIC_RATIO * kappa
+        }
+    }
+}
+
 /// Structural total speed prediction from baryonic speed and branch ratio.
 ///
 /// With `v^2 ~ GM/r`, scaling enclosed mass by `(1 + r_dm)` scales speed by
@@ -174,7 +186,8 @@ pub fn evaluate_branch_fit(branch: DarkSectorBranch, data: &[SparcMassRow]) -> D
     let mut ape_alpha = 0.0;
 
     for row in data {
-        let v_pred = predicted_speed_kms(branch, row.v_baryon_kms);
+        let ratio_row = branch_dark_to_visible_ratio_at_row(branch, row);
+        let v_pred = (1.0 + ratio_row).sqrt() * row.v_baryon_kms;
         let dv = v_pred - row.v_obs_kms;
         sq_v += dv * dv;
         ape_v += (dv.abs() / row.v_obs_kms).min(1.0e6);
