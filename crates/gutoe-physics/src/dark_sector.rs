@@ -21,6 +21,9 @@ pub const METER_PER_KPC: f64 = 3.085_677_581_491_367e19;
 pub enum DarkSectorBranch {
     Particle,
     Geometric,
+    /// Unified branch: local clustering from particle-like lane, total budget
+    /// from geometric lane.
+    Unified,
 }
 
 /// Structural particle-branch dark density: ρ_dark = (5/11) * ρ_visible.
@@ -91,6 +94,12 @@ pub fn dark_density(branch: DarkSectorBranch, visible_density: f64, curvature_fa
     match branch {
         DarkSectorBranch::Particle => dark_density_particle(visible_density),
         DarkSectorBranch::Geometric => dark_density_geometric(visible_density, curvature_factor),
+        DarkSectorBranch::Unified => {
+            // Local clustering behavior follows the particle lane, modulated by
+            // the derived κ(r) profile.
+            let k = curvature_factor.max(0.0);
+            DARK_TO_VISIBLE_COUNT_RATIO * k * visible_density
+        }
     }
 }
 

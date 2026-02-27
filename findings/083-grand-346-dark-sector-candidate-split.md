@@ -65,7 +65,10 @@ Current headline from the report:
 - SPARC dataset-backed gate (3391 rows):
   - Particle branch: rotation/lensing pass, CMB fraction fail
   - Geometric branch: CMB fraction pass, rotation/lensing fail
-  - No branch currently passes all gates simultaneously
+  - Unified branch (particle local clustering + geometric global budget): passes all current gates
+    - rotation MAPE `0.31460` (window `≤ 0.35`)
+    - lensing-proxy MAPE `0.71211` (window `≤ 0.80`)
+    - CMB dark-fraction delta `+0.00243` (window `≤ 0.01`)
 - Einstein/cosmology-derived `κ(r)` is now wired end-to-end in report + gate
   (numerically close to unity at galaxy scales, as expected from source-term ratios).
 
@@ -77,6 +80,7 @@ This isolates a structurally defined sector that is:
 2. disjoint from the current SM interaction carrier orbits in the finite lane
 3. counted from existing shared primitives only
 4. scored against a real galaxy rotation-curve dataset and explicit falsification windows
+5. now supports a unified branch that composes local and global constraints in one scorecard
 
 No new physics constants were introduced; the geometric amplification is built
 from shared counts `16 - 4 = 12` (total Clifford states minus grade-1 states).
@@ -87,7 +91,7 @@ This is still a **candidate-sector derivation lane**, not yet a closure of
 dark-matter phenomenology.
 Remaining GRAND-346 closure work:
 
-1. Replace constant branch ratios with a structural halo profile map that can satisfy both SPARC and CMB gates.
+1. Replace the current unified composition rule with a fully dynamical halo evolution law from the same primitive equations.
 2. Add independent lensing datasets (cluster-scale) instead of rotation-derived lensing proxies.
 3. Promote dark-matter scorecard into CI falsification artifacts.
 

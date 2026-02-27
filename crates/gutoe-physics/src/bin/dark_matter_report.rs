@@ -30,18 +30,22 @@ fn main() {
     let kappa = curvature_factor_from_einstein_cosmology(rho_visible, radius);
     let rho_dark_particle = dark_density(DarkSectorBranch::Particle, rho_visible, 1.0);
     let rho_dark_geometric = dark_density(DarkSectorBranch::Geometric, rho_visible, kappa);
+    let rho_dark_unified = dark_density(DarkSectorBranch::Unified, rho_visible, kappa);
 
     let m_visible = enclosed_mass_constant_density(rho_visible, radius);
     let m_total_particle = enclosed_mass_constant_density(rho_visible + rho_dark_particle, radius);
     let m_total_geometric = enclosed_mass_constant_density(rho_visible + rho_dark_geometric, radius);
+    let m_total_unified = enclosed_mass_constant_density(rho_visible + rho_dark_unified, radius);
 
     let v_visible = circular_velocity(m_visible, radius).unwrap_or(f64::NAN);
     let v_particle = circular_velocity(m_total_particle, radius).unwrap_or(f64::NAN);
     let v_geometric = circular_velocity(m_total_geometric, radius).unwrap_or(f64::NAN);
+    let v_unified = circular_velocity(m_total_unified, radius).unwrap_or(f64::NAN);
 
     let alpha_visible = lensing_deflection(m_visible, impact).unwrap_or(f64::NAN);
     let alpha_particle = lensing_deflection(m_total_particle, impact).unwrap_or(f64::NAN);
     let alpha_geometric = lensing_deflection(m_total_geometric, impact).unwrap_or(f64::NAN);
+    let alpha_unified = lensing_deflection(m_total_unified, impact).unwrap_or(f64::NAN);
 
     let omega_dm_particle = OMEGA_BARYON_OBS * DARK_TO_VISIBLE_COUNT_RATIO;
     let omega_m_particle = OMEGA_BARYON_OBS + omega_dm_particle;
@@ -50,6 +54,7 @@ fn main() {
     let omega_m_geometric = OMEGA_BARYON_OBS + omega_dm_geometric;
     let dm_fraction_geometric = omega_dm_geometric / omega_m_geometric;
     let dm_fraction_geometric_with_curvature = rho_dark_geometric / (rho_visible + rho_dark_geometric);
+    let dm_fraction_unified_local = rho_dark_unified / (rho_visible + rho_dark_unified);
     let dm_fraction_obs = OMEGA_DM_OBS / OMEGA_MATTER_OBS;
 
     let out_dir = "/tmp/bh_renders";
@@ -77,16 +82,19 @@ fn main() {
     writeln!(txt, "[branch_densities]").expect("write");
     writeln!(txt, "rho_dark_particle = {:.6e}", rho_dark_particle).expect("write");
     writeln!(txt, "rho_dark_geometric = {:.6e}", rho_dark_geometric).expect("write");
+    writeln!(txt, "rho_dark_unified_local = {:.6e}", rho_dark_unified).expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[rotation_proxy]").expect("write");
     writeln!(txt, "v_visible = {:.6e} m/s", v_visible).expect("write");
     writeln!(txt, "v_particle = {:.6e} m/s", v_particle).expect("write");
     writeln!(txt, "v_geometric = {:.6e} m/s", v_geometric).expect("write");
+    writeln!(txt, "v_unified_local = {:.6e} m/s", v_unified).expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[lensing_proxy]").expect("write");
     writeln!(txt, "alpha_visible = {:.6e} rad", alpha_visible).expect("write");
     writeln!(txt, "alpha_particle = {:.6e} rad", alpha_particle).expect("write");
     writeln!(txt, "alpha_geometric = {:.6e} rad", alpha_geometric).expect("write");
+    writeln!(txt, "alpha_unified_local = {:.6e} rad", alpha_unified).expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[cmb_matter_fraction_check]").expect("write");
     writeln!(txt, "omega_baryon_obs = {:.9}", OMEGA_BARYON_OBS).expect("write");
@@ -102,6 +110,7 @@ fn main() {
         dm_fraction_geometric_with_curvature
     )
     .expect("write");
+    writeln!(txt, "dm_fraction_unified_local = {:.9}", dm_fraction_unified_local).expect("write");
     writeln!(
         txt,
         "dm_fraction_particle_delta = {:.9}",
@@ -118,6 +127,12 @@ fn main() {
         txt,
         "dm_fraction_geometric_with_curvature_delta = {:.9}",
         dm_fraction_geometric_with_curvature - dm_fraction_obs
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "dm_fraction_unified_local_delta = {:.9}",
+        dm_fraction_unified_local - dm_fraction_obs
     )
     .expect("write");
 
@@ -150,8 +165,20 @@ fn main() {
     .expect("write");
     writeln!(
         json,
+        "  \"unified_local_density\": {{\"rho_dark_unified\": {:.12e}}},",
+        rho_dark_unified
+    )
+    .expect("write");
+    writeln!(
+        json,
         "  \"rotation_proxy\": {{\"v_visible_m_s\": {:.12e}, \"v_particle_m_s\": {:.12e}, \"v_geometric_m_s\": {:.12e}}},",
         v_visible, v_particle, v_geometric
+    )
+    .expect("write");
+    writeln!(
+        json,
+        "  \"rotation_unified_local\": {{\"v_unified_m_s\": {:.12e}}},",
+        v_unified
     )
     .expect("write");
     writeln!(
@@ -162,7 +189,13 @@ fn main() {
     .expect("write");
     writeln!(
         json,
-        "  \"cmb_check\": {{\"omega_baryon_obs\": {:.12}, \"omega_dm_obs\": {:.12}, \"omega_dm_particle\": {:.12}, \"omega_dm_geometric\": {:.12}, \"dm_fraction_obs\": {:.12}, \"dm_fraction_particle\": {:.12}, \"dm_fraction_geometric\": {:.12}, \"dm_fraction_geometric_with_curvature\": {:.12}, \"dm_fraction_particle_delta\": {:.12}, \"dm_fraction_geometric_delta\": {:.12}, \"dm_fraction_geometric_with_curvature_delta\": {:.12}}}\n}}",
+        "  \"lensing_unified_local\": {{\"alpha_unified_rad\": {:.12e}}},",
+        alpha_unified
+    )
+    .expect("write");
+    writeln!(
+        json,
+        "  \"cmb_check\": {{\"omega_baryon_obs\": {:.12}, \"omega_dm_obs\": {:.12}, \"omega_dm_particle\": {:.12}, \"omega_dm_geometric\": {:.12}, \"dm_fraction_obs\": {:.12}, \"dm_fraction_particle\": {:.12}, \"dm_fraction_geometric\": {:.12}, \"dm_fraction_geometric_with_curvature\": {:.12}, \"dm_fraction_unified_local\": {:.12}, \"dm_fraction_particle_delta\": {:.12}, \"dm_fraction_geometric_delta\": {:.12}, \"dm_fraction_geometric_with_curvature_delta\": {:.12}, \"dm_fraction_unified_local_delta\": {:.12}}}\n}}",
         OMEGA_BARYON_OBS,
         OMEGA_DM_OBS,
         omega_dm_particle,
@@ -171,9 +204,11 @@ fn main() {
         dm_fraction_particle,
         dm_fraction_geometric,
         dm_fraction_geometric_with_curvature,
+        dm_fraction_unified_local,
         dm_fraction_particle - dm_fraction_obs,
         dm_fraction_geometric - dm_fraction_obs,
-        dm_fraction_geometric_with_curvature - dm_fraction_obs
+        dm_fraction_geometric_with_curvature - dm_fraction_obs,
+        dm_fraction_unified_local - dm_fraction_obs
     )
     .expect("write");
 

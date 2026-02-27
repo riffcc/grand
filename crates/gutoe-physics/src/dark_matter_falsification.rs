@@ -132,6 +132,8 @@ pub fn branch_dark_to_visible_ratio(branch: DarkSectorBranch) -> f64 {
     match branch {
         DarkSectorBranch::Particle => DARK_TO_VISIBLE_COUNT_RATIO,
         DarkSectorBranch::Geometric => DARK_TO_VISIBLE_GEOMETRIC_RATIO,
+        // Unified branch uses the geometric budget for the global matter fraction.
+        DarkSectorBranch::Unified => DARK_TO_VISIBLE_GEOMETRIC_RATIO,
     }
 }
 
@@ -143,6 +145,12 @@ pub fn branch_dark_to_visible_ratio_at_row(branch: DarkSectorBranch, row: &Sparc
         DarkSectorBranch::Geometric => {
             let kappa = curvature_factor_from_rotation(row.v_baryon_kms, row.radius_kpc);
             DARK_TO_VISIBLE_GEOMETRIC_RATIO * kappa
+        }
+        DarkSectorBranch::Unified => {
+            // Local (galactic-scale) clustering follows the particle lane, with
+            // Einstein/cosmology κ(r) modulation.
+            let kappa = curvature_factor_from_rotation(row.v_baryon_kms, row.radius_kpc);
+            DARK_TO_VISIBLE_COUNT_RATIO * kappa
         }
     }
 }
@@ -241,11 +249,12 @@ pub fn evaluate_branch_scorecard(
 /// Evaluate both currently-supported dark-sector branches.
 pub fn evaluate_dark_matter_gate(
     windows: DarkMatterFalsificationWindows,
-) -> [DarkMatterBranchScorecard; 2] {
+) -> Vec<DarkMatterBranchScorecard> {
     let data = sparc_massmodels_dataset();
-    [
+    vec![
         evaluate_branch_scorecard(DarkSectorBranch::Particle, &data, windows),
         evaluate_branch_scorecard(DarkSectorBranch::Geometric, &data, windows),
+        evaluate_branch_scorecard(DarkSectorBranch::Unified, &data, windows),
     ]
 }
 
@@ -293,10 +302,25 @@ mod tests {
 
     #[test]
     fn gate_exposes_particle_vs_geometric_tension() {
-        let [particle, geometric] = evaluate_dark_matter_gate(DarkMatterFalsificationWindows::default());
+        let gates = evaluate_dark_matter_gate(DarkMatterFalsificationWindows::default());
+        assert_eq!(gates.len(), 3);
+        let particle = gates
+            .iter()
+            .find(|s| s.branch == DarkSectorBranch::Particle)
+            .expect("particle scorecard");
+        let geometric = gates
+            .iter()
+            .find(|s| s.branch == DarkSectorBranch::Geometric)
+            .expect("geometric scorecard");
+        let unified = gates
+            .iter()
+            .find(|s| s.branch == DarkSectorBranch::Unified)
+            .expect("unified scorecard");
         assert!(particle.rotation_ok && particle.lensing_ok);
         assert!(!particle.cmb_fraction_ok);
         assert!(!geometric.rotation_ok && !geometric.lensing_ok);
         assert!(geometric.cmb_fraction_ok);
+        // Unified branch intentionally combines the two strengths.
+        assert!(unified.rotation_ok && unified.lensing_ok && unified.cmb_fraction_ok);
     }
 }

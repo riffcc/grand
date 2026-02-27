@@ -144,6 +144,28 @@ theorem geometric_dark_fraction_of_matter_eq :
   rw [geometric_dark_to_visible_ratio_eq]
   norm_num
 
+/-- Unified branch budget ratio (how much): use the geometric amplified ratio. -/
+def unifiedBudgetDarkToVisibleRatio : ℚ :=
+  geometricDarkToVisibleRatio
+
+/-- Unified branch budget ratio is exactly `60/11`. -/
+theorem unified_budget_dark_to_visible_ratio_eq :
+    unifiedBudgetDarkToVisibleRatio = 60 / 11 := by
+  exact geometric_dark_to_visible_ratio_eq
+
+/-- Unified local ratio (where): particle-like local clustering modulated by `κ`. -/
+noncomputable def unifiedLocalDarkToVisibleRatio (kappa : ℝ) : ℝ :=
+  (5 / 11 : ℝ) * kappa
+
+/-- Unified local ratio is nonnegative when `κ` is nonnegative. -/
+theorem unified_local_dark_to_visible_ratio_nonneg
+    {kappa : ℝ}
+    (hk : 0 ≤ kappa) :
+    0 ≤ unifiedLocalDarkToVisibleRatio kappa := by
+  unfold unifiedLocalDarkToVisibleRatio
+  have hbase : 0 ≤ (5 / 11 : ℝ) := by norm_num
+  exact mul_nonneg hbase hk
+
 /-- Particle-branch effective dark density from the count ratio. -/
 def effectiveDarkDensityQ (rhoVisible : ℚ) : ℚ :=
   darkToVisibleCountRatio * rhoVisible
@@ -228,5 +250,22 @@ theorem einstein_cosmology_kappa_ge_one
     _ ≤ uvCurvatureBoost lP r * vacuumCurvatureBoost rhoVisible rhoVacuum := by
       exact mul_le_mul huv hvac hone_nonneg huv_nonneg
     _ = einsteinCosmologyKappa rhoVisible rhoVacuum lP r := by rfl
+
+/-- Under physical positivity assumptions, unified local dark ratio is at least
+    the particle baseline `5/11`. -/
+theorem unified_local_ratio_ge_particle_baseline
+    {rhoVisible rhoVacuum lP r : ℝ}
+    (hVis : 0 < rhoVisible)
+    (hVac : 0 ≤ rhoVacuum)
+    (hr : r ≠ 0) :
+    (5 / 11 : ℝ) ≤ unifiedLocalDarkToVisibleRatio
+        (einsteinCosmologyKappa rhoVisible rhoVacuum lP r) := by
+  unfold unifiedLocalDarkToVisibleRatio
+  have hk : 1 ≤ einsteinCosmologyKappa rhoVisible rhoVacuum lP r :=
+    einstein_cosmology_kappa_ge_one hVis hVac hr
+  have hfac_nonneg : 0 ≤ (5 / 11 : ℝ) := by norm_num
+  have hmul :=
+    mul_le_mul_of_nonneg_left hk hfac_nonneg
+  simpa [mul_assoc, mul_comm, mul_left_comm] using hmul
 
 end Gutoe.DarkMatterSector

@@ -11,6 +11,7 @@ fn branch_name(branch: DarkSectorBranch) -> &'static str {
     match branch {
         DarkSectorBranch::Particle => "particle",
         DarkSectorBranch::Geometric => "geometric",
+        DarkSectorBranch::Unified => "unified",
     }
 }
 
@@ -35,7 +36,7 @@ fn write_branch_txt(out: &mut File, s: DarkMatterBranchScorecard) {
 
 fn main() {
     let windows = DarkMatterFalsificationWindows::default();
-    let [particle, geometric] = evaluate_dark_matter_gate(windows);
+    let scorecards = evaluate_dark_matter_gate(windows);
 
     let out_dir = "/tmp/bh_renders";
     let _ = fs::create_dir_all(out_dir);
@@ -55,8 +56,9 @@ fn main() {
     )
     .expect("write");
     writeln!(txt).expect("write");
-    write_branch_txt(&mut txt, particle);
-    write_branch_txt(&mut txt, geometric);
+    for s in &scorecards {
+        write_branch_txt(&mut txt, *s);
+    }
 
     let mut json = File::create(&json_path).expect("create json");
     writeln!(
@@ -65,11 +67,11 @@ fn main() {
         windows.rotation_mape_max, windows.lensing_proxy_mape_max, windows.dm_fraction_delta_abs_max
     )
     .expect("write");
-    let write_branch = |json: &mut File, s: DarkMatterBranchScorecard| {
+    let write_branch = |json: &mut File, s: DarkMatterBranchScorecard, is_last: bool| {
         let m = s.metrics;
         writeln!(
             json,
-            "  \"{}\": {{\"n_points\": {}, \"rotation_rmse_kms\": {:.12}, \"rotation_mape\": {:.12}, \"rotation_chi2_ndof\": {:.12}, \"lensing_proxy_rmse_rad\": {:.12e}, \"lensing_proxy_mape\": {:.12}, \"predicted_dm_fraction\": {:.12}, \"observed_dm_fraction\": {:.12}, \"dm_fraction_delta\": {:.12}, \"rotation_ok\": {}, \"lensing_ok\": {}, \"cmb_fraction_ok\": {}, \"passes_all\": {}}},",
+            "  \"{}\": {{\"n_points\": {}, \"rotation_rmse_kms\": {:.12}, \"rotation_mape\": {:.12}, \"rotation_chi2_ndof\": {:.12}, \"lensing_proxy_rmse_rad\": {:.12e}, \"lensing_proxy_mape\": {:.12}, \"predicted_dm_fraction\": {:.12}, \"observed_dm_fraction\": {:.12}, \"dm_fraction_delta\": {:.12}, \"rotation_ok\": {}, \"lensing_ok\": {}, \"cmb_fraction_ok\": {}, \"passes_all\": {}}}{}",
             branch_name(s.branch),
             m.n_points,
             m.rotation_rmse_kms,
@@ -84,15 +86,18 @@ fn main() {
             s.lensing_ok,
             s.cmb_fraction_ok,
             s.passes_all(),
+            if is_last { "" } else { "," },
         )
         .expect("write");
     };
-    write_branch(&mut json, particle);
-    write_branch(&mut json, geometric);
+
+    for (i, s) in scorecards.iter().enumerate() {
+        write_branch(&mut json, *s, i + 1 == scorecards.len());
+    }
     writeln!(
         json,
         "  \"summary\": {{\"at_least_one_branch_passes_all\": {}}}\n}}",
-        particle.passes_all() || geometric.passes_all()
+        scorecards.iter().any(|s| s.passes_all())
     )
     .expect("write");
 
