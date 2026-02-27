@@ -44,6 +44,7 @@ pub mod dark_sector;
 pub mod dark_matter_falsification;
 pub mod baryogenesis;
 pub mod inflation;
+pub mod bbn;
 
 pub use equations::*;
 pub use constants::*;
@@ -64,3 +65,4 @@ pub use dark_sector::*;
 pub use dark_matter_falsification::*;
 pub use baryogenesis::*;
 pub use inflation::*;
+pub use bbn::*;

@@ -40,6 +40,7 @@ lean_lib Gutoe where
              `Gutoe.CosmologicalConstant,
              `Gutoe.Inflation,
              `Gutoe.Baryogenesis,
+             `Gutoe.BBN,
              `Gutoe.DarkMatterSector,
              `Gutoe.StellarFusion,
              `Gutoe.FalsifiabilityCatalog,
