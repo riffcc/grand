@@ -58,3 +58,55 @@ Notes:
   - prediction vs binned
   - prediction vs full
   - binned vs rebinned-from-full
+
+## `COM_PowerSpect_CMB-TE-full_R3.01.txt` (GRAND-355)
+
+Source target:
+- Planck 2018 TE full (unbinned) spectrum
+- URL:
+  - `https://irsa.ipac.caltech.edu/data/Planck/release_3/ancillary-data/cosmoparams/COM_PowerSpect_CMB-TE-full_R3.01.txt`
+
+Schema (whitespace):
+- `l Dl -dDl +dDl`
+
+Usage:
+- Used by `cmb_te_ee_crosscheck` for TE full-spectrum validation.
+
+## `COM_PowerSpect_CMB-EE-full_R3.01.txt` (GRAND-355)
+
+Source target:
+- Planck 2018 EE full (unbinned) spectrum
+- URL:
+  - `https://irsa.ipac.caltech.edu/data/Planck/release_3/ancillary-data/cosmoparams/COM_PowerSpect_CMB-EE-full_R3.01.txt`
+
+Schema (whitespace):
+- `l Dl -dDl +dDl`
+
+Usage:
+- Used by `cmb_te_ee_crosscheck` for EE full-spectrum validation.
+
+## `COM_PowerSpect_CMB-TE-binned_R3.02.txt` (GRAND-355)
+
+Source target:
+- Planck 2018 TE binned spectrum
+- URL:
+  - `https://irsa.ipac.caltech.edu/data/Planck/release_3/ancillary-data/cosmoparams/COM_PowerSpect_CMB-TE-binned_R3.02.txt`
+
+Schema (whitespace):
+- `l Dl -dDl +dDl BestFit`
+
+Usage:
+- Used by `cmb_te_ee_crosscheck` for TE binned validation.
+
+## `COM_PowerSpect_CMB-EE-binned_R3.02.txt` (GRAND-355)
+
+Source target:
+- Planck 2018 EE binned spectrum
+- URL:
+  - `https://irsa.ipac.caltech.edu/data/Planck/release_3/ancillary-data/cosmoparams/COM_PowerSpect_CMB-EE-binned_R3.02.txt`
+
+Schema (whitespace):
+- `l Dl -dDl +dDl BestFit`
+
+Usage:
+- Used by `cmb_te_ee_crosscheck` for EE binned validation.

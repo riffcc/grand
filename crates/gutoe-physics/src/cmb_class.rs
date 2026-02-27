@@ -319,11 +319,40 @@ pub fn read_planck_tt_csv(path: &Path) -> Result<Vec<PlanckTtPoint>, String> {
     Ok(out)
 }
 
+/// Generic Planck `D_ell` parser; supports both CSV and Planck whitespace files.
+/// Kept separate from `read_planck_tt_csv` so TE/EE channels can use the same code path.
+pub fn read_planck_dl_csv(path: &Path) -> Result<Vec<PlanckTtPoint>, String> {
+    read_planck_tt_csv(path)
+}
+
 pub fn read_class_tt_camb(
     path: &Path,
     ell_min: u32,
     ell_max: u32,
 ) -> Result<Vec<ClassTtPoint>, String> {
+    read_class_dl_camb_column(path, ell_min, ell_max, 2)
+}
+
+/// Read a CLASS CAMB-format CMB spectrum column.
+///
+/// The `column_1_based` index follows the CLASS header convention:
+/// - 1: ell
+/// - 2: TT
+/// - 3: EE
+/// - 4: BB
+/// - 5: TE
+pub fn read_class_dl_camb_column(
+    path: &Path,
+    ell_min: u32,
+    ell_max: u32,
+    column_1_based: usize,
+) -> Result<Vec<ClassTtPoint>, String> {
+    if column_1_based < 2 {
+        return Err(format!(
+            "invalid CLASS column index {} (must be >=2: 2=TT,3=EE,5=TE)",
+            column_1_based
+        ));
+    }
     let f = File::open(path).map_err(|e| format!("open CLASS output {:?}: {e}", path))?;
     let mut out = Vec::new();
     for (idx, line) in BufReader::new(f).lines().enumerate() {
@@ -333,7 +362,7 @@ pub fn read_class_tt_camb(
             continue;
         }
         let fields: Vec<&str> = s.split_whitespace().collect();
-        if fields.len() < 2 {
+        if fields.len() < column_1_based {
             continue;
         }
         let ell: u32 = match fields[0].parse() {
@@ -343,12 +372,13 @@ pub fn read_class_tt_camb(
         if ell < ell_min || ell > ell_max {
             continue;
         }
-        let d_ell_tt_uk2: f64 = fields[1].parse().map_err(|e| {
+        let d_ell_tt_uk2: f64 = fields[column_1_based - 1].parse().map_err(|e| {
             format!(
-                "parse CLASS TT in {:?} line {} ('{}'): {e}",
+                "parse CLASS D_ell column {} in {:?} line {} ('{}'): {e}",
+                column_1_based,
                 path,
                 idx + 1,
-                fields[1]
+                fields[column_1_based - 1]
             )
         })?;
         out.push(ClassTtPoint { ell, d_ell_tt_uk2 });
