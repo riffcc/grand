@@ -1,11 +1,17 @@
 import Mathlib
 import Gutoe.DarkMatterSector
 import Gutoe.GravityMetric
+import Gutoe.FineStructure
+import Gutoe.Baryogenesis
+import Gutoe.Z3Uniqueness
 
 namespace Gutoe.Inflation
 
 open Gutoe.DarkMatterSector
 open Gutoe.GravityMetric
+open Gutoe.FineStructure
+open Gutoe.Baryogenesis
+open Gutoe.Z3Uniqueness
 
 /-- Structural inflation e-fold count from shared Clifford dark-sector counts:
     `N = 12 * 5 = 60`. -/
@@ -35,6 +41,28 @@ noncomputable def inflationEndN : ℝ :=
 /-- Total expansion factor `exp(N)`. -/
 noncomputable def inflationExpansionFactor : ℝ :=
   Real.exp inflationEfoldCount
+
+/-- Structural inflation Hubble ratio `H/M_pl` from shared primitives:
+    `α_LO^2 * (60/11) * (1-λ_QG) * (3/6) * 1/sqrt(486)`. -/
+noncomputable def inflationHubbleRatio : ℝ :=
+  alphaLeadingOrder ^ 2
+    * (geometricDarkToVisibleRatio : ℝ)
+    * (1 - lambda_qg)
+    * ((magneticTriplet.card : ℝ) / ((Nat.choose 4 2 : ℕ) : ℝ))
+    * (1 / Real.sqrt (baryoMicroModeCount : ℝ))
+
+/-- Scalar amplitude from slow-roll relation:
+    `A_s = (H/M_pl)^2 / (8π² ε)`. -/
+noncomputable def scalarAmplitude : ℝ :=
+  inflationHubbleRatio ^ 2 / (8 * Real.pi ^ 2 * slowRollEpsilon inflationEfoldCount)
+
+/-- Reheating equation-of-state proxy from shared dark fraction. -/
+noncomputable def reheatingW : ℝ :=
+  (darkFractionOfTotalStates : ℝ)
+
+/-- Structural reheating e-fold count: `N_reh = N / 12 = 5`. -/
+noncomputable def reheatingEfoldCount : ℝ :=
+  inflationEfoldCount / (geometricDarkAmplificationQ : ℝ)
 
 theorem dark_sector_card_eq_five :
     darkSectorCandidates.card = 5 := by
@@ -66,6 +94,54 @@ theorem r_structural_eq :
     tensorToScalarRatio inflationEfoldCount = (1 : ℝ) / 300 := by
   rw [inflation_efolds_eq_60]
   norm_num [tensorToScalarRatio, slowRollEpsilon]
+
+theorem inflation_hubble_ratio_eq :
+    inflationHubbleRatio
+      = ((1 : ℝ) / 137) ^ 2
+          * ((60 : ℝ) / 11)
+          * ((11 : ℝ) / 12)
+          * ((3 : ℝ) / 6)
+          * (1 / Real.sqrt 486) := by
+  unfold inflationHubbleRatio
+  rw [alpha_leading_order_eq, geometric_dark_to_visible_ratio_eq]
+  have hLam : lambda_qg = (1 : ℝ) / 12 := by
+    unfold lambda_qg
+    norm_num
+  rw [hLam]
+  have hs : magneticTriplet.card = 3 := su2_dim
+  have h20 : (Nat.choose 4 2 : ℕ) = 6 := by native_decide
+  rw [hs]
+  rw [h20]
+  norm_num [baryo_micro_mode_count_eq_486]
+
+theorem inflation_hubble_ratio_pos :
+    0 < inflationHubbleRatio := by
+  rw [inflation_hubble_ratio_eq]
+  positivity
+
+theorem scalar_amplitude_pos :
+    0 < scalarAmplitude := by
+  unfold scalarAmplitude
+  have heps : 0 < slowRollEpsilon inflationEfoldCount := by
+    rw [epsilon_structural_eq]
+    norm_num
+  have hnum : 0 < inflationHubbleRatio ^ 2 := by
+    exact sq_pos_of_pos inflation_hubble_ratio_pos
+  have hden : 0 < 8 * Real.pi ^ 2 * slowRollEpsilon inflationEfoldCount := by
+    have hpi : 0 < Real.pi := Real.pi_pos
+    positivity
+  exact div_pos hnum hden
+
+theorem reheating_w_eq :
+    reheatingW = (5 : ℝ) / 16 := by
+  unfold reheatingW
+  norm_num [dark_fraction_of_total_states_eq]
+
+theorem reheating_efolds_eq :
+    reheatingEfoldCount = 5 := by
+  unfold reheatingEfoldCount
+  rw [inflation_efolds_eq_60, geometric_dark_amplification_eq]
+  norm_num
 
 theorem ns_in_observational_window :
     (0.955 : ℝ) ≤ scalarSpectralIndex inflationEfoldCount ∧

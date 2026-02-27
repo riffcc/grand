@@ -17,42 +17,65 @@ fn main() {
 
     writeln!(
         json,
-        "{{\n  \"overall_pass\": {},\n  \"windows\": {{\"n_efolds_min\": {:.6}, \"n_efolds_max\": {:.6}, \"n_s_center\": {:.6}, \"n_s_tol\": {:.6}, \"r_max\": {:.6}}},\n  \"score\": {{\"n_efolds\": {:.12}, \"epsilon\": {:.12e}, \"eta\": {:.12e}, \"n_s\": {:.12}, \"r\": {:.12}, \"n_end\": {:.12}, \"expansion_factor\": {:.12e}, \"n_efolds_ok\": {}, \"n_s_ok\": {}, \"r_ok\": {}, \"graceful_exit_ok\": {}, \"passes_all\": {}}}\n}}",
+        "{{\n  \"overall_pass\": {},\n  \"windows\": {{\"n_efolds_min\": {:.6}, \"n_efolds_max\": {:.6}, \"n_s_center\": {:.6}, \"n_s_tol\": {:.6}, \"r_max\": {:.6}, \"a_s_center\": {:.12e}, \"a_s_tol\": {:.12e}, \"t_reheat_min_gev\": {:.12e}, \"chi2_max\": {:.6}}},\n  \"score\": {{\"n_efolds\": {:.12}, \"epsilon\": {:.12e}, \"eta\": {:.12e}, \"n_s\": {:.12}, \"r\": {:.12}, \"a_s\": {:.12e}, \"h_over_mpl\": {:.12e}, \"n_reheat\": {:.12}, \"w_reheat\": {:.12}, \"t_reheat_gev\": {:.12e}, \"cmb_proxy_chi2\": {:.12}, \"cmb_proxy_loglike\": {:.12}, \"n_end\": {:.12}, \"expansion_factor\": {:.12e}, \"n_efolds_ok\": {}, \"n_s_ok\": {}, \"r_ok\": {}, \"a_s_ok\": {}, \"reheating_ok\": {}, \"cmb_like_ok\": {}, \"graceful_exit_ok\": {}, \"passes_all\": {}}}\n}}",
         score.passes_all(),
         windows.n_efolds_min,
         windows.n_efolds_max,
         windows.ns_center,
         windows.ns_tol,
         windows.r_max,
+        windows.as_center,
+        windows.as_tol,
+        windows.t_reheat_min_gev,
+        windows.chi2_max,
         score.n_efolds,
         score.epsilon,
         score.eta,
         score.n_s,
         score.r,
+        score.a_s,
+        score.h_over_mpl,
+        score.n_reheat,
+        score.w_reheat,
+        score.t_reheat_gev,
+        score.cmb_proxy_chi2,
+        score.cmb_proxy_loglike,
         score.n_end,
         score.expansion_factor,
         score.n_efolds_ok,
         score.n_s_ok,
         score.r_ok,
+        score.a_s_ok,
+        score.reheating_ok,
+        score.cmb_like_ok,
         score.graceful_exit_ok,
         score.passes_all()
     )
     .expect("write gate json");
 
     println!(
-        "inflation gate: pass={} (N={:.3}, n_s={:.6}, r={:.6}, exit={})",
+        "inflation gate: pass={} (N={:.3}, n_s={:.6}, r={:.6}, A_s={:.3e}, chi2={:.3}, T_reh={:.3e} GeV, exit={})",
         score.passes_all(),
         score.n_efolds,
         score.n_s,
         score.r,
+        score.a_s,
+        score.cmb_proxy_chi2,
+        score.t_reheat_gev,
         score.graceful_exit_ok
     );
     println!("wrote {json_path}");
 
     if !score.passes_all() {
         eprintln!(
-            "FAIL: N_ok={} n_s_ok={} r_ok={} graceful_exit_ok={}",
-            score.n_efolds_ok, score.n_s_ok, score.r_ok, score.graceful_exit_ok
+            "FAIL: N_ok={} n_s_ok={} r_ok={} a_s_ok={} reheating_ok={} cmb_like_ok={} graceful_exit_ok={}",
+            score.n_efolds_ok,
+            score.n_s_ok,
+            score.r_ok,
+            score.a_s_ok,
+            score.reheating_ok,
+            score.cmb_like_ok,
+            score.graceful_exit_ok
         );
         process::exit(2);
     }
