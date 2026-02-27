@@ -43,6 +43,7 @@ pub mod mass_gap;
 pub mod dark_sector;
 pub mod dark_matter_falsification;
 pub mod baryogenesis;
+pub mod inflation;
 
 pub use equations::*;
 pub use constants::*;
@@ -62,3 +63,4 @@ pub use mass_gap::*;
 pub use dark_sector::*;
 pub use dark_matter_falsification::*;
 pub use baryogenesis::*;
+pub use inflation::*;

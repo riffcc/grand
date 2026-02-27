@@ -38,6 +38,7 @@ lean_lib Gutoe where
              `Gutoe.SMQCDUnification,
              `Gutoe.EWSBHiggs,
              `Gutoe.CosmologicalConstant,
+             `Gutoe.Inflation,
              `Gutoe.Baryogenesis,
              `Gutoe.DarkMatterSector,
              `Gutoe.StellarFusion,
