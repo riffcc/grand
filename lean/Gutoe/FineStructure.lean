@@ -95,10 +95,36 @@ def alphaInverse (d : ℕ) : ℕ := triangularNumber (2 ^ d) + 1
 /-- For d=4 spacetime dimensions: alpha^-1 = 137 (our universe). -/
 theorem alpha_inverse_d4 : alphaInverse 4 = 137 := by native_decide
 
+/-- Verbatim structural statement:
+    T(2^4) + 1 = 137. -/
+theorem triangular_clifford_dim_plus_one_eq_137 :
+    triangularNumber (2 ^ 4) + 1 = 137 := by native_decide
+
 /-- The fine structure constant alpha^-1 equals exactly 137 at leading order.
     The experimental value 137.036 differs by 0.026%, corresponding to
     higher-order QED loop corrections (Schwinger term: alpha/2pi). -/
 theorem fine_structure_constant : alphaInverse 4 = 137 := alpha_inverse_d4
+
+-- ── Decimal correction lane (first/second order) ──────────────────────────
+
+/-- Reference decimal for α⁻¹ used in the regression lane:
+    137.035999084 = 137035999084 / 10^9. -/
+def alphaInversePhysicalRef : ℚ := 137035999084 / 1000000000
+
+/-- First-order decimal correction around the structural integer 137:
+    α⁻¹ ≈ 137 + 5/137. -/
+def alphaInvFirstOrder : ℚ := (alphaInverse 4 : ℚ) + 5 / (alphaInverse 4 : ℚ)
+
+/-- Second-order decimal correction lane:
+    α⁻¹ ≈ 137 + 5/137 - 9/137². -/
+def alphaInvSecondOrder : ℚ :=
+  (alphaInverse 4 : ℚ) + 5 / (alphaInverse 4 : ℚ) - 9 / ((alphaInverse 4 : ℚ) ^ 2)
+
+/-- The second-order lane is strictly closer to the decimal reference than
+    the first-order lane. -/
+theorem alpha_second_order_closer_than_first :
+    |alphaInvSecondOrder - alphaInversePhysicalRef| <
+      |alphaInvFirstOrder - alphaInversePhysicalRef| := by native_decide
 
 -- ── Predictions for other spacetime dimensions ─────────────────────────────
 
