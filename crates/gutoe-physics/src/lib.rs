@@ -27,6 +27,8 @@
 
 pub mod baryogenesis;
 pub mod bbn;
+pub mod cmb_damping;
+pub mod cmb_class;
 pub mod constants;
 pub mod cosmo_transfer;
 pub mod dark_matter_falsification;
@@ -52,6 +54,8 @@ pub mod universe;
 
 pub use baryogenesis::*;
 pub use bbn::*;
+pub use cmb_damping::*;
+pub use cmb_class::*;
 pub use constants::*;
 pub use cosmo_transfer::*;
 pub use dark_matter_falsification::*;
