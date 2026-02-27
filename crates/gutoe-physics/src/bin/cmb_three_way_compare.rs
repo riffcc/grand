@@ -9,11 +9,13 @@ use gutoe_physics::cmb_class::{
     compare_class_to_planck, read_class_tt_camb, read_planck_tt_csv, run_class,
     run_classy_fallback, write_class_ini, ClassRunInputs, PlanckTtPoint,
 };
+use gutoe_physics::cmb_reionization::derive_tau_reio;
 use gutoe_physics::constants::{
     lambda_cosmological_full_candidate, C, DARK_TO_VISIBLE_GEOMETRIC_RATIO,
 };
 use gutoe_physics::dark_matter_falsification::OMEGA_BARYON_OBS;
-use gutoe_physics::{evaluate_inflation_gate, InflationWindows};
+use gutoe_physics::microphysics::MicrophysicsAssumptions;
+use gutoe_physics::{evaluate_bbn_gate, evaluate_inflation_gate, BbnWindows, InflationWindows};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -44,6 +46,24 @@ fn derived_class_inputs(tau_reio: f64) -> ClassRunInputs {
         a_s: inflation.a_s,
         tau_reio,
     }
+}
+
+fn derived_tau_from_structure(inputs: ClassRunInputs) -> Result<(f64, f64), String> {
+    let omega_b0 = OMEGA_BARYON_OBS;
+    let omega_cdm0 = OMEGA_BARYON_OBS * DARK_TO_VISIBLE_GEOMETRIC_RATIO;
+    let omega_m0 = omega_b0 + omega_cdm0;
+    let bbn = evaluate_bbn_gate(BbnWindows::default());
+    let micro = MicrophysicsAssumptions {
+        h0_km_s_mpc: inputs.h * 100.0,
+        omega_b0,
+        omega_m0,
+        omega_r0: 9.0e-5,
+        omega_k0: inputs.omega_k,
+        omega_lambda0: inputs.omega_lambda,
+        eta10: bbn.eta10,
+    };
+    let reion = derive_tau_reio(micro, bbn.eta10)?;
+    Ok((reion.tau_reio, reion.z_reion_structural))
 }
 
 fn find_class_tt_output(run_dir: &Path) -> Result<PathBuf, String> {
@@ -82,13 +102,6 @@ fn find_class_tt_output(run_dir: &Path) -> Result<PathBuf, String> {
         }
     });
     Ok(candidates[0].clone())
-}
-
-fn parse_env_f64(name: &str, default: f64) -> f64 {
-    std::env::var(name)
-        .ok()
-        .and_then(|x| x.parse::<f64>().ok())
-        .unwrap_or(default)
 }
 
 fn as_chi2(
@@ -184,7 +197,9 @@ fn main() {
     let class_bin = std::env::var("GUTOE_CLASS_BIN").unwrap_or_else(|_| "class".to_string());
     let classy_python =
         std::env::var("GUTOE_CLASSY_PYTHON").unwrap_or_else(|_| "python3".to_string());
-    let tau_reio = parse_env_f64("GUTOE_TAU_REIO", 0.054);
+    let tau_env = std::env::var("GUTOE_TAU_REIO")
+        .ok()
+        .and_then(|x| x.parse::<f64>().ok());
 
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -195,7 +210,19 @@ fn main() {
     let ini_path = run_dir.join("run.ini");
     let root = run_dir.join("g_");
 
-    let inputs = derived_class_inputs(tau_reio);
+    let mut inputs = derived_class_inputs(0.054);
+    let (tau_reio, z_reion_structural_opt) = if let Some(tau) = tau_env {
+        (tau, None)
+    } else {
+        match derived_tau_from_structure(inputs) {
+            Ok((tau, z_reion)) => (tau, Some(z_reion)),
+            Err(e) => {
+                eprintln!("failed to derive tau_reio structurally: {e}");
+                std::process::exit(2);
+            }
+        }
+    };
+    inputs.tau_reio = tau_reio;
     write_class_ini(&ini_path, &root.to_string_lossy(), 2_500, inputs).expect("write ini");
     let (backend_used, class_tt_path) = match run_class(&class_bin, &ini_path) {
         Ok(_) => (
@@ -257,11 +284,14 @@ fn main() {
     let mut json = File::create(&json_path).expect("create json");
     writeln!(
         json,
-        "{{\n  \"inputs\": {{\"backend\":\"{}\", \"class_bin\":\"{}\", \"classy_python\":\"{}\", \"tau_reio\": {:.6}, \"planck_binned\":\"{}\", \"planck_full\":\"{}\"}},\n  \"class_vs_planck_binned\": {{\"n\": {}, \"chi2\": {:.12}, \"reduced_chi2\": {:.12}}},\n  \"class_vs_planck_full\": {{\"n\": {}, \"chi2\": {:.12}, \"reduced_chi2\": {:.12}}},\n  \"planck_binned_vs_planck_rebinned_from_full\": {{\"n\": {}, \"chi2\": {:.12}, \"reduced_chi2\": {:.12}}}\n}}",
+        "{{\n  \"inputs\": {{\"backend\":\"{}\", \"class_bin\":\"{}\", \"classy_python\":\"{}\", \"tau_reio\": {:.6}, \"z_reion_structural\": {}, \"planck_binned\":\"{}\", \"planck_full\":\"{}\"}},\n  \"class_vs_planck_binned\": {{\"n\": {}, \"chi2\": {:.12}, \"reduced_chi2\": {:.12}}},\n  \"class_vs_planck_full\": {{\"n\": {}, \"chi2\": {:.12}, \"reduced_chi2\": {:.12}}},\n  \"planck_binned_vs_planck_rebinned_from_full\": {{\"n\": {}, \"chi2\": {:.12}, \"reduced_chi2\": {:.12}}}\n}}",
         backend_used,
         class_bin,
         classy_python,
         tau_reio,
+        z_reion_structural_opt
+            .map(|v| format!("{v:.12}"))
+            .unwrap_or_else(|| "null".to_string()),
         planck_binned_path,
         planck_full_path,
         fit_pred_binned.n_points,
@@ -287,4 +317,10 @@ fn main() {
         chi2_bin_vs_rebinned,
         n_bin_vs_rebinned
     );
+    if let Some(zr) = z_reion_structural_opt {
+        println!(
+            "tau_reio derived structurally from reionization timing: tau={:.6}, z_reion={:.3}",
+            tau_reio, zr
+        );
+    }
 }

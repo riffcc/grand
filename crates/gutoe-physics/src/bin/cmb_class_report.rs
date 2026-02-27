@@ -4,11 +4,13 @@ use gutoe_physics::cmb_class::{
     compare_class_to_planck, read_class_tt_camb, read_planck_tt_csv, run_class,
     run_classy_fallback, write_class_ini, ClassRunInputs,
 };
+use gutoe_physics::cmb_reionization::derive_tau_reio;
 use gutoe_physics::constants::{
     lambda_cosmological_full_candidate, C, DARK_TO_VISIBLE_GEOMETRIC_RATIO,
 };
 use gutoe_physics::dark_matter_falsification::OMEGA_BARYON_OBS;
-use gutoe_physics::{evaluate_inflation_gate, InflationWindows};
+use gutoe_physics::microphysics::MicrophysicsAssumptions;
+use gutoe_physics::{evaluate_bbn_gate, evaluate_inflation_gate, BbnWindows, InflationWindows};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -39,6 +41,24 @@ fn derived_class_inputs(tau_reio: f64) -> ClassRunInputs {
         a_s: inflation.a_s,
         tau_reio,
     }
+}
+
+fn derived_tau_from_structure(inputs: ClassRunInputs) -> Result<(f64, f64), String> {
+    let omega_b0 = OMEGA_BARYON_OBS;
+    let omega_cdm0 = OMEGA_BARYON_OBS * DARK_TO_VISIBLE_GEOMETRIC_RATIO;
+    let omega_m0 = omega_b0 + omega_cdm0;
+    let bbn = evaluate_bbn_gate(BbnWindows::default());
+    let micro = MicrophysicsAssumptions {
+        h0_km_s_mpc: inputs.h * 100.0,
+        omega_b0,
+        omega_m0,
+        omega_r0: 9.0e-5,
+        omega_k0: inputs.omega_k,
+        omega_lambda0: inputs.omega_lambda,
+        eta10: bbn.eta10,
+    };
+    let reion = derive_tau_reio(micro, bbn.eta10)?;
+    Ok((reion.tau_reio, reion.z_reion_structural))
 }
 
 fn parse_env_f64(name: &str) -> Option<f64> {
@@ -96,8 +116,6 @@ fn main() {
     let classy_python =
         std::env::var("GUTOE_CLASSY_PYTHON").unwrap_or_else(|_| "python3".to_string());
     let tau_from_env = parse_env_f64("GUTOE_TAU_REIO");
-    let tau_reio = tau_from_env.unwrap_or(0.054);
-    let tau_assumption = tau_from_env.is_none();
 
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -109,7 +127,19 @@ fn main() {
     let root = run_dir.join("gutoe_");
     let root_str = root.to_string_lossy().to_string();
 
-    let inputs = derived_class_inputs(tau_reio);
+    let mut inputs = derived_class_inputs(0.054);
+    let (tau_reio, tau_assumption, z_reion_structural_opt) = if let Some(tau) = tau_from_env {
+        (tau, true, None)
+    } else {
+        match derived_tau_from_structure(inputs) {
+            Ok((tau, z_reion)) => (tau, false, Some(z_reion)),
+            Err(e) => {
+                eprintln!("failed to derive tau_reio structurally: {e}");
+                std::process::exit(2);
+            }
+        }
+    };
+    inputs.tau_reio = tau_reio;
     if let Err(e) = write_class_ini(&ini_path, &root_str, 2_500, inputs) {
         eprintln!("failed to write CLASS ini: {e}");
         std::process::exit(2);
@@ -186,6 +216,9 @@ fn main() {
     writeln!(txt, "A_s = {:.12e}", inputs.a_s).expect("write");
     writeln!(txt, "tau_reio = {:.12}", inputs.tau_reio).expect("write");
     writeln!(txt, "tau_reio_is_assumption = {}", tau_assumption).expect("write");
+    if let Some(zr) = z_reion_structural_opt {
+        writeln!(txt, "z_reion_structural = {:.12}", zr).expect("write");
+    }
     writeln!(txt).expect("write");
     writeln!(txt, "[fit]").expect("write");
     writeln!(txt, "n_points = {}", fit.n_points).expect("write");
@@ -213,7 +246,7 @@ fn main() {
     let mut json = File::create(&json_path).expect("create json");
     writeln!(
         json,
-        "{{\n  \"inputs\": {{\"class_bin\":\"{}\", \"planck_tt_csv\":\"{}\", \"h\": {:.12}, \"omega_b\": {:.12}, \"omega_cdm\": {:.12}, \"omega_k\": {:.12}, \"omega_lambda\": {:.12}, \"n_s\": {:.12}, \"a_s\": {:.12e}, \"tau_reio\": {:.12}, \"tau_reio_is_assumption\": {}}},\n  \"fit\": {{\"n_points\": {}, \"chi2\": {:.12}, \"reduced_chi2\": {:.12}, \"mean_abs_pull\": {:.12}, \"max_abs_pull\": {:.12}, \"rms_residual_uk2\": {:.12}}},\n  \"artifacts\": {{\"class_tt_path\":\"{}\", \"residual_csv\":\"{}\"}}\n}}",
+        "{{\n  \"inputs\": {{\"class_bin\":\"{}\", \"planck_tt_csv\":\"{}\", \"h\": {:.12}, \"omega_b\": {:.12}, \"omega_cdm\": {:.12}, \"omega_k\": {:.12}, \"omega_lambda\": {:.12}, \"n_s\": {:.12}, \"a_s\": {:.12e}, \"tau_reio\": {:.12}, \"tau_reio_is_assumption\": {}, \"z_reion_structural\": {}}},\n  \"fit\": {{\"n_points\": {}, \"chi2\": {:.12}, \"reduced_chi2\": {:.12}, \"mean_abs_pull\": {:.12}, \"max_abs_pull\": {:.12}, \"rms_residual_uk2\": {:.12}}},\n  \"artifacts\": {{\"class_tt_path\":\"{}\", \"residual_csv\":\"{}\"}}\n}}",
         class_bin,
         planck_path,
         inputs.h,
@@ -225,6 +258,9 @@ fn main() {
         inputs.a_s,
         inputs.tau_reio,
         tau_assumption,
+        z_reion_structural_opt
+            .map(|v| format!("{v:.12}"))
+            .unwrap_or_else(|| "null".to_string()),
         fit.n_points,
         fit.chi2,
         fit.reduced_chi2,
@@ -251,6 +287,11 @@ fn main() {
         println!(
             "NOTE: tau_reio not yet derived in-framework; using explicit assumption tau_reio={:.6}",
             inputs.tau_reio
+        );
+    } else if let Some(zr) = z_reion_structural_opt {
+        println!(
+            "tau_reio derived structurally from reionization timing: tau={:.6}, z_reion={:.3}",
+            inputs.tau_reio, zr
         );
     }
 }
