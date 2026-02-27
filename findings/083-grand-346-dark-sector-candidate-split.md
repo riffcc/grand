@@ -36,6 +36,7 @@ Rust harness additions:
 - `crates/gutoe-physics/src/bin/dark_matter_report.rs`
 - `crates/gutoe-physics/src/dark_matter_falsification.rs`
 - `crates/gutoe-physics/src/bin/dark_matter_falsification_report.rs`
+- `crates/gutoe-physics/src/bin/dark_matter_ci_gate.rs`
 - `crates/gutoe-physics/data/sparc_massmodels_2016c_baryon.csv`
 
 Core runtime outputs:
@@ -93,7 +94,6 @@ Remaining GRAND-346 closure work:
 
 1. Replace the current unified composition rule with a fully dynamical halo evolution law from the same primitive equations.
 2. Add independent lensing datasets (cluster-scale) instead of rotation-derived lensing proxies.
-3. Promote dark-matter scorecard into CI falsification artifacts.
 
 ## Build sanity
 
@@ -101,6 +101,15 @@ Remaining GRAND-346 closure work:
 - `lake build Gutoe` ✅
 - `cargo check -p gutoe-physics --bin dark_matter_report` ✅
 - `cargo check -p gutoe-physics --bin dark_matter_falsification_report` ✅
+- `cargo check -p gutoe-physics --bin dark_matter_ci_gate` ✅
 - `cargo test -p gutoe-physics dark_matter_falsification` ✅
+- `cargo run -q -p gutoe-physics --bin dark_matter_ci_gate` ✅
+
+CI hard gate behavior:
+
+- default target branch is `unified`
+- configurable via `GUTOE_DARK_GATE_BRANCH={particle|geometric|unified}`
+- writes `/tmp/bh_renders/dark_matter_ci_gate.json`
+- exits with code `2` if target branch fails any gate window
 
 No `sorry` introduced.
