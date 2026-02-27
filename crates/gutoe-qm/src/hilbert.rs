@@ -119,7 +119,11 @@ pub fn measure_and_collapse(psi: &mut SpatialPsi, rng: &mut impl rand::Rng) -> u
     }
     // Collapse: project onto |site⟩
     for (i, a) in psi.iter_mut().enumerate() {
-        *a = if i == site { Complex64::new(1.0, 0.0) } else { Complex64::new(0.0, 0.0) };
+        *a = if i == site {
+            Complex64::new(1.0, 0.0)
+        } else {
+            Complex64::new(0.0, 0.0)
+        };
     }
     site
 }

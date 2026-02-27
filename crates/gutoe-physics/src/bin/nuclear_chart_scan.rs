@@ -1,7 +1,8 @@
 use gutoe_physics::{
     magic_s2n_discontinuities, magic_s2n_summary, proton_s2p_discontinuities, proton_s2p_summary,
-    rank_island_candidates, scan_nuclear_chart, write_magic_discontinuities_csv, write_magic_summary_csv,
-    write_proton_discontinuities_csv, write_proton_summary_csv, write_records_csv, NucleusRecord, ScanConfig,
+    rank_island_candidates, scan_nuclear_chart, write_magic_discontinuities_csv,
+    write_magic_summary_csv, write_proton_discontinuities_csv, write_proton_summary_csv,
+    write_records_csv, NucleusRecord, ScanConfig,
 };
 use std::env;
 use std::fs;
@@ -63,7 +64,8 @@ fn write_top_islands_csv(path: PathBuf, rows: &[NucleusRecord]) -> std::io::Resu
 }
 
 fn main() -> anyhow::Result<()> {
-    let output_dir = env::var("GUTOE_NUCLEAR_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart".to_string());
+    let output_dir =
+        env::var("GUTOE_NUCLEAR_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart".to_string());
     let default_shell = gutoe_physics::ShellParams::default();
     let cfg = ScanConfig {
         z_min: env_u16("GUTOE_NUCLEAR_Z_MIN", 1),
@@ -74,9 +76,15 @@ fn main() -> anyhow::Result<()> {
             amplitude_z: env_f64("GUTOE_NUCLEAR_AMP_Z", default_shell.amplitude_z),
             amplitude_n: env_f64("GUTOE_NUCLEAR_AMP_N", default_shell.amplitude_n),
             shell_amp: env_f64("GUTOE_NUCLEAR_SHELL_AMP", default_shell.shell_amp),
-            shell_scale_exp: env_f64("GUTOE_NUCLEAR_SHELL_SCALE_EXP", default_shell.shell_scale_exp),
+            shell_scale_exp: env_f64(
+                "GUTOE_NUCLEAR_SHELL_SCALE_EXP",
+                default_shell.shell_scale_exp,
+            ),
             use_strutinsky: env_bool("GUTOE_NUCLEAR_USE_STRUTINSKY", default_shell.use_strutinsky),
-            strutinsky_gamma: env_f64("GUTOE_NUCLEAR_STRUTINSKY_GAMMA", default_shell.strutinsky_gamma),
+            strutinsky_gamma: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_GAMMA",
+                default_shell.strutinsky_gamma,
+            ),
             strutinsky_spacing_mev: env_f64(
                 "GUTOE_NUCLEAR_STRUTINSKY_SPACING_MEV",
                 default_shell.strutinsky_spacing_mev,
@@ -149,8 +157,14 @@ fn main() -> anyhow::Result<()> {
             heavy_sigma_z: env_f64("GUTOE_NUCLEAR_HEAVY_SIGMA_Z", default_shell.heavy_sigma_z),
             heavy_sigma_n: env_f64("GUTOE_NUCLEAR_HEAVY_SIGMA_N", default_shell.heavy_sigma_n),
             heavy_amplitude: env_f64("GUTOE_NUCLEAR_HEAVY_AMP", default_shell.heavy_amplitude),
-            heavy_gate_z_min: env_u16("GUTOE_NUCLEAR_HEAVY_GATE_Z_MIN", default_shell.heavy_gate_z_min),
-            heavy_gate_n_min: env_u16("GUTOE_NUCLEAR_HEAVY_GATE_N_MIN", default_shell.heavy_gate_n_min),
+            heavy_gate_z_min: env_u16(
+                "GUTOE_NUCLEAR_HEAVY_GATE_Z_MIN",
+                default_shell.heavy_gate_z_min,
+            ),
+            heavy_gate_n_min: env_u16(
+                "GUTOE_NUCLEAR_HEAVY_GATE_N_MIN",
+                default_shell.heavy_gate_n_min,
+            ),
             z50_isovector_valley_amplitude: env_f64(
                 "GUTOE_NUCLEAR_Z50_ISOVECTOR_VALLEY_AMP",
                 default_shell.z50_isovector_valley_amplitude,
@@ -192,7 +206,10 @@ fn main() -> anyhow::Result<()> {
     let mut slice_csv = String::from(
         "Z,N,A,binding_per_nucleon_mev,s2n_mev,s2p_mev,shell_bonus_mev,shell_bonus_baseline_mev,shell_bonus_heavy_mev,shell_bonus_superheavy_proton_mev,fissility,fission_barrier_mev,sf_log10_half_life_s,stability_score\n",
     );
-    for r in records.iter().filter(|r| r.z >= slice_z_min && r.z <= slice_z_max) {
+    for r in records
+        .iter()
+        .filter(|r| r.z >= slice_z_min && r.z <= slice_z_max)
+    {
         slice_csv.push_str(&format!(
             "{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
             r.z,

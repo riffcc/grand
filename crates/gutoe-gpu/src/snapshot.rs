@@ -31,7 +31,10 @@ impl std::fmt::Display for SnapshotError {
             Self::UnsupportedVersion(v) => write!(f, "unsupported snapshot version: {v}"),
             Self::Truncated => write!(f, "snapshot payload truncated"),
             Self::HashMismatch { expected, got } => {
-                write!(f, "snapshot hash mismatch: expected {expected:#x}, got {got:#x}")
+                write!(
+                    f,
+                    "snapshot hash mismatch: expected {expected:#x}, got {got:#x}"
+                )
             }
         }
     }

@@ -55,8 +55,18 @@ impl HexState {
     /// Get all 12 states
     pub fn all() -> [HexState; 12] {
         [
-            HexState::A0, HexState::A60, HexState::A120, HexState::A180, HexState::A240, HexState::A300,
-            HexState::B0, HexState::B60, HexState::B120, HexState::B180, HexState::B240, HexState::B300,
+            HexState::A0,
+            HexState::A60,
+            HexState::A120,
+            HexState::A180,
+            HexState::A240,
+            HexState::A300,
+            HexState::B0,
+            HexState::B60,
+            HexState::B120,
+            HexState::B180,
+            HexState::B240,
+            HexState::B300,
         ]
     }
 
@@ -69,7 +79,7 @@ impl HexState {
             HexState::A180 => 180.0,
             HexState::A240 => 240.0,
             HexState::A300 => 300.0,
-            HexState::B0 => 180.0,    // Negated
+            HexState::B0 => 180.0, // Negated
             HexState::B60 => 240.0,
             HexState::B120 => 300.0,
             HexState::B180 => 0.0,
@@ -85,8 +95,15 @@ impl HexState {
 
     /// Check if on positive face
     pub fn is_positive(&self) -> bool {
-        matches!(self, HexState::A0 | HexState::A60 | HexState::A120 |
-                       HexState::A180 | HexState::A240 | HexState::A300)
+        matches!(
+            self,
+            HexState::A0
+                | HexState::A60
+                | HexState::A120
+                | HexState::A180
+                | HexState::A240
+                | HexState::A300
+        )
     }
 
     /// Check if on negative/dual face
@@ -290,8 +307,12 @@ impl HexPhase {
         Self { angle: degrees }
     }
 
-    pub fn S() -> Self { Self { angle: 60.0 } }
-    pub fn T() -> Self { Self { angle: 30.0 } }
+    pub fn S() -> Self {
+        Self { angle: 60.0 }
+    }
+    pub fn T() -> Self {
+        Self { angle: 30.0 }
+    }
 
     pub fn apply(&self, state: HexState) -> HexState {
         let current_angle = state.angle();
@@ -301,8 +322,12 @@ impl HexPhase {
         HexState::all()
             .into_iter()
             .min_by(|a, b| {
-                let dist_a = (a.angle() - new_angle).abs().min(360.0 - (a.angle() - new_angle).abs());
-                let dist_b = (b.angle() - new_angle).abs().min(360.0 - (b.angle() - new_angle).abs());
+                let dist_a = (a.angle() - new_angle)
+                    .abs()
+                    .min(360.0 - (a.angle() - new_angle).abs());
+                let dist_b = (b.angle() - new_angle)
+                    .abs()
+                    .min(360.0 - (b.angle() - new_angle).abs());
                 dist_a.partial_cmp(&dist_b).unwrap()
             })
             .unwrap_or(state)

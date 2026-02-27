@@ -13,15 +13,26 @@ fn main() {
     let pref = baryogenesis_structural_prefactor();
     let f_neq = nonequilibrium_survival_factor();
 
-    let out_dir = std::env::var("GUTOE_BARYO_OUT").unwrap_or_else(|_| "/tmp/bh_renders".to_string());
+    let out_dir =
+        std::env::var("GUTOE_BARYO_OUT").unwrap_or_else(|_| "/tmp/bh_renders".to_string());
     let _ = fs::create_dir_all(&out_dir);
     let txt_path = format!("{out_dir}/baryogenesis_report.txt");
     let json_path = format!("{out_dir}/baryogenesis_report.json");
 
     let mut txt = File::create(&txt_path).expect("create txt");
     writeln!(txt, "[baryogenesis_structural]").expect("write");
-    writeln!(txt, "jarlskog_ckm_direct = {:.12e}", score.jarlskog_ckm_direct).expect("write");
-    writeln!(txt, "jarlskog_ckm_texture = {:.12e}", score.jarlskog_ckm_texture).expect("write");
+    writeln!(
+        txt,
+        "jarlskog_ckm_direct = {:.12e}",
+        score.jarlskog_ckm_direct
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "jarlskog_ckm_texture = {:.12e}",
+        score.jarlskog_ckm_texture
+    )
+    .expect("write");
     writeln!(txt, "prefactor = {:.12e}", pref).expect("write");
     writeln!(txt, "nonequilibrium_survival = {:.12e}", f_neq).expect("write");
     writeln!(txt, "eta_predicted = {:.12e}", score.eta_predicted).expect("write");

@@ -83,14 +83,27 @@ pub struct CameraFrame {
 }
 
 impl CameraFrame {
-    pub fn new(position: Vec3, forward: Vec3, world_up: Vec3, fov_y_rad: f64, aspect: f64) -> Option<Self> {
+    pub fn new(
+        position: Vec3,
+        forward: Vec3,
+        world_up: Vec3,
+        fov_y_rad: f64,
+        aspect: f64,
+    ) -> Option<Self> {
         let f = forward.normalized()?;
         let mut r = f.cross(world_up).normalized()?;
         let mut u = r.cross(f).normalized()?;
         // Re-orthogonalize for numerical stability.
         r = u.cross(f).normalized()?;
         u = r.cross(f).normalized()?;
-        Some(Self { position, forward: f, right: r, up: u, fov_y_rad, aspect })
+        Some(Self {
+            position,
+            forward: f,
+            right: r,
+            up: u,
+            fov_y_rad,
+            aspect,
+        })
     }
 
     /// True 3D pinhole ray from pixel center in NDC coordinates [-1,1]^2.
@@ -188,9 +201,7 @@ pub fn trace_photon_from_3d(
 fn orbit_accel_3d(r: f64, b: f64, r_s: f64, r_c: f64) -> f64 {
     let re2 = r * r + r_c * r_c;
     let re3 = re2 * re2.sqrt();
-    r * (2.0 * r * r + r_c * r_c) / (b * b)
-        - r
-        + r_s * r * (r * r + 2.0 * r_c * r_c) / (2.0 * re3)
+    r * (2.0 * r * r + r_c * r_c) / (b * b) - r + r_s * r * (r * r + 2.0 * r_c * r_c) / (2.0 * re3)
 }
 
 fn orbit_vr_sq_3d(r: f64, b: f64, r_s: f64, r_c: f64) -> f64 {
@@ -274,13 +285,18 @@ pub fn trace_photon_3d_schwarzschild(
     let r_capture_re = r_s * 0.99;
     let max_steps = (max_phi / dphi).ceil() as usize + 1;
 
-    let world_at = |rad: f64, ang: f64| -> Vec3 { e_x * (rad * ang.cos()) + e_y * (rad * ang.sin()) };
+    let world_at =
+        |rad: f64, ang: f64| -> Vec3 { e_x * (rad * ang.cos()) + e_y * (rad * ang.sin()) };
     let mut w_prev = world_at(r, phi);
 
     for _ in 0..max_steps {
         let (r_new, p_rk4) = rk4_step_3d(r, p_r, b, r_s, r_c, dphi);
         let vr2_new = orbit_vr_sq_3d(r_new, b, r_s, r_c).max(0.0);
-        let p_new = if p_rk4 >= 0.0 { vr2_new.sqrt() } else { -vr2_new.sqrt() };
+        let p_new = if p_rk4 >= 0.0 {
+            vr2_new.sqrt()
+        } else {
+            -vr2_new.sqrt()
+        };
         let phi_new = phi + dphi;
         let re_new = (r_new * r_new + r_c * r_c).sqrt();
         if !re_new.is_finite() || r_new.is_nan() {
@@ -352,7 +368,13 @@ mod tests {
             16.0 / 9.0,
         )
         .unwrap();
-        for (x, y) in [(-1.0, -1.0), (-0.2, 0.6), (0.0, 0.0), (0.7, -0.4), (1.0, 1.0)] {
+        for (x, y) in [
+            (-1.0, -1.0),
+            (-0.2, 0.6),
+            (0.0, 0.0),
+            (0.7, -0.4),
+            (1.0, 1.0),
+        ] {
             let d = cam.ray_dir_from_ndc(x, y);
             assert!((d.norm() - 1.0).abs() < 1e-12);
         }
@@ -394,7 +416,13 @@ mod tests {
     #[test]
     fn lean_ray_norm_sq_eval_parity() {
         // Parity with theorem: Gutoe.Geodesic3DProjection.rayNormSq_eval
-        for (a, b) in [(-2.0, -1.5), (-0.4, 0.7), (0.0, 0.0), (1.2, -0.8), (3.5, 4.0)] {
+        for (a, b) in [
+            (-2.0, -1.5),
+            (-0.4, 0.7),
+            (0.0, 0.0),
+            (1.2, -0.8),
+            (3.5, 4.0),
+        ] {
             let lhs = ray_norm_sq(a, b);
             let rhs = impact_radius_sq(a, b) + 1.0;
             assert!((lhs - rhs).abs() < 1e-12, "a={a} b={b} lhs={lhs} rhs={rhs}");
@@ -407,7 +435,10 @@ mod tests {
         for (a, b) in [(-1.0, -2.0), (0.25, 0.9), (2.5, -0.3)] {
             let left = impact_radius_sq(a, -b).sqrt();
             let right = impact_radius_sq(a, b).sqrt();
-            assert!((left - right).abs() < 1e-12, "a={a} b={b} left={left} right={right}");
+            assert!(
+                (left - right).abs() < 1e-12,
+                "a={a} b={b} left={left} right={right}"
+            );
         }
     }
 
@@ -416,7 +447,11 @@ mod tests {
         // Parity with theorem: Gutoe.Geodesic3DProjection.rayDir_unit_normSq
         for (a, b) in [(-1.2, 0.4), (0.0, 0.0), (1.1, 2.2)] {
             let d = ray_dir(a, b).expect("ray_dir should normalize for finite inputs");
-            assert!((d.dot(d) - 1.0).abs() < 1e-12, "a={a} b={b} norm2={}", d.dot(d));
+            assert!(
+                (d.dot(d) - 1.0).abs() < 1e-12,
+                "a={a} b={b} norm2={}",
+                d.dot(d)
+            );
             assert!(d.z > 0.0, "expected positive forward z component");
         }
     }

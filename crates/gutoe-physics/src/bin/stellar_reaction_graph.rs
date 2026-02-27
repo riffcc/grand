@@ -52,7 +52,11 @@ fn main() {
     json.push_str("},\n");
     json.push_str(&format!(
         "  \"all_conserved\": {}\n",
-        if network.all_conserved() { "true" } else { "false" }
+        if network.all_conserved() {
+            "true"
+        } else {
+            "false"
+        }
     ));
     json.push_str("}\n");
 

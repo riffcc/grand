@@ -27,13 +27,13 @@ use gutoe_gpu::{
     kerr::KerrMetric,
     metric::{GutoeMetric, C_INF, LAMBDA_QG, WATSON_SC},
     synchrotron::{band_tint, band_weight_with_exposure, RenderSpectrum as SpectralBand},
-    transfer::{covariant_absorption, covariant_emissivity, transfer_step},
     tracer::{
         b_critical, trace_photon, trace_photon_interior, trace_photon_interior_core,
         trace_photon_kerr, trace_photon_kerr_activity, trace_photon_kerr_debug,
-        trace_photon_kerr_wave_branches, trace_photon_kerr_wave_samples, write_ppm,
-        RenderConfig, TraceResult,
+        trace_photon_kerr_wave_branches, trace_photon_kerr_wave_samples, write_ppm, RenderConfig,
+        TraceResult,
     },
+    transfer::{covariant_absorption, covariant_emissivity, transfer_step},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -217,14 +217,19 @@ fn truth_color_from_trace(
         }
         (TruthMode::Crossings, _) => [0, 0, 0],
 
-        (TruthMode::Angle, TraceResult::Escaped { phi_total }) => false_color_ramp01(angle_norm(phi_total)),
-        (TruthMode::Angle, TraceResult::DiskHit { phi_orb, .. }) => false_color_ramp01(angle_norm(phi_orb.abs())),
+        (TruthMode::Angle, TraceResult::Escaped { phi_total }) => {
+            false_color_ramp01(angle_norm(phi_total))
+        }
+        (TruthMode::Angle, TraceResult::DiskHit { phi_orb, .. }) => {
+            false_color_ramp01(angle_norm(phi_orb.abs()))
+        }
         (TruthMode::Angle, TraceResult::Captured) => [0, 0, 0],
 
         (TruthMode::Lean, _) => lean_warm_color(lean_activity.unwrap_or(0.0)),
 
         (TruthMode::Transfer, TraceResult::DiskHit { r_eff, phi_orb, .. }) => {
-            let g4 = disk_transfer_factor(r_eff, r_s, bx_raw, phi_orb, sin_inc, doppler, kerr_astar);
+            let g4 =
+                disk_transfer_factor(r_eff, r_s, bx_raw, phi_orb, sin_inc, doppler, kerr_astar);
             let u = ((g4.max(1e-9).log10() + 6.0) / 8.5).clamp(0.0, 1.0);
             false_color_ramp01(u)
         }
@@ -340,18 +345,18 @@ extern "C" {
         ring_mode: i32,
         interior_mode: i32,
         core_look_mode: i32,
-        spectral_band: i32, // 0..7, see SpectralBand
-        disk_model: i32,    // 0=thin, 1=riaf
-        plasma_model: i32,  // 0=nt, 1=grmhd profile proxy
-        use_transfer: i32,  // 1 => use transfer_step path for disk intensity
-        tau_scale: f64,     // optical-depth scale for transfer path
+        spectral_band: i32,  // 0..7, see SpectralBand
+        disk_model: i32,     // 0=thin, 1=riaf
+        plasma_model: i32,   // 0=nt, 1=grmhd profile proxy
+        use_transfer: i32,   // 1 => use transfer_step path for disk intensity
+        tau_scale: f64,      // optical-depth scale for transfer path
         fixed_exposure: f64, // <0 => per-band default exposure; >=0 force fixed exposure
-        adaptive_dphi: i32, // 1 => reduce dphi near critical impact parameter
-        kerr_enable: i32,   // 1 => use Kerr tracer for exterior rays
-        kerr_astar: f64,    // dimensionless spin a*
-        r_cam_rs: f64, // 0.0 = exterior; >0 = interior camera at r_cam_rs × r_s
-        jitter_x: f64, // subpixel jitter in [0,1)
-        jitter_y: f64, // subpixel jitter in [0,1)
+        adaptive_dphi: i32,  // 1 => reduce dphi near critical impact parameter
+        kerr_enable: i32,    // 1 => use Kerr tracer for exterior rays
+        kerr_astar: f64,     // dimensionless spin a*
+        r_cam_rs: f64,       // 0.0 = exterior; >0 = interior camera at r_cam_rs × r_s
+        jitter_x: f64,       // subpixel jitter in [0,1)
+        jitter_y: f64,       // subpixel jitter in [0,1)
         out_pixels: *mut u8,
     );
 }
@@ -870,10 +875,8 @@ fn pixel_color(
     // Local covariant source proxy.
     let source_local = (t_rel * fade * outer_taper * spectral * j_scale).max(0.0);
     let g_cov = transfer.max(1e-9).powf(0.25);
-    let alpha_base = 0.35
-        * tau_scale.max(0.0)
-        * (1.0 + (n_cross.saturating_sub(1)) as f64 * 0.15)
-        * a_scale;
+    let alpha_base =
+        0.35 * tau_scale.max(0.0) * (1.0 + (n_cross.saturating_sub(1)) as f64 * 0.15) * a_scale;
     let luminance_raw = if use_transfer {
         // Multi-step covariant transfer integration along an effective path
         // segment through the emitting flow.
@@ -1321,9 +1324,15 @@ fn star_field_color(bx: f64, by: f64, phi_total: f64) -> [u8; 3] {
     if let Some(map) = map_rgb {
         // Keep a bit of procedural sparkle over real-sky texture.
         return [
-            ((map[0] as f64 * 0.88) + (proc[0] as f64 * 0.12)).round().clamp(0.0, 255.0) as u8,
-            ((map[1] as f64 * 0.88) + (proc[1] as f64 * 0.12)).round().clamp(0.0, 255.0) as u8,
-            ((map[2] as f64 * 0.88) + (proc[2] as f64 * 0.12)).round().clamp(0.0, 255.0) as u8,
+            ((map[0] as f64 * 0.88) + (proc[0] as f64 * 0.12))
+                .round()
+                .clamp(0.0, 255.0) as u8,
+            ((map[1] as f64 * 0.88) + (proc[1] as f64 * 0.12))
+                .round()
+                .clamp(0.0, 255.0) as u8,
+            ((map[2] as f64 * 0.88) + (proc[2] as f64 * 0.12))
+                .round()
+                .clamp(0.0, 255.0) as u8,
         ];
     }
     proc
@@ -1511,7 +1520,13 @@ fn moffat_kernel(alpha: f64, beta: f64, radius: usize) -> Vec<f64> {
     k
 }
 
-fn convolve_rgb_f64(input: &[[f64; 3]], w: usize, h: usize, kernel: &[f64], radius: usize) -> Vec<[f64; 3]> {
+fn convolve_rgb_f64(
+    input: &[[f64; 3]],
+    w: usize,
+    h: usize,
+    kernel: &[f64],
+    radius: usize,
+) -> Vec<[f64; 3]> {
     let n = 2 * radius + 1;
     let mut out = vec![[0.0; 3]; w * h];
     for y in 0..h {
@@ -1534,10 +1549,23 @@ fn convolve_rgb_f64(input: &[[f64; 3]], w: usize, h: usize, kernel: &[f64], radi
     out
 }
 
-fn richardson_lucy_rgb(observed: &[[u8; 3]], w: usize, h: usize, kernel: &[f64], radius: usize, iters: usize) -> Vec<[u8; 3]> {
+fn richardson_lucy_rgb(
+    observed: &[[u8; 3]],
+    w: usize,
+    h: usize,
+    kernel: &[f64],
+    radius: usize,
+    iters: usize,
+) -> Vec<[u8; 3]> {
     let obs: Vec<[f64; 3]> = observed
         .iter()
-        .map(|p| [p[0] as f64 / 255.0, p[1] as f64 / 255.0, p[2] as f64 / 255.0])
+        .map(|p| {
+            [
+                p[0] as f64 / 255.0,
+                p[1] as f64 / 255.0,
+                p[2] as f64 / 255.0,
+            ]
+        })
         .collect();
     let mut est = obs.clone();
     for _ in 0..iters {
@@ -1618,7 +1646,10 @@ fn sample_jitter(i: usize, spp: usize) -> (f64, f64) {
     let n = (spp as f64).sqrt().ceil() as usize;
     let sx = i % n;
     let sy = i / n;
-    (((sx as f64) + 0.5) / n as f64, ((sy as f64) + 0.5) / n as f64)
+    (
+        ((sx as f64) + 0.5) / n as f64,
+        ((sy as f64) + 0.5) / n as f64,
+    )
 }
 
 /// Reduce integration step near the critical impact parameter to sharpen rings.
@@ -1655,7 +1686,10 @@ fn render_view(
     let parse_env_usize = |k: &str| std::env::var(k).ok().and_then(|s| s.parse::<usize>().ok());
     let parse_env_bool = |k: &str| {
         std::env::var(k).ok().is_some_and(|s| {
-            matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON")
+            matches!(
+                s.as_str(),
+                "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+            )
         })
     };
     let width = if width_override > 0 {
@@ -1685,9 +1719,12 @@ fn render_view(
     let mut disk_model = DiskModel::from_env();
     let plasma_model = PlasmaModel::from_env();
     let use_transfer_env = std::env::var("BH_USE_TRANSFER").ok();
-    let mut use_transfer = use_transfer_env
-        .as_ref()
-        .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+    let mut use_transfer = use_transfer_env.as_ref().is_some_and(|s| {
+        matches!(
+            s.as_str(),
+            "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+        )
+    });
     let tau_scale_env = std::env::var("BH_TAU_SCALE").ok();
     let mut tau_scale = tau_scale_env
         .as_ref()
@@ -1762,14 +1799,20 @@ fn render_view(
     }
     eprintln!("    spectrum={} (BH_SPECTRUM)", spectral_band.as_label());
     eprintln!("    disk_model={} (BH_DISK_MODEL)", disk_model.as_label());
-    eprintln!("    plasma_model={} (BH_PLASMA_MODEL)", plasma_model.as_label());
+    eprintln!(
+        "    plasma_model={} (BH_PLASMA_MODEL)",
+        plasma_model.as_label()
+    );
     if plasma_model == PlasmaModel::Grmhd {
         let f_nonthermal = std::env::var("BH_NONTHERMAL_FRAC")
             .ok()
             .and_then(|s| s.parse::<f64>().ok())
             .unwrap_or(0.0)
             .clamp(0.0, 1.0);
-        eprintln!("    nonthermal_frac={:.3} (BH_NONTHERMAL_FRAC)", f_nonthermal);
+        eprintln!(
+            "    nonthermal_frac={:.3} (BH_NONTHERMAL_FRAC)",
+            f_nonthermal
+        );
     }
     eprintln!(
         "    transfer={} tau_scale={:.3} (BH_USE_TRANSFER/BH_TAU_SCALE)",
@@ -1943,8 +1986,14 @@ fn render_view(
     let sidecar_path = out_dir.join(format!("{}.json", output_slug));
     let mut sidecar = String::new();
     sidecar.push_str("{\n");
-    sidecar.push_str(&format!("  \"slug\": \"{}\",\n", output_slug.replace('"', "\\\"")));
-    sidecar.push_str(&format!("  \"label\": \"{}\",\n", view.label.replace('"', "\\\"")));
+    sidecar.push_str(&format!(
+        "  \"slug\": \"{}\",\n",
+        output_slug.replace('"', "\\\"")
+    ));
+    sidecar.push_str(&format!(
+        "  \"label\": \"{}\",\n",
+        view.label.replace('"', "\\\"")
+    ));
     sidecar.push_str(&format!("  \"git_sha\": \"{}\",\n", git_sha));
     sidecar.push_str(&format!("  \"png\": \"{}\",\n", png_path.display()));
     sidecar.push_str(&format!("  \"width\": {},\n", cfg_base.width));
@@ -1959,15 +2008,38 @@ fn render_view(
     sidecar.push_str(&format!("  \"superscale\": {},\n", superscale));
     sidecar.push_str(&format!("  \"spp\": {},\n", spp));
     sidecar.push_str(&format!("  \"blur_sigma\": {:.6},\n", blur_sigma));
-    sidecar.push_str(&format!("  \"disk_model\": \"{}\",\n", disk_model.as_label()));
-    sidecar.push_str(&format!("  \"plasma_model\": \"{}\",\n", plasma_model.as_label()));
-    sidecar.push_str(&format!("  \"spectrum\": \"{}\",\n", spectral_band.as_label()));
+    sidecar.push_str(&format!(
+        "  \"disk_model\": \"{}\",\n",
+        disk_model.as_label()
+    ));
+    sidecar.push_str(&format!(
+        "  \"plasma_model\": \"{}\",\n",
+        plasma_model.as_label()
+    ));
+    sidecar.push_str(&format!(
+        "  \"spectrum\": \"{}\",\n",
+        spectral_band.as_label()
+    ));
     sidecar.push_str(&format!("  \"use_transfer\": {},\n", use_transfer));
     sidecar.push_str(&format!("  \"tau_scale\": {:.6},\n", tau_scale));
-    sidecar.push_str(&format!("  \"truth_mode\": \"{}\",\n", truth_mode().as_label()));
-    sidecar.push_str(&format!("  \"gutoe_mode\": {},\n", !(view.gr_mode || force_gr)));
-    sidecar.push_str(&format!("  \"kerr_astar\": {},\n", parse_env_f64("BH_KERR_ASTAR").unwrap_or(0.0)));
-    sidecar.push_str(&format!("  \"starmap_path\": \"{}\",\n", std::env::var("BH_STARMAP_PATH").unwrap_or_default().replace('"', "\\\"")));
+    sidecar.push_str(&format!(
+        "  \"truth_mode\": \"{}\",\n",
+        truth_mode().as_label()
+    ));
+    sidecar.push_str(&format!(
+        "  \"gutoe_mode\": {},\n",
+        !(view.gr_mode || force_gr)
+    ));
+    sidecar.push_str(&format!(
+        "  \"kerr_astar\": {},\n",
+        parse_env_f64("BH_KERR_ASTAR").unwrap_or(0.0)
+    ));
+    sidecar.push_str(&format!(
+        "  \"starmap_path\": \"{}\",\n",
+        std::env::var("BH_STARMAP_PATH")
+            .unwrap_or_default()
+            .replace('"', "\\\"")
+    ));
     let parity_check = parse_env_bool("BH_KERR_PARITY") || parse_env_bool("BH_VALIDATE_GPU");
     sidecar.push_str(&format!("  \"cpu_gpu_parity_check\": {}\n", parity_check));
     sidecar.push_str("}\n");
@@ -2013,7 +2085,10 @@ fn render_view_tiled(
     let parse_env_usize = |k: &str| std::env::var(k).ok().and_then(|s| s.parse::<usize>().ok());
     let parse_env_bool = |k: &str| {
         std::env::var(k).ok().is_some_and(|s| {
-            matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON")
+            matches!(
+                s.as_str(),
+                "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+            )
         })
     };
     let fov_override = parse_env_f64("BH_FOV_OVERRIDE");
@@ -2027,9 +2102,12 @@ fn render_view_tiled(
     let spectral_band = SpectralBand::from_env();
     let disk_model = DiskModel::from_env();
     let plasma_model = PlasmaModel::from_env();
-    let use_transfer = std::env::var("BH_USE_TRANSFER")
-        .ok()
-        .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+    let use_transfer = std::env::var("BH_USE_TRANSFER").ok().is_some_and(|s| {
+        matches!(
+            s.as_str(),
+            "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+        )
+    });
     let tau_scale = std::env::var("BH_TAU_SCALE")
         .ok()
         .and_then(|s| s.parse::<f64>().ok())
@@ -2041,8 +2119,7 @@ fn render_view_tiled(
     } else {
         GutoeMetric::planck_units(1.0)
     };
-    let kerr_metric = parse_env_f64("BH_KERR_ASTAR")
-        .and_then(|a| KerrMetric::new(metric.r_s, a));
+    let kerr_metric = parse_env_f64("BH_KERR_ASTAR").and_then(|a| KerrMetric::new(metric.r_s, a));
     let r_cam_rs = if view.r_cam_frac > 0.0 {
         metric
             .r_horizon()
@@ -2103,7 +2180,9 @@ fn render_view_tiled(
     #[cfg(not(any(feature = "cuda", feature = "rocm")))]
     let tiled_gpu = false;
     let faithful_guard = parse_env_bool("BH_TILED_FAITHFUL");
-    let probe_px = parse_env_usize("BH_TILED_PROBE_PX").unwrap_or(48).clamp(16, 128);
+    let probe_px = parse_env_usize("BH_TILED_PROBE_PX")
+        .unwrap_or(48)
+        .clamp(16, 128);
     let probe_mad_max = parse_env_f64("BH_TILED_PROBE_MAD_MAX")
         .unwrap_or(8.0)
         .clamp(0.5, 64.0);
@@ -2123,7 +2202,15 @@ fn render_view_tiled(
             let y0 = ty * tile;
             let tw = (width - x0).min(tile);
             let th = (height - y0).min(tile);
-            eprintln!("    tile ({},{})  x={} y={}  {}x{}", tx + 1, ty + 1, x0, y0, tw, th);
+            eprintln!(
+                "    tile ({},{})  x={} y={}  {}x{}",
+                tx + 1,
+                ty + 1,
+                x0,
+                y0,
+                tw,
+                th
+            );
             #[cfg(any(feature = "cuda", feature = "rocm"))]
             let tile_cfg = RenderConfig {
                 width: tw,
@@ -2747,7 +2834,15 @@ fn render_with_options_cpu(
                     dphi_ray,
                 )
             } else {
-                trace_photon(metric, disk_inner, disk_outer, bx, by, cfg.max_phi, dphi_ray)
+                trace_photon(
+                    metric,
+                    disk_inner,
+                    disk_outer,
+                    bx,
+                    by,
+                    cfg.max_phi,
+                    dphi_ray,
+                )
             };
 
             let lean_activity = if truth_mode() == TruthMode::Lean {
@@ -2919,7 +3014,8 @@ fn render_with_options_cpu_window(
         } else {
             Vec3::new(0.0, 0.0, 1.0)
         };
-        let half_view_y = cfg.fov_rs * r_s * (total_height as f64 / total_width.min(total_height) as f64);
+        let half_view_y =
+            cfg.fov_rs * r_s * (total_height as f64 / total_width.min(total_height) as f64);
         let fov_y = 2.0 * (half_view_y / z_obs).atan();
         CameraFrame::new(
             obs,
@@ -3001,7 +3097,15 @@ fn render_with_options_cpu_window(
                     dphi_ray,
                 )
             } else {
-                trace_photon(metric, disk_inner, disk_outer, bx, by, cfg.max_phi, dphi_ray)
+                trace_photon(
+                    metric,
+                    disk_inner,
+                    disk_outer,
+                    bx,
+                    by,
+                    cfg.max_phi,
+                    dphi_ray,
+                )
             };
 
             let lean_activity = if truth_mode() == TruthMode::Lean {
@@ -3195,7 +3299,15 @@ fn dump_debug_channels(
                 (kd.result, kd.branch_sign)
             } else {
                 (
-                    trace_photon(metric, disk_inner, disk_outer, bx, by, cfg.max_phi, dphi_ray),
+                    trace_photon(
+                        metric,
+                        disk_inner,
+                        disk_outer,
+                        bx,
+                        by,
+                        cfg.max_phi,
+                        dphi_ray,
+                    ),
                     0,
                 )
             };
@@ -3228,15 +3340,30 @@ fn dump_debug_channels(
     }
 
     let prefix = out_dir.join(format!("{output_slug}__debug"));
-    save_png_gray_u8(&prefix.with_file_name(format!("{output_slug}__debug_hit_class.png")), &hit_class, w, h);
-    save_png_gray_u8(&prefix.with_file_name(format!("{output_slug}__debug_n_cross.png")), &n_cross, w, h);
+    save_png_gray_u8(
+        &prefix.with_file_name(format!("{output_slug}__debug_hit_class.png")),
+        &hit_class,
+        w,
+        h,
+    );
+    save_png_gray_u8(
+        &prefix.with_file_name(format!("{output_slug}__debug_n_cross.png")),
+        &n_cross,
+        w,
+        h,
+    );
     save_png_gray_u8(
         &prefix.with_file_name(format!("{output_slug}__debug_branch_sign.png")),
         &branch_sign,
         w,
         h,
     );
-    save_png_gray_f64_norm(&prefix.with_file_name(format!("{output_slug}__debug_phi.png")), &phi_vals, w, h);
+    save_png_gray_f64_norm(
+        &prefix.with_file_name(format!("{output_slug}__debug_phi.png")),
+        &phi_vals,
+        w,
+        h,
+    );
     save_png_gray_f64_norm(
         &prefix.with_file_name(format!("{output_slug}__debug_r_eff.png")),
         &r_eff_vals,
@@ -3285,7 +3412,7 @@ fn render_with_options(
     jitter_x: f64,
     jitter_y: f64,
 ) -> Vec<[u8; 3]> {
-    let force_cpu = std::env::var("BH_FORCE_CPU")
+    let _force_cpu = std::env::var("BH_FORCE_CPU")
         .ok()
         .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
     // GPU path with optional CPU parity check.
@@ -3294,50 +3421,20 @@ fn render_with_options(
         if force_cpu {
             eprintln!("    [GPU] BH_FORCE_CPU=1 -> using CPU path");
         } else {
-        let tmode = truth_mode();
-        if tmode == TruthMode::Off {
-            if kerr.is_some() {
-                eprintln!("    [GPU] Kerr mode enabled (experimental).");
-            }
-            eprintln!(
-                "    [GPU] launching GPU kernel ({} × {} = {} pixels) …",
-                cfg.width,
-                cfg.height,
-                cfg.width * cfg.height
-            );
-            let t0 = std::time::Instant::now();
-            let gpu = render_with_options_gpu(
-                metric,
-                disk_inner_rs,
-                disk_outer_rs,
-                cfg,
-                az_deg,
-                doppler,
-                ring_mode,
-                interior_mode,
-                core_look_mode,
-                spectral_band,
-                disk_model,
-                plasma_model,
-                use_transfer,
-                tau_scale,
-                adaptive_dphi,
-                kerr,
-                r_cam_rs,
-                jitter_x,
-                jitter_y,
-            );
-            eprintln!("    [GPU] done in {:.2}s", t0.elapsed().as_secs_f64());
-
-            let parity = std::env::var("BH_KERR_PARITY")
-                .ok()
-                .or_else(|| std::env::var("BH_VALIDATE_GPU").ok())
-                .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
-            if parity {
-                eprintln!("    [PARITY] running CPU reference …");
-                let cpu = render_with_options_cpu(
+            let tmode = truth_mode();
+            if tmode == TruthMode::Off {
+                if kerr.is_some() {
+                    eprintln!("    [GPU] Kerr mode enabled (experimental).");
+                }
+                eprintln!(
+                    "    [GPU] launching GPU kernel ({} × {} = {} pixels) …",
+                    cfg.width,
+                    cfg.height,
+                    cfg.width * cfg.height
+                );
+                let t0 = std::time::Instant::now();
+                let gpu = render_with_options_gpu(
                     metric,
-                    kerr,
                     disk_inner_rs,
                     disk_outer_rs,
                     cfg,
@@ -3352,28 +3449,58 @@ fn render_with_options(
                     use_transfer,
                     tau_scale,
                     adaptive_dphi,
+                    kerr,
                     r_cam_rs,
                     jitter_x,
                     jitter_y,
                 );
-                let mut mad = 0.0_f64;
-                let mut maxd = 0_u8;
-                for (g, c) in gpu.iter().zip(cpu.iter()) {
-                    let d0 = g[0].abs_diff(c[0]);
-                    let d1 = g[1].abs_diff(c[1]);
-                    let d2 = g[2].abs_diff(c[2]);
-                    mad += (d0 as f64 + d1 as f64 + d2 as f64) / 3.0;
-                    maxd = maxd.max(d0.max(d1.max(d2)));
+                eprintln!("    [GPU] done in {:.2}s", t0.elapsed().as_secs_f64());
+
+                let parity = std::env::var("BH_KERR_PARITY")
+                    .ok()
+                    .or_else(|| std::env::var("BH_VALIDATE_GPU").ok())
+                    .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+                if parity {
+                    eprintln!("    [PARITY] running CPU reference …");
+                    let cpu = render_with_options_cpu(
+                        metric,
+                        kerr,
+                        disk_inner_rs,
+                        disk_outer_rs,
+                        cfg,
+                        az_deg,
+                        doppler,
+                        ring_mode,
+                        interior_mode,
+                        core_look_mode,
+                        spectral_band,
+                        disk_model,
+                        plasma_model,
+                        use_transfer,
+                        tau_scale,
+                        adaptive_dphi,
+                        r_cam_rs,
+                        jitter_x,
+                        jitter_y,
+                    );
+                    let mut mad = 0.0_f64;
+                    let mut maxd = 0_u8;
+                    for (g, c) in gpu.iter().zip(cpu.iter()) {
+                        let d0 = g[0].abs_diff(c[0]);
+                        let d1 = g[1].abs_diff(c[1]);
+                        let d2 = g[2].abs_diff(c[2]);
+                        mad += (d0 as f64 + d1 as f64 + d2 as f64) / 3.0;
+                        maxd = maxd.max(d0.max(d1.max(d2)));
+                    }
+                    mad /= gpu.len().max(1) as f64;
+                    eprintln!("    [PARITY] GPU↔CPU mean|Δ|={mad:.3} max|Δ|={maxd}");
                 }
-                mad /= gpu.len().max(1) as f64;
-                eprintln!("    [PARITY] GPU↔CPU mean|Δ|={mad:.3} max|Δ|={maxd}");
+                return gpu;
             }
-            return gpu;
-        }
-        eprintln!(
-            "    [GPU] truth mode '{}' active; forcing CPU path for faithful channels",
-            tmode.as_label()
-        );
+            eprintln!(
+                "    [GPU] truth mode '{}' active; forcing CPU path for faithful channels",
+                tmode.as_label()
+            );
         }
     }
 
@@ -3640,8 +3767,7 @@ fn compute_kerr_image_metrics(img: &[[u8; 3]], width: usize, height: usize) -> K
         }
     }
     let ring_thickness = (rout - rin).max(0.0);
-    let flux_asymmetry =
-        (flux_left - flux_right) / (flux_left + flux_right).max(1e-12);
+    let flux_asymmetry = (flux_left - flux_right) / (flux_left + flux_right).max(1e-12);
     let shadow_diameter = 2.0 * shadow_r;
     let closure_phase_deg = closure_phase_proxy_deg(img, width, height);
 
@@ -3703,9 +3829,12 @@ fn run_validation_report(view: &View, width: usize, height: usize) {
         .and_then(|s| s.parse::<f64>().ok())
         .and_then(|a| KerrMetric::new(metric.r_s, a));
     let spectral_band = SpectralBand::from_env();
-    let use_transfer = std::env::var("BH_USE_TRANSFER")
-        .ok()
-        .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+    let use_transfer = std::env::var("BH_USE_TRANSFER").ok().is_some_and(|s| {
+        matches!(
+            s.as_str(),
+            "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+        )
+    });
     let tau_scale = std::env::var("BH_TAU_SCALE")
         .ok()
         .and_then(|s| s.parse::<f64>().ok())
@@ -3846,8 +3975,10 @@ fn run_transfer_parity_report(view: &View, width: usize, height: usize, out_dir:
             }
         });
         let csv_path = out_dir.join(format!("transfer_parity_{}_{}.csv", view.slug, backend_tag));
-        let tmp_path =
-            out_dir.join(format!("transfer_parity_{}_{}.csv.tmp", view.slug, backend_tag));
+        let tmp_path = out_dir.join(format!(
+            "transfer_parity_{}_{}.csv.tmp",
+            view.slug, backend_tag
+        ));
         let mut f = std::fs::File::create(&tmp_path).expect("create transfer parity tmp csv");
         writeln!(
             f,
@@ -3864,7 +3995,10 @@ fn run_transfer_parity_report(view: &View, width: usize, height: usize, out_dir:
             (DiskModel::Riaf, true, 1.5),
         ];
 
-        eprintln!("\nTransfer parity report: {} @ {}x{}", view.slug, width, height);
+        eprintln!(
+            "\nTransfer parity report: {} @ {}x{}",
+            view.slug, width, height
+        );
         let prev_legacy = std::env::var("BH_PARITY_LEGACY_STARS").ok();
         std::env::set_var("BH_PARITY_LEGACY_STARS", "1");
         let mut thin_gpu_base_luma: Option<f64> = None;
@@ -4012,9 +4146,12 @@ fn run_kerr_metrics_report(view: &View, width: usize, height: usize, out_dir: &P
         GutoeMetric::planck_units(1.0)
     };
     let spectral_band = SpectralBand::from_env();
-    let use_transfer = std::env::var("BH_USE_TRANSFER")
-        .ok()
-        .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+    let use_transfer = std::env::var("BH_USE_TRANSFER").ok().is_some_and(|s| {
+        matches!(
+            s.as_str(),
+            "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+        )
+    });
     let tau_scale = std::env::var("BH_TAU_SCALE")
         .ok()
         .and_then(|s| s.parse::<f64>().ok())
@@ -4127,9 +4264,12 @@ fn run_wave_samples_report(view: &View, width: usize, height: usize, out_dir: &P
     use std::f64::consts::PI;
     use std::io::Write as _;
 
-    let force_gr = std::env::var("BH_FORCE_GR")
-        .ok()
-        .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+    let force_gr = std::env::var("BH_FORCE_GR").ok().is_some_and(|s| {
+        matches!(
+            s.as_str(),
+            "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+        )
+    });
     let metric = if view.gr_mode || force_gr {
         GutoeMetric::schwarzschild(1.0)
     } else {
@@ -4195,24 +4335,10 @@ fn run_wave_samples_report(view: &View, width: usize, height: usize, out_dir: &P
             let bx = ca * sx - sa * sy;
             let by = sa * sx + ca * sy;
             let kd = trace_photon_kerr_debug(
-                &kerr,
-                disk_inner,
-                disk_outer,
-                bx,
-                by,
-                inc_deg,
-                max_lambda,
-                dphi,
+                &kerr, disk_inner, disk_outer, bx, by, inc_deg, max_lambda, dphi,
             );
             let samples = trace_photon_kerr_wave_samples(
-                &kerr,
-                disk_inner,
-                disk_outer,
-                bx,
-                by,
-                inc_deg,
-                max_lambda,
-                dphi,
+                &kerr, disk_inner, disk_outer, bx, by, inc_deg, max_lambda, dphi,
             );
 
             // Preserve compatibility with selected-branch diagnostics by writing
@@ -4303,9 +4429,12 @@ fn run_wave_coherent_report(view: &View, width: usize, height: usize, out_dir: &
     use std::f64::consts::PI;
     use std::io::Write as _;
 
-    let force_gr = std::env::var("BH_FORCE_GR")
-        .ok()
-        .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+    let force_gr = std::env::var("BH_FORCE_GR").ok().is_some_and(|s| {
+        matches!(
+            s.as_str(),
+            "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+        )
+    });
     let metric = if view.gr_mode || force_gr {
         GutoeMetric::schwarzschild(1.0)
     } else {
@@ -4484,7 +4613,8 @@ fn run_wave_coherent_report(view: &View, width: usize, height: usize, out_dir: &
     let coh_png = out_dir.join(format!("wave_coherent_{}__intensity.png", view.slug));
     let contrast_png = out_dir.join(format!("wave_coherent_{}__contrast.png", view.slug));
     let observed_png = out_dir.join(format!("wave_coherent_{}__observed.png", view.slug));
-    let observed_color_png = out_dir.join(format!("wave_coherent_{}__observed_color.png", view.slug));
+    let observed_color_png =
+        out_dir.join(format!("wave_coherent_{}__observed_color.png", view.slug));
     let instrument_png = out_dir.join(format!("wave_coherent_{}__instrument.png", view.slug));
     save_png_gray_f64_norm(&coh_png, &coh, width, height);
     save_png_gray_f64_norm(&contrast_png, &contrast, width, height);
@@ -4538,7 +4668,9 @@ fn run_wave_coherent_report(view: &View, width: usize, height: usize, out_dir: &
     let obs_gray_u8: Vec<[u8; 3]> = observed
         .iter()
         .map(|&v| {
-            let g = (255.0 * (v * obs_scale).clamp(0.0, 1.0)).round().clamp(0.0, 255.0) as u8;
+            let g = (255.0 * (v * obs_scale).clamp(0.0, 1.0))
+                .round()
+                .clamp(0.0, 255.0) as u8;
             [g, g, g]
         })
         .collect();
@@ -4709,7 +4841,13 @@ fn run_sgr_astar_eht_report(out_dir: &Path, width: usize, height: usize, blur_si
     let k = moffat_kernel(psf_alpha, 2.6, radius);
     let raw_f: Vec<[f64; 3]> = raw
         .iter()
-        .map(|p| [p[0] as f64 / 255.0, p[1] as f64 / 255.0, p[2] as f64 / 255.0])
+        .map(|p| {
+            [
+                p[0] as f64 / 255.0,
+                p[1] as f64 / 255.0,
+                p[2] as f64 / 255.0,
+            ]
+        })
         .collect();
     let dirty_f = convolve_rgb_f64(&raw_f, width, height, &k, radius);
     let dirty: Vec<[u8; 3]> = dirty_f
@@ -4740,7 +4878,10 @@ fn run_sgr_astar_eht_report(out_dir: &Path, width: usize, height: usize, blur_si
     writeln!(
         f,
         "intrinsic_230ghz,{width},{height},0.0,{:.6},{:.6},{:.9},{:.6}",
-        m_intr.shadow_diameter, m_intr.ring_thickness, m_intr.flux_asymmetry, m_intr.closure_phase_deg
+        m_intr.shadow_diameter,
+        m_intr.ring_thickness,
+        m_intr.flux_asymmetry,
+        m_intr.closure_phase_deg
     )
     .expect("write intrinsic row");
     writeln!(
@@ -4752,13 +4893,19 @@ fn run_sgr_astar_eht_report(out_dir: &Path, width: usize, height: usize, blur_si
     writeln!(
         f,
         "eht_dirty_moffat,{width},{height},{psf_alpha:.3},{:.6},{:.6},{:.9},{:.6}",
-        m_dirty.shadow_diameter, m_dirty.ring_thickness, m_dirty.flux_asymmetry, m_dirty.closure_phase_deg
+        m_dirty.shadow_diameter,
+        m_dirty.ring_thickness,
+        m_dirty.flux_asymmetry,
+        m_dirty.closure_phase_deg
     )
     .expect("write dirty row");
     writeln!(
         f,
         "eht_recon_rl,{width},{height},{psf_alpha:.3},{:.6},{:.6},{:.9},{:.6}",
-        m_recon.shadow_diameter, m_recon.ring_thickness, m_recon.flux_asymmetry, m_recon.closure_phase_deg
+        m_recon.shadow_diameter,
+        m_recon.ring_thickness,
+        m_recon.flux_asymmetry,
+        m_recon.closure_phase_deg
     )
     .expect("write recon row");
 
@@ -4804,7 +4951,10 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
     let parse_env_f64 = |k: &str| std::env::var(k).ok().and_then(|s| s.parse::<f64>().ok());
     let parse_env_bool = |k: &str| {
         std::env::var(k).ok().is_some_and(|s| {
-            matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON")
+            matches!(
+                s.as_str(),
+                "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+            )
         })
     };
     fn hash_u64(s: &str) -> u64 {
@@ -4970,14 +5120,19 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
         let (re, im) = visibility_dft(&raw, width, height, u, v);
         let amp = (re * re + im * im).sqrt();
         let phase = im.atan2(re).to_degrees();
-        writeln!(f, "{name},{u:.6},{v:.6},{re:.9},{im:.9},{amp:.9},{phase:.6}")
-            .expect("write eht_uv row");
+        writeln!(
+            f,
+            "{name},{u:.6},{v:.6},{re:.9},{im:.9},{amp:.9},{phase:.6}"
+        )
+        .expect("write eht_uv row");
         vis.push((name, re, im));
     }
 
     // Optional station gain + thermal noise corruption model (EHT-18/EHT-19 scaffold).
     let noise_sigma = parse_env_f64("BH_EHT_NOISE_SIGMA").unwrap_or(0.0).max(0.0);
-    let gain_amp_sigma = parse_env_f64("BH_EHT_GAIN_AMP_SIGMA").unwrap_or(0.0).max(0.0);
+    let gain_amp_sigma = parse_env_f64("BH_EHT_GAIN_AMP_SIGMA")
+        .unwrap_or(0.0)
+        .max(0.0);
     let gain_phase_sigma_deg = parse_env_f64("BH_EHT_GAIN_PHASE_SIGMA_DEG")
         .unwrap_or(0.0)
         .max(0.0);
@@ -4997,7 +5152,9 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
                 if parts.len() < 2 {
                     continue;
                 }
-                if parts[0].eq_ignore_ascii_case("station") || parts[1].eq_ignore_ascii_case("sefd_jy") {
+                if parts[0].eq_ignore_ascii_case("station")
+                    || parts[1].eq_ignore_ascii_case("sefd_jy")
+                {
                     continue;
                 }
                 if let Ok(sefd) = parts[1].parse::<f64>() {
@@ -5024,7 +5181,8 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
                 {
                     continue;
                 }
-                if let (Ok(amp), Ok(phase_deg)) = (parts[1].parse::<f64>(), parts[2].parse::<f64>()) {
+                if let (Ok(amp), Ok(phase_deg)) = (parts[1].parse::<f64>(), parts[2].parse::<f64>())
+                {
                     gain_map.insert(parts[0].to_string(), (amp, phase_deg.to_radians()));
                 }
             }
@@ -5167,11 +5325,8 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
 
     let closure_amp_csv = out_dir.join(format!("{}_eht_closure_amp.csv", view.slug));
     let mut ca = std::fs::File::create(&closure_amp_csv).expect("create eht_closure_amp csv");
-    writeln!(
-        ca,
-        "quad,closure_amplitude,closure_amplitude_corrupted"
-    )
-    .expect("write closure amp header");
+    writeln!(ca, "quad,closure_amplitude,closure_amplitude_corrupted")
+        .expect("write closure amp header");
     let amp = |z: (f64, f64)| -> f64 { (z.0 * z.0 + z.1 * z.1).sqrt().max(1e-12) };
     for i in 0..stations.len() {
         for j in (i + 1)..stations.len() {
@@ -5182,14 +5337,30 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
                     let sc = &stations[k];
                     let sd = &stations[l];
                     // A = |Vab||Vcd| / (|Vac||Vbd|)
-                    let Some(vab) = get_pair(sa, sb, &vis_map) else { continue };
-                    let Some(vcd) = get_pair(sc, sd, &vis_map) else { continue };
-                    let Some(vac) = get_pair(sa, sc, &vis_map) else { continue };
-                    let Some(vbd) = get_pair(sb, sd, &vis_map) else { continue };
-                    let Some(vab2) = get_pair(sa, sb, &vis_corrupt_map) else { continue };
-                    let Some(vcd2) = get_pair(sc, sd, &vis_corrupt_map) else { continue };
-                    let Some(vac2) = get_pair(sa, sc, &vis_corrupt_map) else { continue };
-                    let Some(vbd2) = get_pair(sb, sd, &vis_corrupt_map) else { continue };
+                    let Some(vab) = get_pair(sa, sb, &vis_map) else {
+                        continue;
+                    };
+                    let Some(vcd) = get_pair(sc, sd, &vis_map) else {
+                        continue;
+                    };
+                    let Some(vac) = get_pair(sa, sc, &vis_map) else {
+                        continue;
+                    };
+                    let Some(vbd) = get_pair(sb, sd, &vis_map) else {
+                        continue;
+                    };
+                    let Some(vab2) = get_pair(sa, sb, &vis_corrupt_map) else {
+                        continue;
+                    };
+                    let Some(vcd2) = get_pair(sc, sd, &vis_corrupt_map) else {
+                        continue;
+                    };
+                    let Some(vac2) = get_pair(sa, sc, &vis_corrupt_map) else {
+                        continue;
+                    };
+                    let Some(vbd2) = get_pair(sb, sd, &vis_corrupt_map) else {
+                        continue;
+                    };
                     let a = (amp(vab) * amp(vcd)) / (amp(vac) * amp(vbd));
                     let a2 = (amp(vab2) * amp(vcd2)) / (amp(vac2) * amp(vbd2));
                     writeln!(ca, "{sa}-{sb}-{sc}-{sd},{a:.9},{a2:.9}")
@@ -5297,16 +5468,28 @@ fn run_metric_report(out_dir: &Path) {
     writeln!(f, "# r_s,{r_s:.10}").expect("write metric report header");
     writeln!(f, "# l_p,{l_p:.10}").expect("write metric report header");
     writeln!(f, "# r_core,{rc:.10}").expect("write metric report header");
-    writeln!(f, "# r_horizon,{}", rh.map(|v| format!("{v:.10}")).unwrap_or_else(|| "none".into()))
-        .expect("write metric report header");
+    writeln!(
+        f,
+        "# r_horizon,{}",
+        rh.map(|v| format!("{v:.10}"))
+            .unwrap_or_else(|| "none".into())
+    )
+    .expect("write metric report header");
     writeln!(
         f,
         "# r_photon_sphere,{}",
-        rph.map(|v| format!("{v:.10}")).unwrap_or_else(|| "none".into())
+        rph.map(|v| format!("{v:.10}"))
+            .unwrap_or_else(|| "none".into())
     )
     .expect("write metric report header");
-    writeln!(f, "# r_isco,{}", risco.map(|v| format!("{v:.10}")).unwrap_or_else(|| "none".into()))
-        .expect("write metric report header");
+    writeln!(
+        f,
+        "# r_isco,{}",
+        risco
+            .map(|v| format!("{v:.10}"))
+            .unwrap_or_else(|| "none".into())
+    )
+    .expect("write metric report header");
     writeln!(f, "# T_hawking,{th:.12}").expect("write metric report header");
     writeln!(f, "# T_gr,{th_gr:.12}").expect("write metric report header");
     writeln!(f, "# dT_over_T,{frac:.12}").expect("write metric report header");
@@ -5320,17 +5503,24 @@ fn run_metric_report(out_dir: &Path) {
         let grr = metric.g_rr(r);
         let gth = metric.g_theta(r);
         let gph = metric.g_phi(r, std::f64::consts::FRAC_PI_2);
-        writeln!(f, "{r:.10},{re:.10},{gtt:.12},{grr:.12},{gth:.12},{gph:.12}")
-            .expect("write metric report row");
+        writeln!(
+            f,
+            "{r:.10},{re:.10},{gtt:.12},{grr:.12},{gth:.12},{gph:.12}"
+        )
+        .expect("write metric report row");
     }
 
     eprintln!("\nMetric report:");
     eprintln!("  r_s={r_s:.6} l_p={l_p:.6} r_core={rc:.6}");
     eprintln!(
         "  horizon={} photon_sphere={} isco={}",
-        rh.map(|v| format!("{v:.6}")).unwrap_or_else(|| "none".into()),
-        rph.map(|v| format!("{v:.6}")).unwrap_or_else(|| "none".into()),
-        risco.map(|v| format!("{v:.6}")).unwrap_or_else(|| "none".into())
+        rh.map(|v| format!("{v:.6}"))
+            .unwrap_or_else(|| "none".into()),
+        rph.map(|v| format!("{v:.6}"))
+            .unwrap_or_else(|| "none".into()),
+        risco
+            .map(|v| format!("{v:.6}"))
+            .unwrap_or_else(|| "none".into())
     );
     eprintln!("  T_h={th:.8e} T_gr={th_gr:.8e} dT/T={frac:.8e}");
     eprintln!("  csv: {}", csv_path.display());
@@ -5552,15 +5742,8 @@ mod tests {
         let r = 3.0;
         let r_s = 1.0;
         let sin_inc = 0.9;
-        let approaching = disk_transfer_factor(
-            r,
-            r_s,
-            0.8,
-            std::f64::consts::FRAC_PI_2,
-            sin_inc,
-            true,
-            0.0,
-        );
+        let approaching =
+            disk_transfer_factor(r, r_s, 0.8, std::f64::consts::FRAC_PI_2, sin_inc, true, 0.0);
         let receding = disk_transfer_factor(
             r,
             r_s,
@@ -5619,8 +5802,14 @@ mod tests {
         } else {
             std::env::remove_var("BH_NONTHERMAL_FRAC");
         }
-        assert!(j1 > j0, "non-thermal tail should boost emissivity: {j0} -> {j1}");
-        assert!(a1 < a0, "non-thermal tail should reduce absorption: {a0} -> {a1}");
+        assert!(
+            j1 > j0,
+            "non-thermal tail should boost emissivity: {j0} -> {j1}"
+        );
+        assert!(
+            a1 < a0,
+            "non-thermal tail should reduce absorption: {a0} -> {a1}"
+        );
     }
 }
 
@@ -5830,7 +6019,13 @@ fn main() {
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(240);
         eprintln!("GUTOE Black Hole Gallery — interstellar spin sequence …\n");
-        render_interstellar_spin(&out_dir, width_override, height_override, blur_sigma, frames);
+        render_interstellar_spin(
+            &out_dir,
+            width_override,
+            height_override,
+            blur_sigma,
+            frames,
+        );
         return;
     }
 
@@ -5859,8 +6054,16 @@ fn main() {
             eprintln!("validate_bh view slug not found: {slug}");
             std::process::exit(1);
         };
-        let w = if width_override > 0 { width_override } else { 960 };
-        let h = if height_override > 0 { height_override } else { w };
+        let w = if width_override > 0 {
+            width_override
+        } else {
+            960
+        };
+        let h = if height_override > 0 {
+            height_override
+        } else {
+            w
+        };
         run_validation_report(view, w, h);
         return;
     }
@@ -5870,8 +6073,16 @@ fn main() {
             eprintln!("kerr_metrics view slug not found: {slug}");
             std::process::exit(1);
         };
-        let w = if width_override > 0 { width_override } else { 960 };
-        let h = if height_override > 0 { height_override } else { w };
+        let w = if width_override > 0 {
+            width_override
+        } else {
+            960
+        };
+        let h = if height_override > 0 {
+            height_override
+        } else {
+            w
+        };
         run_kerr_metrics_report(view, w, h, &out_dir);
         return;
     }
@@ -5881,8 +6092,16 @@ fn main() {
             eprintln!("transfer_parity view slug not found: {slug}");
             std::process::exit(1);
         };
-        let w = if width_override > 0 { width_override } else { 960 };
-        let h = if height_override > 0 { height_override } else { w };
+        let w = if width_override > 0 {
+            width_override
+        } else {
+            960
+        };
+        let h = if height_override > 0 {
+            height_override
+        } else {
+            w
+        };
         run_transfer_parity_report(view, w, h, &out_dir);
         return;
     }
@@ -5892,8 +6111,16 @@ fn main() {
             eprintln!("wave_samples view slug not found: {slug}");
             std::process::exit(1);
         };
-        let w = if width_override > 0 { width_override } else { 512 };
-        let h = if height_override > 0 { height_override } else { w };
+        let w = if width_override > 0 {
+            width_override
+        } else {
+            512
+        };
+        let h = if height_override > 0 {
+            height_override
+        } else {
+            w
+        };
         run_wave_samples_report(view, w, h, &out_dir);
         return;
     }
@@ -5903,14 +6130,30 @@ fn main() {
             eprintln!("wave_coherent view slug not found: {slug}");
             std::process::exit(1);
         };
-        let w = if width_override > 0 { width_override } else { 512 };
-        let h = if height_override > 0 { height_override } else { w };
+        let w = if width_override > 0 {
+            width_override
+        } else {
+            512
+        };
+        let h = if height_override > 0 {
+            height_override
+        } else {
+            w
+        };
         run_wave_coherent_report(view, w, h, &out_dir);
         return;
     }
     if run_sgr_astar_eht {
-        let w = if width_override > 0 { width_override } else { 1920 };
-        let h = if height_override > 0 { height_override } else { 1080 };
+        let w = if width_override > 0 {
+            width_override
+        } else {
+            1920
+        };
+        let h = if height_override > 0 {
+            height_override
+        } else {
+            1080
+        };
         run_sgr_astar_eht_report(&out_dir, w, h, blur_sigma);
         return;
     }
@@ -5920,8 +6163,16 @@ fn main() {
             eprintln!("eht_uv view slug not found: {slug}");
             std::process::exit(1);
         };
-        let w = if width_override > 0 { width_override } else { 1024 };
-        let h = if height_override > 0 { height_override } else { w };
+        let w = if width_override > 0 {
+            width_override
+        } else {
+            1024
+        };
+        let h = if height_override > 0 {
+            height_override
+        } else {
+            w
+        };
         run_eht_uv_export(view, w, h, &out_dir);
         return;
     }

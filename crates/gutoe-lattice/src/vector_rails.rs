@@ -32,9 +32,9 @@ use std::collections::HashMap;
 pub struct VectorRail {
     pub from: HexCoord,
     pub to: HexCoord,
-    pub veracity: f64,      // Strength of the connection
-    pub phase: f64,        // Current phase of oscillation
-    pub frequency: f64,    // Oscillation frequency
+    pub veracity: f64,  // Strength of the connection
+    pub phase: f64,     // Current phase of oscillation
+    pub frequency: f64, // Oscillation frequency
 }
 
 impl VectorRail {
@@ -61,7 +61,10 @@ impl VectorRail {
 
     /// Get current state value (complex-like)
     pub fn state_value(&self) -> (f64, f64) {
-        (self.veracity * self.phase.cos(), self.veracity * self.phase.sin())
+        (
+            self.veracity * self.phase.cos(),
+            self.veracity * self.phase.sin(),
+        )
     }
 }
 
@@ -140,9 +143,9 @@ impl Default for RailNetwork {
 /// From GUTOE.md: "ω² = v² k² - λ_QG l_P² k⁴"
 #[derive(Debug)]
 pub struct WaveSimulator {
-    pub lambda_qg: f64,   // Quantum gravity coupling
-    pub velocity: f64,     // Wave velocity
-    pub dt: f64,           // Time step
+    pub lambda_qg: f64, // Quantum gravity coupling
+    pub velocity: f64,  // Wave velocity
+    pub dt: f64,        // Time step
 }
 
 impl WaveSimulator {
@@ -177,11 +180,7 @@ impl WaveSimulator {
 }
 
 /// Propagation test - simulates signal through rail network
-pub fn simulate_propagation(
-    network: &RailNetwork,
-    start: &HexCoord,
-    steps: usize,
-) -> Vec<f64> {
+pub fn simulate_propagation(network: &RailNetwork, start: &HexCoord, steps: usize) -> Vec<f64> {
     let mut amplitudes = Vec::with_capacity(steps);
     let mut current = *start;
 
@@ -194,9 +193,9 @@ pub fn simulate_propagation(
         }
 
         // Follow the strongest rail
-        let best = outgoing.iter().max_by(|a, b| {
-            a.veracity.partial_cmp(&b.veracity).unwrap()
-        });
+        let best = outgoing
+            .iter()
+            .max_by(|a, b| a.veracity.partial_cmp(&b.veracity).unwrap());
 
         if let Some(rail) = best {
             amplitudes.push(rail.amplitude());

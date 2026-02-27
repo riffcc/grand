@@ -4,12 +4,12 @@
 //! A[N]      — scalar photon field       (∂²A/∂t² = c²∇²A + J)
 //! A_prev[N] — previous step A for leapfrog
 
-use crate::sim::{LatticeConfig, QuarkType, site_coords, mesh_neighbours};
+use crate::sim::{mesh_neighbours, site_coords, LatticeConfig, QuarkType};
 
 // ── Charge constants ───────────────────────────────────────────────────────────
 
-pub const UP_CHARGE: f64    =  2.0 / 3.0;
-pub const DOWN_CHARGE: f64  = -1.0 / 3.0;
+pub const UP_CHARGE: f64 = 2.0 / 3.0;
+pub const DOWN_CHARGE: f64 = -1.0 / 3.0;
 pub const LEPTON_CHARGE: f64 = -1.0;
 
 const LEPTON_SEED: u8 = 2;
@@ -17,8 +17,8 @@ const LEPTON_SEED: u8 = 2;
 // ── Gauge fields ───────────────────────────────────────────────────────────────
 
 pub struct GaugeFields {
-    pub phi:    Vec<f64>,
-    pub a:      Vec<f64>,
+    pub phi: Vec<f64>,
+    pub a: Vec<f64>,
     pub a_prev: Vec<f64>,
 }
 
@@ -26,8 +26,8 @@ impl GaugeFields {
     pub fn new(cfg: &LatticeConfig) -> Self {
         let n = cfg.hex_rows * cfg.hex_cols * cfg.layers;
         Self {
-            phi:    vec![0.0; n],
-            a:      vec![0.0; n],
+            phi: vec![0.0; n],
+            a: vec![0.0; n],
             a_prev: vec![0.0; n],
         }
     }
@@ -60,7 +60,7 @@ pub fn compute_charge_density(
     let mut rho = vec![0.0f64; n];
     for (&site, qtype) in quark_map {
         rho[site] = match qtype {
-            QuarkType::Up   => UP_CHARGE,
+            QuarkType::Up => UP_CHARGE,
             QuarkType::Down => DOWN_CHARGE,
         };
     }
@@ -89,7 +89,12 @@ fn hex_laplacian(field: &[f64], nbr_cache: &NbrCache) -> Vec<f64> {
 
 /// Solve ∇²φ = −ρ on hex lattice via Jacobi iteration.
 /// φ[i] = (Σⱼ φ[j] + n·ρ[i]) / n
-pub fn jacobi_poisson(rho: &[f64], _cfg: &LatticeConfig, nbr_cache: &NbrCache, n_iter: usize) -> Vec<f64> {
+pub fn jacobi_poisson(
+    rho: &[f64],
+    _cfg: &LatticeConfig,
+    nbr_cache: &NbrCache,
+    n_iter: usize,
+) -> Vec<f64> {
     let n = rho.len();
     let mut phi = vec![0.0f64; n];
     let mut phi_new = vec![0.0f64; n];
@@ -108,7 +113,12 @@ pub fn jacobi_poisson(rho: &[f64], _cfg: &LatticeConfig, nbr_cache: &NbrCache, n
 // ── Maxwell wave equation (leapfrog) ─────────────────────────────────────────
 
 /// A_new = 2·A − A_prev + c²·∇²A + coupling·ρ
-pub fn maxwell_wave_step(gauge: &mut GaugeFields, rho: &[f64], cfg: &LatticeConfig, nbr_cache: &NbrCache) {
+pub fn maxwell_wave_step(
+    gauge: &mut GaugeFields,
+    rho: &[f64],
+    cfg: &LatticeConfig,
+    nbr_cache: &NbrCache,
+) {
     let c2 = cfg.photon_c * cfg.photon_c;
     let lap = hex_laplacian(&gauge.a, nbr_cache);
     let n = gauge.a.len();
@@ -145,7 +155,7 @@ pub fn update_gauge(
     for &site in proton_sites {
         if let Some(qtype) = quark_map.get(&site) {
             rho_proton[site] = match qtype {
-                QuarkType::Up   => UP_CHARGE,
+                QuarkType::Up => UP_CHARGE,
                 QuarkType::Down => DOWN_CHARGE,
             };
         }

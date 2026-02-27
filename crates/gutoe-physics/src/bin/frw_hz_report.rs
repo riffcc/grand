@@ -53,7 +53,14 @@ fn e2_of_z(z: f64, omega_r: f64, omega_m: f64, omega_k: f64, omega_lambda: f64) 
         + omega_lambda
 }
 
-fn h_of_z(h0_km_s_mpc: f64, z: f64, omega_r: f64, omega_m: f64, omega_k: f64, omega_lambda: f64) -> f64 {
+fn h_of_z(
+    h0_km_s_mpc: f64,
+    z: f64,
+    omega_r: f64,
+    omega_m: f64,
+    omega_k: f64,
+    omega_lambda: f64,
+) -> f64 {
     let e2 = e2_of_z(z, omega_r, omega_m, omega_k, omega_lambda);
     if e2 <= 0.0 {
         return f64::NAN;
@@ -74,7 +81,8 @@ fn main() {
         omega_r0: env_f64("GUTOE_OMEGA_R0", DEFAULT_OMEGA_R0),
         omega_k0: env_f64("GUTOE_OMEGA_K0", DEFAULT_OMEGA_K0),
     };
-    let omega_lambda_flat = 1.0 - assumptions.omega_m0 - assumptions.omega_r0 - assumptions.omega_k0;
+    let omega_lambda_flat =
+        1.0 - assumptions.omega_m0 - assumptions.omega_r0 - assumptions.omega_k0;
 
     let lambdas = [
         ("observed", LAMBDA_COSMOLOGICAL_OBSERVED),
@@ -87,9 +95,12 @@ fn main() {
     for (name, lambda) in lambdas {
         let h0_flat = h0_from_lambda_and_omega_lambda(lambda, omega_lambda_flat);
         let omega_lambda_planck = omega_lambda_from_lambda_and_h0(lambda, PLANCK_H0_KM_S_MPC);
-        let omega_lambda_ladder = omega_lambda_from_lambda_and_h0(lambda, DISTANCE_LADDER_H0_KM_S_MPC);
-        let omega_k_planck = 1.0 - assumptions.omega_m0 - assumptions.omega_r0 - omega_lambda_planck;
-        let omega_k_ladder = 1.0 - assumptions.omega_m0 - assumptions.omega_r0 - omega_lambda_ladder;
+        let omega_lambda_ladder =
+            omega_lambda_from_lambda_and_h0(lambda, DISTANCE_LADDER_H0_KM_S_MPC);
+        let omega_k_planck =
+            1.0 - assumptions.omega_m0 - assumptions.omega_r0 - omega_lambda_planck;
+        let omega_k_ladder =
+            1.0 - assumptions.omega_m0 - assumptions.omega_r0 - omega_lambda_ladder;
         variants.push((
             name,
             lambda,
@@ -134,7 +145,16 @@ fn main() {
     writeln!(txt, "omega_lambda_flat = {:.8}", omega_lambda_flat).expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[variants]").expect("write");
-    for (name, lambda, h0_flat, omega_lambda_planck, omega_lambda_ladder, omega_k_planck, omega_k_ladder) in &variants {
+    for (
+        name,
+        lambda,
+        h0_flat,
+        omega_lambda_planck,
+        omega_lambda_ladder,
+        omega_k_planck,
+        omega_k_ladder,
+    ) in &variants
+    {
         writeln!(
             txt,
             "{}: lambda={:.12e}, h0_flat={:.6}, omega_lambda_at_planck_h0={:.8}, omega_lambda_at_ladder_h0={:.8}, omega_k_at_planck_h0={:.8}, omega_k_at_ladder_h0={:.8}",
@@ -169,8 +189,18 @@ fn main() {
     )
     .expect("write");
     writeln!(json, "  \"variants\": [").expect("write");
-    for (idx, (name, lambda, h0_flat, omega_lambda_planck, omega_lambda_ladder, omega_k_planck, omega_k_ladder)) in
-        variants.iter().enumerate()
+    for (
+        idx,
+        (
+            name,
+            lambda,
+            h0_flat,
+            omega_lambda_planck,
+            omega_lambda_ladder,
+            omega_k_planck,
+            omega_k_ladder,
+        ),
+    ) in variants.iter().enumerate()
     {
         writeln!(
             json,

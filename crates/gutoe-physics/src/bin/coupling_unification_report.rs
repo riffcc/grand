@@ -11,8 +11,8 @@ const MZ_GEV: f64 = 91.1876;
 
 // MS-bar values near M_Z (representative).
 const ALPHA1_MZ: f64 = 0.016923; // U(1)_Y in SU(5) normalization
-const ALPHA2_MZ: f64 = 0.03374;  // SU(2)_L
-const ALPHA3_MZ: f64 = 0.1180;   // SU(3)_c
+const ALPHA2_MZ: f64 = 0.03374; // SU(2)_L
+const ALPHA3_MZ: f64 = 0.1180; // SU(3)_c
 
 // One-loop SM beta coefficients.
 const B1: f64 = 41.0 / 10.0;
@@ -62,8 +62,11 @@ fn main() {
 
     let mut txt = File::create(&txt_path).expect("create summary txt");
     writeln!(txt, "MZ_GEV={MZ_GEV:.6}").unwrap();
-    writeln!(txt, "alpha1_MZ={ALPHA1_MZ:.9} alpha2_MZ={ALPHA2_MZ:.9} alpha3_MZ={ALPHA3_MZ:.9}")
-        .unwrap();
+    writeln!(
+        txt,
+        "alpha1_MZ={ALPHA1_MZ:.9} alpha2_MZ={ALPHA2_MZ:.9} alpha3_MZ={ALPHA3_MZ:.9}"
+    )
+    .unwrap();
     writeln!(txt, "best_mu_gev={best_mu:.8e}").unwrap();
     writeln!(txt, "best_spread_alpha_inv={best_spread:.9}").unwrap();
     writeln!(
@@ -75,7 +78,9 @@ fn main() {
 
     println!("best unification-like scale mu = {best_mu:.4e} GeV");
     println!("min spread in alpha^-1 = {best_spread:.6}");
-    println!("alpha^-1(mu*): ({:.6}, {:.6}, {:.6})", best_vals.0, best_vals.1, best_vals.2);
+    println!(
+        "alpha^-1(mu*): ({:.6}, {:.6}, {:.6})",
+        best_vals.0, best_vals.1, best_vals.2
+    );
     println!("wrote {csv_path} and {txt_path}");
 }
-

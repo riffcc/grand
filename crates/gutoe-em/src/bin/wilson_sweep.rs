@@ -88,9 +88,7 @@ fn main() {
         let ps = stddev(&p);
         let vm = mean(&v);
         let vs = stddev(&v);
-        println!(
-            "  beta={beta:.2} eps={eps:.2}  plaquette={pm:.5}±{ps:.5}  V3={vm:.5}±{vs:.5}"
-        );
+        println!("  beta={beta:.2} eps={eps:.2}  plaquette={pm:.5}±{ps:.5}  V3={vm:.5}±{vs:.5}");
         writeln!(
             f,
             "{beta:.6},{seeds},{n_therm},{n_meas},{eps:.6},{pm:.9},{ps:.9},{vm:.9},{vs:.9}"

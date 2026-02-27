@@ -153,11 +153,7 @@ pub struct CompositeGate {
 
 impl CompositeGate {
     pub fn new(gates: Vec<Box<dyn Gate>>) -> Self {
-        let name = gates
-            .iter()
-            .map(|g| g.name())
-            .collect::<Vec<_>>()
-            .join("+");
+        let name = gates.iter().map(|g| g.name()).collect::<Vec<_>>().join("+");
         Self { gates, name }
     }
 }
@@ -424,7 +420,10 @@ mod tests {
         // Lepton should have moved to max-phi neighbour
         assert_ne!(out1[100], LEPTON_SEED, "lepton should have hopped away");
         let max_nb = nbrs.last().copied().unwrap();
-        assert_eq!(out1[max_nb], LEPTON_SEED, "lepton should be at max-phi neighbour");
+        assert_eq!(
+            out1[max_nb], LEPTON_SEED,
+            "lepton should be at max-phi neighbour"
+        );
     }
 
     #[test]
@@ -448,6 +447,9 @@ mod tests {
 
         let gate = EmHopGate::new(phi, proton_sites);
         let out = gate.apply(&sites, &cfg);
-        assert_ne!(out[max_nb], LEPTON_SEED, "lepton must not hop to proton site");
+        assert_ne!(
+            out[max_nb], LEPTON_SEED,
+            "lepton must not hop to proton site"
+        );
     }
 }

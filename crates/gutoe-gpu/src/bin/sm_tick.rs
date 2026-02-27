@@ -80,6 +80,9 @@ fn main() {
         out_dir.display()
     );
     if let Some(q0) = interpolated_q0 {
-        println!("playback probe: tick={} interpolated matter[0]={:.9}", probe_tick, q0);
+        println!(
+            "playback probe: tick={} interpolated matter[0]={:.9}",
+            probe_tick, q0
+        );
     }
 }

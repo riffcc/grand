@@ -171,7 +171,11 @@ pub fn measure_coulomb_coupling(rows: usize, cols: usize, n_iter: usize) -> Coul
             let count = bin.len();
             let r_mean = bin.iter().map(|(d, _)| d).sum::<f64>() / count as f64;
             let phi_mean = bin.iter().map(|(_, p)| p).sum::<f64>() / count as f64;
-            profile.push(RadialBin { r_mean, phi_mean, count });
+            profile.push(RadialBin {
+                r_mean,
+                phi_mean,
+                count,
+            });
         }
         r_start = r_end;
     }
@@ -225,7 +229,7 @@ pub fn mp_me_geometric() -> f64 {
 }
 
 /// Weinberg angle sin²θ_W at GUT scale (SU(5) prediction).
-pub const WEINBERG_GUT: f64 = 3.0 / 8.0;   // = 0.375
+pub const WEINBERG_GUT: f64 = 3.0 / 8.0; // = 0.375
 
 /// Weinberg angle at the electroweak scale (Clifford prediction).
 /// sin²θ_W = 3/13 where:
@@ -392,8 +396,7 @@ pub const CLIFFORD_COMPLEMENT: u32 = CLIFFORD_DIM - 3; // 16 - dim(SU(2)) = 13
 pub fn electron_mass_from_clifford_improved(m_mu: f64, m_tau: f64) -> f64 {
     use std::f64::consts::PI;
     let alpha = 1.0 / ALPHA_INVERSE_PHYSICAL;
-    let correction =
-        N_GRADES as f64 * alpha * CLIFFORD_COMPLEMENT as f64 / N_LAYERS as f64;
+    let correction = N_GRADES as f64 * alpha * CLIFFORD_COMPLEMENT as f64 / N_LAYERS as f64;
     let delta = 3.0 * PI / 4.0 - correction;
     let two_pi_3 = 2.0 * PI / 3.0;
     let c1 = (delta + two_pi_3).cos();
@@ -634,10 +637,10 @@ mod tests {
     #[test]
     fn alpha_inverse_predictions() {
         // alpha^-1(d) = T(2^d) + 1 for d spacetime dimensions
-        assert_eq!(triangular(1 << 2) + 1, 11);   // d=2: Cl(1,1)
-        assert_eq!(triangular(1 << 3) + 1, 37);   // d=3: Cl(1,2)
-        assert_eq!(triangular(1 << 4) + 1, 137);  // d=4: Cl(1,3) -- our universe
-        assert_eq!(triangular(1 << 5) + 1, 529);  // d=5: Cl(1,4)
+        assert_eq!(triangular(1 << 2) + 1, 11); // d=2: Cl(1,1)
+        assert_eq!(triangular(1 << 3) + 1, 37); // d=3: Cl(1,2)
+        assert_eq!(triangular(1 << 4) + 1, 137); // d=4: Cl(1,3) -- our universe
+        assert_eq!(triangular(1 << 5) + 1, 529); // d=5: Cl(1,4)
         assert_eq!(triangular(1 << 6) + 1, 2081); // d=6: Cl(1,5)
     }
 
@@ -771,7 +774,7 @@ mod tests {
         let pred = mp_me_geometric();
         let err = (pred - MP_ME_EXP).abs() / MP_ME_EXP;
         assert!(
-            err < 0.001,  // 0.1% tolerance
+            err < 0.001, // 0.1% tolerance
             "6π⁵ = {pred:.4} vs experiment {MP_ME_EXP:.4}, error = {:.4}%",
             err * 100.0
         );
@@ -783,7 +786,7 @@ mod tests {
         let pred = MP_ME_CLIFFORD as f64;
         let err = (pred - MP_ME_EXP).abs() / MP_ME_EXP;
         assert!(
-            err < 0.001,  // 0.1% tolerance
+            err < 0.001, // 0.1% tolerance
             "12×T(17) = {pred:.4} vs experiment {MP_ME_EXP:.4}, error = {:.4}%",
             err * 100.0
         );
@@ -804,18 +807,30 @@ mod tests {
         // Verify the Clifford decomposition:
         // 3 = spatial_bivectors, 10 = grade2 + grade3 = 6+4, 13 = 3+10
         let spatial_biv: u32 = 3;
-        let grade2: u32 = 6;  // C(4,2)
-        let grade3: u32 = 4;  // C(4,3)
-        assert_eq!(spatial_biv + grade2 + grade3, 13, "Weinberg denominator = 3+6+4 = 13");
+        let grade2: u32 = 6; // C(4,2)
+        let grade3: u32 = 4; // C(4,3)
+        assert_eq!(
+            spatial_biv + grade2 + grade3,
+            13,
+            "Weinberg denominator = 3+6+4 = 13"
+        );
         // Also: 13 = Clifford_dim - SU(2)_dim = 16 - 3
-        assert_eq!(CLIFFORD_DIM - spatial_biv, 13, "13 = Clifford_dim - dim(SU(2))");
+        assert_eq!(
+            CLIFFORD_DIM - spatial_biv,
+            13,
+            "13 = Clifford_dim - dim(SU(2))"
+        );
         // T(6) = 21 = triangular number of hex coordination
         assert_eq!(triangular(6), 21, "T(6) = 21");
         // The 13 connection: same 13 in Weinberg and phi_shell
         let phi_shell_pred = 13.0 / triangular(6) as f64;
         let phi_shell_exact = 0.619978; // from exact Green's function solve
         let phi_err = (phi_shell_pred - phi_shell_exact).abs() / phi_shell_exact;
-        assert!(phi_err < 0.002, "phi_shell = 13/21 = {phi_shell_pred:.6} vs exact {phi_shell_exact:.6}: error {:.3}%", phi_err*100.0);
+        assert!(
+            phi_err < 0.002,
+            "phi_shell = 13/21 = {phi_shell_pred:.6} vs exact {phi_shell_exact:.6}: error {:.3}%",
+            phi_err * 100.0
+        );
     }
 
     #[test]
@@ -831,16 +846,27 @@ mod tests {
 
         // Both corrections should be within 10% of 5α
         let err_alpha = (correction - delta_alpha_inv).abs() / delta_alpha_inv;
-        let err_mp    = (correction - delta_mp_me).abs() / delta_mp_me;
-        assert!(err_alpha < 0.10, "5α = {correction:.6} vs Δ(α⁻¹) = {delta_alpha_inv:.6}: {:.1}%", err_alpha*100.0);
-        assert!(err_mp < 0.10, "5α = {correction:.6} vs Δ(mp/me) = {delta_mp_me:.6}: {:.1}%", err_mp*100.0);
+        let err_mp = (correction - delta_mp_me).abs() / delta_mp_me;
+        assert!(
+            err_alpha < 0.10,
+            "5α = {correction:.6} vs Δ(α⁻¹) = {delta_alpha_inv:.6}: {:.1}%",
+            err_alpha * 100.0
+        );
+        assert!(
+            err_mp < 0.10,
+            "5α = {correction:.6} vs Δ(mp/me) = {delta_mp_me:.6}: {:.1}%",
+            err_mp * 100.0
+        );
 
         // The corrected formulas
         let alpha_inv_corrected = EDDINGTON_NUMBER as f64 + correction;
         let mp_me_corrected = 6.0 * std::f64::consts::PI.powi(5) + correction;
         println!("  Schwinger correction 5α = {correction:.6}");
         println!("  α⁻¹ corrected: {alpha_inv_corrected:.6} vs exp {ALPHA_INVERSE_PHYSICAL:.6} (Δ={:.6})", ALPHA_INVERSE_PHYSICAL - alpha_inv_corrected);
-        println!("  mp/me corrected: {mp_me_corrected:.6} vs exp {MP_ME_EXP:.6} (Δ={:.6})", MP_ME_EXP - mp_me_corrected);
+        println!(
+            "  mp/me corrected: {mp_me_corrected:.6} vs exp {MP_ME_EXP:.6} (Δ={:.6})",
+            MP_ME_EXP - mp_me_corrected
+        );
         // Residuals should be < 0.001 (order α²)
         assert!((ALPHA_INVERSE_PHYSICAL - alpha_inv_corrected).abs() < 0.001);
         assert!((MP_ME_EXP - mp_me_corrected).abs() < 0.005);
@@ -855,7 +881,8 @@ mod tests {
         assert!(
             WEINBERG_GUT > WEINBERG_OBSERVED,
             "sin²θ_W(GUT) = {} should exceed observed {}",
-            WEINBERG_GUT, WEINBERG_OBSERVED
+            WEINBERG_GUT,
+            WEINBERG_OBSERVED
         );
 
         // GUT prediction is between 1/5 and 1/2
@@ -878,7 +905,7 @@ mod tests {
         // b₀ = (11/3) × N_grade2 − (2/3) × N_grade1 = (11/3)×6 − (2/3)×4 = 58/3
         let n_grade2 = 6u32; // C(4,2) = 6 bivectors = gluon-analog states
         let n_grade1 = 4u32; // C(4,1) = 4 vectors  = fermion-analog states
-        // In integer arithmetic: b₀ × 3 = 11 × N_grade2 − 2 × N_grade1
+                             // In integer arithmetic: b₀ × 3 = 11 × N_grade2 − 2 × N_grade1
         let b0_times_3 = 11 * n_grade2 - 2 * n_grade1;
         assert_eq!(b0_times_3, 58, "b₀ × 3 = 11×6 − 2×4 = 58");
 
@@ -933,7 +960,10 @@ mod tests {
         let cp100 = cycle_prob_rg(100, &cfg);
         let cp140 = cycle_prob_rg(140, &cfg);
         assert!(cp0 > cp100, "cycle_prob should decrease: {cp0} > {cp100}");
-        assert!(cp100 > cp140, "cycle_prob should decrease: {cp100} > {cp140}");
+        assert!(
+            cp100 > cp140,
+            "cycle_prob should decrease: {cp100} > {cp140}"
+        );
         assert!(
             (cp0 - cfg.cycle_prob).abs() < 0.01,
             "At t=0, cycle_prob should equal cycle_prob config: {cp0}"
@@ -990,7 +1020,10 @@ mod tests {
         );
 
         // Near the Landau pole: ratio should exceed 50 (significant growth)
-        assert!(ratio_pre > 50.0, "ratio(140) = {ratio_pre:.1}, expected > 50");
+        assert!(
+            ratio_pre > 50.0,
+            "ratio(140) = {ratio_pre:.1}, expected > 50"
+        );
 
         // Verify ratio passes through 1836 between t=148 and the pole
         // (the Landau pole IS at t_*=149, so ratio diverges there)
@@ -1000,7 +1033,10 @@ mod tests {
             ratio_148 < MP_ME_EXP,
             "ratio(148) = {ratio_148:.0} should be < 1836 (pole at t=149)"
         );
-        assert!(is_infinite, "α_s(149) should be infinite at the Landau pole");
+        assert!(
+            is_infinite,
+            "α_s(149) should be infinite at the Landau pole"
+        );
 
         println!(
             "  Mass ratio trajectory: UV={:.1} → t=100:{:.1} → t=140:{:.1} → t=148:{:.1} → t=149:∞",
@@ -1015,9 +1051,9 @@ mod tests {
     #[test]
     fn koide_formula_matches_experiment() {
         // CODATA 2018 lepton masses in MeV
-        let me   = 0.51099895_f64;    // electron
-        let mmu  = 105.6583755_f64;   // muon
-        let mtau = 1776.93_f64;       // tau
+        let me = 0.51099895_f64; // electron
+        let mmu = 105.6583755_f64; // muon
+        let mtau = 1776.93_f64; // tau
 
         let k = koide_ratio([me, mmu, mtau]);
 
@@ -1064,7 +1100,10 @@ mod tests {
             for &delta in &[0.0_f64, 0.3, 1.5, 3.0, 5.0] {
                 let masses = z3_harmonic_masses(m_scale, s, delta);
                 // Verify all positive (should always hold for s < 1)
-                assert!(masses.iter().all(|&m| m >= 0.0), "mass < 0 for s={s}, δ={delta}");
+                assert!(
+                    masses.iter().all(|&m| m >= 0.0),
+                    "mass < 0 for s={s}, δ={delta}"
+                );
                 let k = koide_ratio(masses);
                 let expected = (1.0 + s * s / 2.0) / 3.0;
                 assert!(
@@ -1100,7 +1139,10 @@ mod tests {
 
         let m2 = masses[1].max(1e-300);
         let m3 = masses[2];
-        println!("  At s=√2, δ=3π/4: m₀={:.2e}, m₁={:.6}, m₂={:.6}", m_min, m2, m3);
+        println!(
+            "  At s=√2, δ=3π/4: m₀={:.2e}, m₁={:.6}, m₂={:.6}",
+            m_min, m2, m3
+        );
         println!("  mτ/mμ ratio (Z₃ limit) = {:.4}", (m3 / m2).sqrt());
     }
 
@@ -1108,12 +1150,12 @@ mod tests {
     fn koide_s_parameter_is_sqrt2() {
         // The experimental lepton masses have s = √2 to 0.006%.
         // This is NOT an input — it follows from the Z₃ harmonic structure + Koide ≈ 2/3.
-        let me   = 0.51099895_f64;
-        let mmu  = 105.6583755_f64;
+        let me = 0.51099895_f64;
+        let mmu = 105.6583755_f64;
         let mtau = 1776.93_f64;
 
         let s2 = koide_s_squared([me, mmu, mtau]);
-        let s  = s2.sqrt();
+        let s = s2.sqrt();
 
         let sqrt2 = std::f64::consts::SQRT_2;
         let err = (s - sqrt2).abs() / sqrt2;
@@ -1184,8 +1226,14 @@ mod tests {
         println!("    3π/4    = {delta_z3:.6} rad  (Z₃ fixed point)");
         println!("    Δδ      = {delta_delta:.6} rad");
         println!("    5α      = {five_alpha:.6} rad  (Clifford prediction)");
-        println!("    Δδ/(5α) = {:.4}  (should ≈ 1)", delta_delta / five_alpha);
-        println!("    s       = {s:.8}  (should ≈ √2 = {:.8})", std::f64::consts::SQRT_2);
+        println!(
+            "    Δδ/(5α) = {:.4}  (should ≈ 1)",
+            delta_delta / five_alpha
+        );
+        println!(
+            "    s       = {s:.8}  (should ≈ √2 = {:.8})",
+            std::f64::consts::SQRT_2
+        );
     }
 
     #[test]
@@ -1208,8 +1256,8 @@ mod tests {
         let delta_z3 = 3.0 * std::f64::consts::PI / 4.0;
 
         let delta_delta = (delta_z3 - delta).abs(); // first-order: Δδ ≈ 5α
-        let delta_k = k - 2.0 / 3.0;               // second-order: ΔK = (s²−2)/6
-        let delta_s2 = s * s - 2.0;                 // second-order: Δ(s²)
+        let delta_k = k - 2.0 / 3.0; // second-order: ΔK = (s²−2)/6
+        let delta_s2 = s * s - 2.0; // second-order: Δ(s²)
 
         // EXACT algebraic identity: ΔK = (s²−2)/6  ←→  Δ(s²) = 6·ΔK
         assert!(
@@ -1236,9 +1284,18 @@ mod tests {
         );
 
         println!("  One correction ε = 5α = {epsilon:.6}, two consequences:");
-        println!("  First-order  (phase):  Δδ    = {delta_delta:.6}  ≈ ε      (ratio {:.3})", delta_delta / epsilon);
-        println!("  Second-order (Koide):  Δ(s²) = {delta_s2:.2e}  |Δ(s²)|/ε² = {:.4}", delta_s2.abs() / (epsilon * epsilon));
-        println!("  Exact identity:        Δ(s²) = 6·ΔK = {:.2e}  ✓", 6.0 * delta_k);
+        println!(
+            "  First-order  (phase):  Δδ    = {delta_delta:.6}  ≈ ε      (ratio {:.3})",
+            delta_delta / epsilon
+        );
+        println!(
+            "  Second-order (Koide):  Δ(s²) = {delta_s2:.2e}  |Δ(s²)|/ε² = {:.4}",
+            delta_s2.abs() / (epsilon * epsilon)
+        );
+        println!(
+            "  Exact identity:        Δ(s²) = 6·ΔK = {:.2e}  ✓",
+            6.0 * delta_k
+        );
         println!("  Note: Koide holds to 1 part in 10^5 — far better than the 5α phase deviation");
         println!("  Conclusion: K = 2/3 comes from Z₃ structure; m_e from phase deviation Δδ ≈ 5α");
     }
@@ -1274,11 +1331,17 @@ mod tests {
         let delta = 3.0 * std::f64::consts::PI / 4.0 - N_GRADES as f64 * alpha;
         let (_m, _, _) = z3_extract_params([me_exp, mmu, mtau]);
         println!("  Electron mass prediction (zero free parameters):");
-        println!("    Inputs:     m_μ = {mmu:.4} MeV,  m_τ = {mtau:.2} MeV,  α⁻¹ = {:.3}", 1.0 / alpha);
+        println!(
+            "    Inputs:     m_μ = {mmu:.4} MeV,  m_τ = {mtau:.2} MeV,  α⁻¹ = {:.3}",
+            1.0 / alpha
+        );
         println!("    Phase:      δ = 3π/4 − 5α = {delta:.6} rad");
         println!("    Prediction: m_e = {me_pred:.5} MeV");
         println!("    Experiment: m_e = {me_exp:.5} MeV");
-        println!("    Error:      {:.2}%  (leading-order Schwinger analog)", err * 100.0);
+        println!(
+            "    Error:      {:.2}%  (leading-order Schwinger analog)",
+            err * 100.0
+        );
         println!("    Residual = 8.5% in δ → 39% in m_e  (see improved formula below)");
     }
 
@@ -1313,8 +1376,7 @@ mod tests {
 
         // Verify the phase deviation is predicted to within 1%
         let alpha = 1.0 / ALPHA_INVERSE_PHYSICAL;
-        let correction =
-            N_GRADES as f64 * alpha * CLIFFORD_COMPLEMENT as f64 / N_LAYERS as f64;
+        let correction = N_GRADES as f64 * alpha * CLIFFORD_COMPLEMENT as f64 / N_LAYERS as f64;
         let (_m, _s, delta_exp) = z3_extract_params([me_exp, mmu, mtau]);
         let delta_pred = 3.0 * std::f64::consts::PI / 4.0 - correction;
         let phase_err = (delta_pred - delta_exp).abs() / correction;
@@ -1326,8 +1388,14 @@ mod tests {
 
         println!("  Improved electron mass (5α × 13/12 phase correction):");
         println!("    Phase correction = 5α × 13/12 = {correction:.6} rad");
-        println!("    δ_pred = {delta_pred:.6} rad,  δ_exp = {delta_exp:.6} rad  (err {:.3}%)", phase_err * 100.0);
-        println!("    m_e_pred = {me_pred:.5} MeV  vs  m_e_exp = {me_exp:.5} MeV  ({:.3}% err)", err * 100.0);
+        println!(
+            "    δ_pred = {delta_pred:.6} rad,  δ_exp = {delta_exp:.6} rad  (err {:.3}%)",
+            phase_err * 100.0
+        );
+        println!(
+            "    m_e_pred = {me_pred:.5} MeV  vs  m_e_exp = {me_exp:.5} MeV  ({:.3}% err)",
+            err * 100.0
+        );
         println!("    STATUS: empirical fit — 13/12 ≈ 1.083 matches residual 1.085");
         println!("    13 and 12 both appear in the framework independently (Weinberg, mp/me)");
         println!("    NOT a derivation: dimensional counting, not a diagram/trace calculation");
@@ -1413,26 +1481,33 @@ mod tests {
         let lepton: u8 = 1; // γ⁰
 
         let bivectors: [(u8, &str); 6] = [
-            ( 3, "γ⁰¹"), ( 5, "γ⁰²"), ( 6, "γ¹²"),
-            ( 9, "γ⁰³"), (10, "γ¹³"), (12, "γ²³"),
+            (3, "γ⁰¹"),
+            (5, "γ⁰²"),
+            (6, "γ¹²"),
+            (9, "γ⁰³"),
+            (10, "γ¹³"),
+            (12, "γ²³"),
         ];
 
         // Grade-3 elements (3 bits set) for identification
-        let grade3_names: [(u8, &str); 4] = [
-            ( 7, "γ⁰¹²"), (11, "γ⁰¹³"), (13, "γ⁰²³"), (14, "γ¹²³"),
-        ];
+        let grade3_names: [(u8, &str); 4] = [(7, "γ⁰¹²"), (11, "γ⁰¹³"), (13, "γ⁰²³"), (14, "γ¹²³")];
 
         println!("\n  ── Clifford one-loop diagram: B × gen_k → intermediate ──");
-        println!("  {:>4}  {:>4}   {:>10}  {:>5}  {:>12}", "B", "gen_k", "result", "sign", "grade");
+        println!(
+            "  {:>4}  {:>4}   {:>10}  {:>5}  {:>12}",
+            "B", "gen_k", "result", "sign", "grade"
+        );
 
         // For each bivector and each spatial generation, record what the product is
         // Format: (bivector, gen_k) → (intermediate_mi, sign, grade)
         struct Transition {
             b_name: &'static str,
-            #[allow(dead_code)] gen_k_name: &'static str,
+            #[allow(dead_code)]
+            gen_k_name: &'static str,
             gen_k_mi: u8,
             inter_mi: u8,
-            #[allow(dead_code)] sign: i32,
+            #[allow(dead_code)]
+            sign: i32,
             inter_grade: u32,
         }
 
@@ -1442,16 +1517,35 @@ mod tests {
             for &(gk_mi, gk_name) in &spatial_gens {
                 let (result_mi, sign) = clifford_product(b_mi, gk_mi);
                 let grade = clifford_grade(result_mi);
-                let inter_name = grade3_names.iter()
+                let inter_name = grade3_names
+                    .iter()
                     .find(|&&(mi, _)| mi == result_mi)
                     .map(|&(_, n)| n)
-                    .or_else(|| spatial_gens.iter().find(|&&(mi, _)| mi == result_mi).map(|&(_, n)| n))
-                    .or_else(|| if result_mi == lepton { Some("γ⁰") } else { None })
+                    .or_else(|| {
+                        spatial_gens
+                            .iter()
+                            .find(|&&(mi, _)| mi == result_mi)
+                            .map(|&(_, n)| n)
+                    })
+                    .or_else(|| {
+                        if result_mi == lepton {
+                            Some("γ⁰")
+                        } else {
+                            None
+                        }
+                    })
                     .unwrap_or("?");
-                println!("  {:>4}  {:>4}  →  {:>10}  {:>+5}   grade-{}", b_name, gk_name, inter_name, sign, grade);
+                println!(
+                    "  {:>4}  {:>4}  →  {:>10}  {:>+5}   grade-{}",
+                    b_name, gk_name, inter_name, sign, grade
+                );
                 transitions.push(Transition {
-                    b_name, gen_k_name: gk_name, gen_k_mi: gk_mi,
-                    inter_mi: result_mi, sign, inter_grade: grade,
+                    b_name,
+                    gen_k_name: gk_name,
+                    gen_k_mi: gk_mi,
+                    inter_mi: result_mi,
+                    sign,
+                    inter_grade: grade,
                 });
             }
         }
@@ -1462,11 +1556,23 @@ mod tests {
         for &(gk_mi, gk_name) in &spatial_gens {
             print!("  Σ({gk_name}): ");
             for t in transitions.iter().filter(|t| t.gen_k_mi == gk_mi) {
-                let inter_name = grade3_names.iter()
+                let inter_name = grade3_names
+                    .iter()
                     .find(|&&(mi, _)| mi == t.inter_mi)
                     .map(|&(_, n)| n)
-                    .or_else(|| spatial_gens.iter().find(|&&(mi, _)| mi == t.inter_mi).map(|&(_, n)| n))
-                    .or_else(|| if t.inter_mi == lepton { Some("γ⁰") } else { None })
+                    .or_else(|| {
+                        spatial_gens
+                            .iter()
+                            .find(|&&(mi, _)| mi == t.inter_mi)
+                            .map(|&(_, n)| n)
+                    })
+                    .or_else(|| {
+                        if t.inter_mi == lepton {
+                            Some("γ⁰")
+                        } else {
+                            None
+                        }
+                    })
                     .unwrap_or("?");
                 print!("  [{} → {}(g{})]", t.b_name, inter_name, t.inter_grade);
             }
@@ -1479,7 +1585,8 @@ mod tests {
         println!("\n  ── Z₃ symmetry of intermediate states ──");
 
         // Collect all intermediate states
-        let all_inter: Vec<u8> = transitions.iter()
+        let all_inter: Vec<u8> = transitions
+            .iter()
             .map(|t| t.inter_mi)
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
@@ -1489,18 +1596,31 @@ mod tests {
         let mut z3_symmetric_group_factor = 0u32;
 
         for &inter_mi in &all_inter {
-            let gens_reaching_this: Vec<u8> = transitions.iter()
+            let gens_reaching_this: Vec<u8> = transitions
+                .iter()
                 .filter(|t| t.inter_mi == inter_mi)
                 .map(|t| t.gen_k_mi)
                 .collect::<std::collections::HashSet<_>>()
                 .into_iter()
                 .collect();
             let n_gens = gens_reaching_this.len();
-            let inter_name = grade3_names.iter()
+            let inter_name = grade3_names
+                .iter()
                 .find(|&&(mi, _)| mi == inter_mi)
                 .map(|&(_, n)| n)
-                .or_else(|| spatial_gens.iter().find(|&&(mi, _)| mi == inter_mi).map(|&(_, n)| n))
-                .or_else(|| if inter_mi == lepton { Some("γ⁰") } else { None })
+                .or_else(|| {
+                    spatial_gens
+                        .iter()
+                        .find(|&&(mi, _)| mi == inter_mi)
+                        .map(|&(_, n)| n)
+                })
+                .or_else(|| {
+                    if inter_mi == lepton {
+                        Some("γ⁰")
+                    } else {
+                        None
+                    }
+                })
                 .unwrap_or("?");
             let grade = clifford_grade(inter_mi);
             let symmetry = match n_gens {
@@ -1519,15 +1639,21 @@ mod tests {
         // The net Z₃-breaking group factor per ordered generation PAIR (k,l):
         // For each pair, the breaking contribution from their UNIQUE intermediates.
         println!("\n  ── Net Z₃-breaking group factors (self-energy DIFFERENCES) ──");
-        let gen_pairs = [(2u8, 4u8, "γ¹","γ²"), (2, 8, "γ¹","γ³"), (4, 8, "γ²","γ³")];
+        let gen_pairs = [
+            (2u8, 4u8, "γ¹", "γ²"),
+            (2, 8, "γ¹", "γ³"),
+            (4, 8, "γ²", "γ³"),
+        ];
         let mut net_factors = Vec::new();
         for &(gk1, gk2, n1, n2) in &gen_pairs {
             // Intermediates unique to gk1 (but not gk2)
-            let inter_gk1: std::collections::HashSet<u8> = transitions.iter()
+            let inter_gk1: std::collections::HashSet<u8> = transitions
+                .iter()
                 .filter(|t| t.gen_k_mi == gk1)
                 .map(|t| t.inter_mi)
                 .collect();
-            let inter_gk2: std::collections::HashSet<u8> = transitions.iter()
+            let inter_gk2: std::collections::HashSet<u8> = transitions
+                .iter()
                 .filter(|t| t.gen_k_mi == gk2)
                 .map(|t| t.inter_mi)
                 .collect();
@@ -1538,7 +1664,9 @@ mod tests {
             let net_gf = unique_to_1.len() as i32 - unique_to_2.len() as i32;
             println!(
                 "  Σ({n1}) − Σ({n2}): unique_to_{n1}={}, unique_to_{n2}={} → net G = {}",
-                unique_to_1.len(), unique_to_2.len(), net_gf
+                unique_to_1.len(),
+                unique_to_2.len(),
+                net_gf
             );
             net_factors.push(net_gf.unsigned_abs());
         }
@@ -1576,7 +1704,11 @@ mod tests {
                 assert_eq!(
                     clifford_grade(result_mi),
                     // Result grade must be 1 or 3 (from grade-2 × grade-1)
-                    if (b_mi & gk_mi).count_ones() > 0 { 1 } else { 3 },
+                    if (b_mi & gk_mi).count_ones() > 0 {
+                        1
+                    } else {
+                        3
+                    },
                     "{b_name} × {gk_name} → grade should be 1 (shared) or 3 (no shared)"
                 );
             }
@@ -1604,12 +1736,8 @@ mod tests {
             (f1 - (-1.0 / 3.0)).abs() < 1e-15,
             "Z₃-fundamental charge component = {f1:.6}, expected −1/3"
         );
-        println!(
-            "  Proton Z₃-fundamental charge: F₁ = {f1:.6}  (exact: −1/3)"
-        );
-        println!(
-            "  Derivation: (Q_Down − Q_Up)/3 = (−1/3 − 2/3)/3 = −1/3"
-        );
+        println!("  Proton Z₃-fundamental charge: F₁ = {f1:.6}  (exact: −1/3)");
+        println!("  Derivation: (Q_Down − Q_Up)/3 = (−1/3 − 2/3)/3 = −1/3");
     }
 
     #[test]
@@ -1656,7 +1784,10 @@ mod tests {
         println!("  NOT 13/12: group factor is 1; 13/12 cannot be a group-theory correction.");
 
         // The group factor is exactly 1 — confirm no approximation was made
-        assert_eq!(g, 1.0, "G must be exact 1.0 from Q_e × N_quarks × |F₁| = 1×3×(1/3)");
+        assert_eq!(
+            g, 1.0,
+            "G must be exact 1.0 from Q_e × N_quarks × |F₁| = 1×3×(1/3)"
+        );
     }
 
     // ── SC lattice derivation: the algebraically motivated geometry ─────────
@@ -1681,21 +1812,41 @@ mod tests {
         // SC coordination derived from spatial bivectors only
         let n_spatial_biv = SU2_DIM; // {γ¹², γ¹³, γ²³}
         let sc_coordination = 2 * n_spatial_biv; // forward + backward per axis
-        assert_eq!(sc_coordination, 6, "SC coordination = 2 × SU2_DIM = {}", sc_coordination);
+        assert_eq!(
+            sc_coordination, 6,
+            "SC coordination = 2 × SU2_DIM = {}",
+            sc_coordination
+        );
 
         // Numerically equal to GAUGE_GRADE_DIM = C(4,2) = 6
-        assert_eq!(sc_coordination, GAUGE_GRADE_DIM, "equal numerically (different physics)");
+        assert_eq!(
+            sc_coordination, GAUGE_GRADE_DIM,
+            "equal numerically (different physics)"
+        );
 
         // But they count different things: SU2_DIM × 2 vs C(4,2)
         // C(4,2) = 6 = 3 spatial + 3 boost bivectors
         // 2 × SU2_DIM = 6 = 3 spatial bivectors × 2 directions (only spatial)
         let n_boost_biv = GAUGE_GRADE_DIM - SU2_DIM; // γ⁰¹, γ⁰², γ⁰³ = 3
-        assert_eq!(n_boost_biv, 3, "3 boost bivectors not counted in SC derivation");
-        assert_eq!(SU2_DIM + n_boost_biv, GAUGE_GRADE_DIM, "spatial + boost = all grade-2");
+        assert_eq!(
+            n_boost_biv, 3,
+            "3 boost bivectors not counted in SC derivation"
+        );
+        assert_eq!(
+            SU2_DIM + n_boost_biv,
+            GAUGE_GRADE_DIM,
+            "spatial + boost = all grade-2"
+        );
 
         // Watson constants comparison
-        assert!(WATSON_SC > WATSON_HEX_Z, "G_sc > G_hex+z: SC is a more compact lattice");
-        assert!((WATSON_SC - 1.5164).abs() < 0.001, "Watson 1939 reference: G_sc(0) = 1.5164");
+        assert!(
+            WATSON_SC > WATSON_HEX_Z,
+            "G_sc > G_hex+z: SC is a more compact lattice"
+        );
+        assert!(
+            (WATSON_SC - 1.5164).abs() < 0.001,
+            "Watson 1939 reference: G_sc(0) = 1.5164"
+        );
         assert!((WATSON_HEX_Z - 1.4482).abs() < 0.001, "G_hex+z(0) = 1.4482");
 
         // Relative difference in Watson constants → relative shift in C_∞ prediction
@@ -1705,13 +1856,22 @@ mod tests {
         let c_inf_shift_pct = (g_ratio - 1.0) * 100.0;
 
         println!("  SC lattice: the Cayley graph of {{±γ¹², ±γ¹³, ±γ²³}}");
-        println!("    SU2_DIM = {} spatial bivectors × 2 directions = {} coordination", n_spatial_biv, sc_coordination);
-        println!("    Hex+z was motivated by C(4,2) = {} — counts boosts too (wrong subset)", GAUGE_GRADE_DIM);
+        println!(
+            "    SU2_DIM = {} spatial bivectors × 2 directions = {} coordination",
+            n_spatial_biv, sc_coordination
+        );
+        println!(
+            "    Hex+z was motivated by C(4,2) = {} — counts boosts too (wrong subset)",
+            GAUGE_GRADE_DIM
+        );
         println!();
         println!("  Watson Green's function G(0):");
         println!("    G_sc     = {WATSON_SC:.4}  (SC — derived)");
         println!("    G_hex+z  = {WATSON_HEX_Z:.4}  (hex+z — assumed)");
-        println!("    ΔG       = {delta_g:.4}  ({:.1}% difference)", delta_g / WATSON_HEX_Z * 100.0);
+        println!(
+            "    ΔG       = {delta_g:.4}  ({:.1}% difference)",
+            delta_g / WATSON_HEX_Z * 100.0
+        );
         println!("    G_sc/G_hex+z = {g_ratio:.4}");
         println!();
         println!("  Implication for C_∞ prediction (C_∞ ∝ G(0)^n):");
@@ -1729,7 +1889,7 @@ mod tests {
     /// Experimental m_e = 0.51100 MeV.  Discrepancy 0.04% — from the 1836.00 vs 1836.15 rounding.
     #[test]
     fn m_e_absolute_from_proton_mass() {
-        let m_p = 938.272046_f64;   // proton mass, MeV
+        let m_p = 938.272046_f64; // proton mass, MeV
         let m_e_exp = 0.51099895_f64;
 
         let m_e_pred = electron_mass_from_proton(m_p);
@@ -1742,11 +1902,20 @@ mod tests {
         );
 
         println!("  ── m_e absolute value from proton mass ──");
-        println!("    mp/me (algebraic) = {} = N_LAYERS × T(17) = {} × {}", MP_ME_CLIFFORD, N_LAYERS, T17);
+        println!(
+            "    mp/me (algebraic) = {} = N_LAYERS × T(17) = {} × {}",
+            MP_ME_CLIFFORD, N_LAYERS, T17
+        );
         println!("    mp/me (experiment) = {MP_ME_EXP:.5}");
         println!("    m_p = {m_p} MeV  (input — confinement scale)");
-        println!("    m_e = mp / {} = {m_e_pred:.6} MeV  (GUTOE prediction)", MP_ME_CLIFFORD);
-        println!("    m_e_exp = {m_e_exp:.6} MeV  (error {:.4}%)", err * 100.0);
+        println!(
+            "    m_e = mp / {} = {m_e_pred:.6} MeV  (GUTOE prediction)",
+            MP_ME_CLIFFORD
+        );
+        println!(
+            "    m_e_exp = {m_e_exp:.6} MeV  (error {:.4}%)",
+            err * 100.0
+        );
     }
 
     /// All three lepton masses (m_e/m_μ and m_e/m_τ ratios) from the Koide phase.
@@ -1769,9 +1938,12 @@ mod tests {
 
         // Verify the input is recovered (m_e round-trip)
         let e_roundtrip_err = (m_e_out - m_e_pred).abs() / m_e_pred;
-        assert!(e_roundtrip_err < 1e-10, "m_e round-trip: {m_e_out:.8} vs {m_e_pred:.8}");
+        assert!(
+            e_roundtrip_err < 1e-10,
+            "m_e round-trip: {m_e_out:.8} vs {m_e_pred:.8}"
+        );
 
-        let err_mu  = (m_mu_pred  - m_mu_exp).abs()  / m_mu_exp;
+        let err_mu = (m_mu_pred - m_mu_exp).abs() / m_mu_exp;
         let err_tau = (m_tau_pred - m_tau_exp).abs() / m_tau_exp;
 
         assert!(
@@ -1785,15 +1957,21 @@ mod tests {
             err_tau * 100.0
         );
 
-        let ratio_me_mmu_exp  = m_e_exp  / m_mu_exp;
+        let ratio_me_mmu_exp = m_e_exp / m_mu_exp;
         let ratio_me_mmu_pred = m_e_pred / m_mu_pred;
-        let ratio_me_mtau_exp  = m_e_exp  / m_tau_exp;
+        let ratio_me_mtau_exp = m_e_exp / m_tau_exp;
         let ratio_me_mtau_pred = m_e_pred / m_tau_pred;
 
         println!("  ── Lepton mass ratios from Koide phase δ = 3π/4 − 5α×(13/12) ──");
         println!("    m_e = {m_e_pred:.6} MeV  (from mp = {m_p} MeV / {MP_ME_CLIFFORD})");
-        println!("    m_μ = {m_mu_pred:.4} MeV  (pred)   {m_mu_exp:.4} MeV  (exp)  err={:.2}%", err_mu * 100.0);
-        println!("    m_τ = {m_tau_pred:.2} MeV  (pred)  {m_tau_exp:.2} MeV  (exp)  err={:.2}%", err_tau * 100.0);
+        println!(
+            "    m_μ = {m_mu_pred:.4} MeV  (pred)   {m_mu_exp:.4} MeV  (exp)  err={:.2}%",
+            err_mu * 100.0
+        );
+        println!(
+            "    m_τ = {m_tau_pred:.2} MeV  (pred)  {m_tau_exp:.2} MeV  (exp)  err={:.2}%",
+            err_tau * 100.0
+        );
         println!("    m_e/m_μ pred = {ratio_me_mmu_pred:.6}   exp = {ratio_me_mmu_exp:.6}");
         println!("    m_e/m_τ pred = {ratio_me_mtau_pred:.7}   exp = {ratio_me_mtau_exp:.7}");
     }
@@ -1806,10 +1984,10 @@ mod tests {
     #[test]
     fn alpha_inv_self_consistent_loop_correction() {
         let alpha_sc = alpha_inv_self_consistent();
-        let alpha_simple = EDDINGTON_NUMBER as f64 + delta_alpha_inv_approx();  // 137 + 5/137
+        let alpha_simple = EDDINGTON_NUMBER as f64 + delta_alpha_inv_approx(); // 137 + 5/137
         let exp = ALPHA_INVERSE_PHYSICAL;
 
-        let err_sc_ppm     = (alpha_sc     - exp).abs() / exp * 1e6;
+        let err_sc_ppm = (alpha_sc - exp).abs() / exp * 1e6;
         let err_simple_ppm = (alpha_simple - exp).abs() / exp * 1e6;
 
         // Both should be within 5 ppm of the experimental α⁻¹.
@@ -1823,12 +2001,20 @@ mod tests {
         );
 
         println!("  ── α⁻¹ loop correction ──");
-        println!("    Algebraic (bare):      α⁻¹₀ = {} = T(16)+1", EDDINGTON_NUMBER);
-        println!("    Simple  137 + 5/137:   α⁻¹  = {alpha_simple:.6}  ({err_simple_ppm:.2} ppm off)");
+        println!(
+            "    Algebraic (bare):      α⁻¹₀ = {} = T(16)+1",
+            EDDINGTON_NUMBER
+        );
+        println!(
+            "    Simple  137 + 5/137:   α⁻¹  = {alpha_simple:.6}  ({err_simple_ppm:.2} ppm off)"
+        );
         println!("    Self-consistent fixed point:");
         println!("      x = 137 + 5/x  →  x = (137 + √18789)/2 = {alpha_sc:.6}  ({err_sc_ppm:.2} ppm off)");
         println!("    Experimental:          α⁻¹  = {exp}");
-        println!("    Correction 5α:  Δ(α⁻¹) = N_grades × α = {} × (1/137) ≈ 0.036", N_GRADES);
+        println!(
+            "    Correction 5α:  Δ(α⁻¹) = N_grades × α = {} × (1/137) ≈ 0.036",
+            N_GRADES
+        );
         println!("    Residual at ~3.5 ppm — open: requires next-order Clifford diagram");
     }
 }

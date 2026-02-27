@@ -62,7 +62,10 @@ impl SingleZoneBurn {
                 *delta.entry(st.species).or_insert(0.0) += flux * st.coeff as f64;
             }
 
-            let neutrino_frac = if r.products.iter().any(|s| s.species == Species::ElectronNeutrino)
+            let neutrino_frac = if r
+                .products
+                .iter()
+                .any(|s| s.species == Species::ElectronNeutrino)
             {
                 0.35
             } else {

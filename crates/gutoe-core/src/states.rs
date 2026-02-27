@@ -61,7 +61,12 @@ pub enum TriState {
 impl TriState {
     /// Get all possible states
     pub fn variants() -> [TriState; 4] {
-        [TriState::VOID, TriState::COSINE, TriState::SINE, TriState::TANGENT]
+        [
+            TriState::VOID,
+            TriState::COSINE,
+            TriState::SINE,
+            TriState::TANGENT,
+        ]
     }
 
     /// Convert to amplitude representation
@@ -241,8 +246,8 @@ mod tests {
 
     #[test]
     fn cycle_map_is_correct() {
-        assert_eq!(TriState::SINE.cycle(),      TriState::COSINE);
-        assert_eq!(TriState::COSINE.cycle(),    TriState::TANGENT);
+        assert_eq!(TriState::SINE.cycle(), TriState::COSINE);
+        assert_eq!(TriState::COSINE.cycle(), TriState::TANGENT);
         assert_eq!(TriState::TANGENT.cycle(), TriState::SINE);
     }
 
@@ -250,8 +255,11 @@ mod tests {
     fn cycle_is_order_3_on_non_void() {
         // Applying cycle 3 times must return the original for each non-VOID state.
         for s in [TriState::SINE, TriState::COSINE, TriState::TANGENT] {
-            assert_eq!(s.cycle().cycle().cycle(), s,
-                "cycle³({s:?}) ≠ {s:?} — cycle is not Z₃");
+            assert_eq!(
+                s.cycle().cycle().cycle(),
+                s,
+                "cycle³({s:?}) ≠ {s:?} — cycle is not Z₃"
+            );
         }
     }
 
@@ -260,7 +268,11 @@ mod tests {
         // cycle(VOID) = VOID, and no other state is fixed.
         assert_eq!(TriState::VOID.cycle(), TriState::VOID);
         for s in [TriState::SINE, TriState::COSINE, TriState::TANGENT] {
-            assert_ne!(s.cycle(), s, "cycle({s:?}) = {s:?} — unexpected fixed point");
+            assert_ne!(
+                s.cycle(),
+                s,
+                "cycle({s:?}) = {s:?} — unexpected fixed point"
+            );
         }
     }
 
@@ -268,8 +280,11 @@ mod tests {
     fn cycle_is_not_involutive() {
         // If cycle were its own inverse, cycle(cycle(s)) = s.
         // This is FALSE for this system (it's Z₃ not Z₂).
-        assert_ne!(TriState::SINE.cycle().cycle(), TriState::SINE,
-            "cycle is involutive — that would make it Z₂, not Z₃");
+        assert_ne!(
+            TriState::SINE.cycle().cycle(),
+            TriState::SINE,
+            "cycle is involutive — that would make it Z₂, not Z₃"
+        );
     }
 
     // ── Amplitude / probability interpretation ───────────────────────────────
@@ -280,8 +295,10 @@ mod tests {
         for s in [TriState::COSINE, TriState::SINE] {
             let (a0, a1) = s.to_amplitude();
             let prob = a0.norm_sqr() + a1.norm_sqr();
-            assert!((prob - 1.0).abs() < 1e-12,
-                "{s:?}: probability sum = {prob}, expected 1.0");
+            assert!(
+                (prob - 1.0).abs() < 1e-12,
+                "{s:?}: probability sum = {prob}, expected 1.0"
+            );
         }
     }
 
@@ -299,8 +316,11 @@ mod tests {
     fn void_amplitude_is_zero_probability() {
         // VOID represents the null reference — zero probability of observation.
         let (a0, a1) = TriState::VOID.to_amplitude();
-        assert_eq!(a0.norm_sqr() + a1.norm_sqr(), 0.0,
-            "VOID has nonzero probability — breaks physical interpretation");
+        assert_eq!(
+            a0.norm_sqr() + a1.norm_sqr(),
+            0.0,
+            "VOID has nonzero probability — breaks physical interpretation"
+        );
     }
 
     // ── Phase structure ──────────────────────────────────────────────────────
@@ -320,9 +340,11 @@ mod tests {
     #[test]
     fn lambda_qg_matches_claimed_value() {
         // Lean/Rust parity guardrail for the shared structural value λ_QG = 1/12.
-        assert!((constants::LAMBDA_QG - (1.0 / 12.0)).abs() < 1e-15,
+        assert!(
+            (constants::LAMBDA_QG - (1.0 / 12.0)).abs() < 1e-15,
             "λ_QG = {} ≠ 1/12 — parity drift detected",
-            constants::LAMBDA_QG);
+            constants::LAMBDA_QG
+        );
     }
 
     // ── Amplitude arithmetic ─────────────────────────────────────────────────
@@ -330,8 +352,8 @@ mod tests {
     #[test]
     fn amplitude_normalization_is_idempotent() {
         let amp = Amplitude::new(3.0, 4.0);
-        let n1  = amp.normalize();
-        let n2  = n1.normalize(); // normalizing a unit vector should be identity
+        let n1 = amp.normalize();
+        let n2 = n1.normalize(); // normalizing a unit vector should be identity
         assert!((n1.re - n2.re).abs() < 1e-12 && (n1.im - n2.im).abs() < 1e-12);
     }
 
@@ -356,8 +378,11 @@ mod tests {
         // a * conj(a) = |a|² + 0i — imaginary part must be zero
         let a = Amplitude::new(3.0, 4.0);
         let product = a.multiply(&a.conj());
-        assert!(product.im.abs() < 1e-12,
-            "a·ā has nonzero imaginary part: {}", product.im);
+        assert!(
+            product.im.abs() < 1e-12,
+            "a·ā has nonzero imaginary part: {}",
+            product.im
+        );
         assert!((product.re - a.magnitude().powi(2)).abs() < 1e-10);
     }
 
@@ -368,8 +393,11 @@ mod tests {
         let reg = Register::new(4);
         assert_eq!(reg.len(), 4);
         for i in 0..4 {
-            assert_eq!(reg.get(i), Some(TriState::COSINE),
-                "qubit {i} not in |0⟩ = COSINE state on init");
+            assert_eq!(
+                reg.get(i),
+                Some(TriState::COSINE),
+                "qubit {i} not in |0⟩ = COSINE state on init"
+            );
         }
     }
 

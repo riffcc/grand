@@ -47,4 +47,3 @@ fn main() {
     println!("delta             = {delta:.9}");
     println!("relative error    = {rel_pct:.6}%");
 }
-

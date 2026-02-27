@@ -5,8 +5,8 @@ use gutoe_physics::constants::{
     DARK_GEOMETRIC_AMPLIFICATION, DARK_TO_VISIBLE_COUNT_RATIO, DARK_TO_VISIBLE_GEOMETRIC_RATIO,
 };
 use gutoe_physics::dark_sector::{
-    circular_velocity, curvature_factor_from_einstein_cosmology, dark_density, enclosed_mass_constant_density,
-    lensing_deflection, DarkSectorBranch,
+    circular_velocity, curvature_factor_from_einstein_cosmology, dark_density,
+    enclosed_mass_constant_density, lensing_deflection, DarkSectorBranch,
 };
 use std::fs::{self, File};
 use std::io::Write;
@@ -34,7 +34,8 @@ fn main() {
 
     let m_visible = enclosed_mass_constant_density(rho_visible, radius);
     let m_total_particle = enclosed_mass_constant_density(rho_visible + rho_dark_particle, radius);
-    let m_total_geometric = enclosed_mass_constant_density(rho_visible + rho_dark_geometric, radius);
+    let m_total_geometric =
+        enclosed_mass_constant_density(rho_visible + rho_dark_geometric, radius);
     let m_total_unified = enclosed_mass_constant_density(rho_visible + rho_dark_unified, radius);
 
     let v_visible = circular_velocity(m_visible, radius).unwrap_or(f64::NAN);
@@ -53,7 +54,8 @@ fn main() {
     let omega_dm_geometric = OMEGA_BARYON_OBS * DARK_TO_VISIBLE_GEOMETRIC_RATIO;
     let omega_m_geometric = OMEGA_BARYON_OBS + omega_dm_geometric;
     let dm_fraction_geometric = omega_dm_geometric / omega_m_geometric;
-    let dm_fraction_geometric_with_curvature = rho_dark_geometric / (rho_visible + rho_dark_geometric);
+    let dm_fraction_geometric_with_curvature =
+        rho_dark_geometric / (rho_visible + rho_dark_geometric);
     let dm_fraction_unified_local = rho_dark_unified / (rho_visible + rho_dark_unified);
     let dm_fraction_obs = OMEGA_DM_OBS / OMEGA_MATTER_OBS;
 
@@ -66,12 +68,36 @@ fn main() {
     writeln!(txt, "GRAND-346 dark-sector harness").expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[structural_split]").expect("write");
-    writeln!(txt, "dark_to_visible_ratio = {:.12}", DARK_TO_VISIBLE_COUNT_RATIO).expect("write");
-    writeln!(txt, "dark_fraction_total_split = {:.12}", DARK_FRACTION_TOTAL_STATE_SPLIT).expect("write");
-    writeln!(txt, "dark_geometric_amplification = {:.12}", DARK_GEOMETRIC_AMPLIFICATION).expect("write");
-    writeln!(txt, "dark_to_visible_geometric_ratio = {:.12}", DARK_TO_VISIBLE_GEOMETRIC_RATIO).expect("write");
-    writeln!(txt, "dark_fraction_geometric_structural = {:.12}", DARK_FRACTION_GEOMETRIC_STRUCTURAL)
-        .expect("write");
+    writeln!(
+        txt,
+        "dark_to_visible_ratio = {:.12}",
+        DARK_TO_VISIBLE_COUNT_RATIO
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "dark_fraction_total_split = {:.12}",
+        DARK_FRACTION_TOTAL_STATE_SPLIT
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "dark_geometric_amplification = {:.12}",
+        DARK_GEOMETRIC_AMPLIFICATION
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "dark_to_visible_geometric_ratio = {:.12}",
+        DARK_TO_VISIBLE_GEOMETRIC_RATIO
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "dark_fraction_geometric_structural = {:.12}",
+        DARK_FRACTION_GEOMETRIC_STRUCTURAL
+    )
+    .expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[inputs]").expect("write");
     writeln!(txt, "rho_visible = {:.6e} kg/m^3", rho_visible).expect("write");
@@ -99,8 +125,18 @@ fn main() {
     writeln!(txt, "[cmb_matter_fraction_check]").expect("write");
     writeln!(txt, "omega_baryon_obs = {:.9}", OMEGA_BARYON_OBS).expect("write");
     writeln!(txt, "omega_dm_obs = {:.9}", OMEGA_DM_OBS).expect("write");
-    writeln!(txt, "omega_dm_particle_from_ratio = {:.9}", omega_dm_particle).expect("write");
-    writeln!(txt, "omega_dm_geometric_from_ratio = {:.9}", omega_dm_geometric).expect("write");
+    writeln!(
+        txt,
+        "omega_dm_particle_from_ratio = {:.9}",
+        omega_dm_particle
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "omega_dm_geometric_from_ratio = {:.9}",
+        omega_dm_geometric
+    )
+    .expect("write");
     writeln!(txt, "dm_fraction_obs = {:.9}", dm_fraction_obs).expect("write");
     writeln!(txt, "dm_fraction_particle = {:.9}", dm_fraction_particle).expect("write");
     writeln!(txt, "dm_fraction_geometric = {:.9}", dm_fraction_geometric).expect("write");
@@ -110,7 +146,12 @@ fn main() {
         dm_fraction_geometric_with_curvature
     )
     .expect("write");
-    writeln!(txt, "dm_fraction_unified_local = {:.9}", dm_fraction_unified_local).expect("write");
+    writeln!(
+        txt,
+        "dm_fraction_unified_local = {:.9}",
+        dm_fraction_unified_local
+    )
+    .expect("write");
     writeln!(
         txt,
         "dm_fraction_particle_delta = {:.9}",

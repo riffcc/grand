@@ -1020,52 +1020,52 @@ fn fs(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Params {
-    r_s:      f32,
-    r_c:      f32,
-    disk_in:  f32,
+    r_s: f32,
+    r_c: f32,
+    disk_in: f32,
     disk_out: f32,
-    sin_inc:  f32,
-    fov:      f32,
-    width:    f32,
-    height:   f32,
-    max_phi:  f32,
-    dphi:     f32,
-    az:       f32,
-    cam_x:    f32,
-    cam_y:    f32,
-    cam_z:    f32,
+    sin_inc: f32,
+    fov: f32,
+    width: f32,
+    height: f32,
+    max_phi: f32,
+    dphi: f32,
+    az: f32,
+    cam_x: f32,
+    cam_y: f32,
+    cam_z: f32,
     cam_roll: f32,
-    interior_mode:  f32,
+    interior_mode: f32,
     core_look_mode: f32,
-    r_cam_frac:     f32,
-    quality_tier:   f32,
-    use_transfer:   f32,
-    tau_scale:      f32,
-    disk_model:     f32,
-    local_stars:    f32,
-    riaf_volume:    f32,
-    kerr_enable:    f32,
-    kerr_astar:     f32,
-    _pad1:    f32,
-    _pad2:    f32,
-    _pad3:    f32,
+    r_cam_frac: f32,
+    quality_tier: f32,
+    use_transfer: f32,
+    tau_scale: f32,
+    disk_model: f32,
+    local_stars: f32,
+    riaf_volume: f32,
+    kerr_enable: f32,
+    kerr_astar: f32,
+    _pad1: f32,
+    _pad2: f32,
+    _pad3: f32,
 }
 
 // ── Camera state ──────────────────────────────────────────────────────────────
 
 struct Camera {
-    inclination: f32, // degrees, 0 = face-on, 90 = edge-on
-    azimuth:     f32, // radians, rotates disk orientation on screen
-    fov_rs:      f32, // half-width of image in r_s
-    disk_outer:  f32, // disk outer radius in r_s
-    gutoe_core:  bool, // toggle GUTOE lattice correction
-    interior_mode: bool, // camera placed inside horizon
+    inclination: f32,     // degrees, 0 = face-on, 90 = edge-on
+    azimuth: f32,         // radians, rotates disk orientation on screen
+    fov_rs: f32,          // half-width of image in r_s
+    disk_outer: f32,      // disk outer radius in r_s
+    gutoe_core: bool,     // toggle GUTOE lattice correction
+    interior_mode: bool,  // camera placed inside horizon
     core_look_mode: bool, // interior camera points at lattice core
-    r_cam_frac: f32, // r_cam = r_cam_frac * r_horizon (coordinate)
-    cam_x:       f32, // freecam world-space x offset
-    cam_y:       f32, // freecam world-space y offset
-    cam_z:       f32, // freecam world-space z offset
-    cam_roll:    f32, // camera roll in radians
+    r_cam_frac: f32,      // r_cam = r_cam_frac * r_horizon (coordinate)
+    cam_x: f32,           // freecam world-space x offset
+    cam_y: f32,           // freecam world-space y offset
+    cam_z: f32,           // freecam world-space z offset
+    cam_roll: f32,        // camera roll in radians
     use_transfer: bool,
     tau_scale: f32,
     riaf_mode: bool,
@@ -1077,9 +1077,12 @@ struct Camera {
 
 impl Default for Camera {
     fn default() -> Self {
-        let use_transfer = std::env::var("BH_USE_TRANSFER")
-            .ok()
-            .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"));
+        let use_transfer = std::env::var("BH_USE_TRANSFER").ok().is_some_and(|s| {
+            matches!(
+                s.as_str(),
+                "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+            )
+        });
         let tau_scale = std::env::var("BH_TAU_SCALE")
             .ok()
             .and_then(|s| s.parse::<f32>().ok())
@@ -1108,17 +1111,17 @@ impl Default for Camera {
             // azimuth = -π/2 rotates the disk so the approaching (bright) side is
             // at screen-bottom, matching the classic EHT image orientation.
             inclination: 17.0,
-            azimuth:     -std::f32::consts::FRAC_PI_2,
-            fov_rs:      7.0,
-            disk_outer:  20.0,
-            gutoe_core:  true,
+            azimuth: -std::f32::consts::FRAC_PI_2,
+            fov_rs: 7.0,
+            disk_outer: 20.0,
+            gutoe_core: true,
             interior_mode: false,
             core_look_mode: false,
             r_cam_frac: 0.72,
-            cam_x:       0.0,
-            cam_y:       0.0,
-            cam_z:       0.0,
-            cam_roll:    0.0,
+            cam_x: 0.0,
+            cam_y: 0.0,
+            cam_z: 0.0,
+            cam_roll: 0.0,
             use_transfer,
             tau_scale,
             riaf_mode,
@@ -1137,7 +1140,9 @@ impl Camera {
         let (saz, caz) = self.azimuth.sin_cos();
         let fwd = [-sinc * caz, -sinc * saz, -cinc];
         let mut right_v = [fwd[1], -fwd[0], 0.0];
-        let rn = (right_v[0] * right_v[0] + right_v[1] * right_v[1] + right_v[2] * right_v[2]).sqrt().max(1e-6);
+        let rn = (right_v[0] * right_v[0] + right_v[1] * right_v[1] + right_v[2] * right_v[2])
+            .sqrt()
+            .max(1e-6);
         right_v[0] /= rn;
         right_v[1] /= rn;
         right_v[2] /= rn;
@@ -1175,20 +1180,20 @@ impl Camera {
             (18.0 * std::f32::consts::PI, 0.012)
         };
         Params {
-            r_s:      1.0,
+            r_s: 1.0,
             r_c,
-            disk_in:  3.0,  // r_ISCO = 3 r_s
+            disk_in: 3.0, // r_ISCO = 3 r_s
             disk_out: self.disk_outer,
-            sin_inc:  self.inclination.to_radians().sin(),
-            fov:      self.fov_rs,
+            sin_inc: self.inclination.to_radians().sin(),
+            fov: self.fov_rs,
             width,
             height,
             max_phi,
             dphi,
-            az:       self.azimuth,
-            cam_x:    self.cam_x,
-            cam_y:    self.cam_y,
-            cam_z:    self.cam_z,
+            az: self.azimuth,
+            cam_x: self.cam_x,
+            cam_y: self.cam_y,
+            cam_z: self.cam_z,
             cam_roll: self.cam_roll,
             interior_mode: if self.interior_mode { 1.0 } else { 0.0 },
             core_look_mode: if self.core_look_mode { 1.0 } else { 0.0 },
@@ -1201,9 +1206,9 @@ impl Camera {
             riaf_volume: if self.riaf_volume { 1.0 } else { 0.0 },
             kerr_enable: if self.kerr_enable { 1.0 } else { 0.0 },
             kerr_astar: self.kerr_astar,
-            _pad1:    0.0,
-            _pad2:    0.0,
-            _pad3:    0.0,
+            _pad1: 0.0,
+            _pad2: 0.0,
+            _pad3: 0.0,
         }
     }
 }
@@ -1211,15 +1216,15 @@ impl Camera {
 // ── wgpu resources ────────────────────────────────────────────────────────────
 
 struct Gpu {
-    _instance:  wgpu::Instance,
-    surface:    wgpu::Surface<'static>,
-    device:     wgpu::Device,
-    queue:      wgpu::Queue,
-    config:     wgpu::SurfaceConfiguration,
-    pipeline:   wgpu::RenderPipeline,
+    _instance: wgpu::Instance,
+    surface: wgpu::Surface<'static>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    config: wgpu::SurfaceConfiguration,
+    pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
-    uni_buf:    wgpu::Buffer,
-    _star_tex:  wgpu::Texture,
+    uni_buf: wgpu::Buffer,
+    _star_tex: wgpu::Texture,
     _star_view: wgpu::TextureView,
     _star_samp: wgpu::Sampler,
     quality_tier: f32,
@@ -1267,8 +1272,8 @@ impl Gpu {
             let surface = instance.create_surface(window).ok()?;
             let adapter = instance
                 .request_adapter(&wgpu::RequestAdapterOptions {
-                    power_preference:       power_pref,
-                    compatible_surface:     Some(&surface),
+                    power_preference: power_pref,
+                    compatible_surface: Some(&surface),
                     force_fallback_adapter: false,
                 })
                 .await?;
@@ -1298,12 +1303,13 @@ impl Gpu {
         };
 
         let primary_init = try_backend(primary, Arc::clone(&window)).await;
-        let fallback_init = if primary_init.is_none() && cfg!(any(target_os = "linux", target_os = "windows")) {
-            log::warn!("Primary backend init failed; retrying with OpenGL backend");
-            try_backend(wgpu::Backends::GL, Arc::clone(&window)).await
-        } else {
-            None
-        };
+        let fallback_init =
+            if primary_init.is_none() && cfg!(any(target_os = "linux", target_os = "windows")) {
+                log::warn!("Primary backend init failed; retrying with OpenGL backend");
+                try_backend(wgpu::Backends::GL, Arc::clone(&window)).await
+            } else {
+                None
+            };
         let (instance, surface, adapter) = primary_init
             .or(fallback_init)
             .expect("no GPU adapter found — backend init failed");
@@ -1318,8 +1324,10 @@ impl Gpu {
             quality_tier
         );
 
-        let caps   = surface.get_capabilities(&adapter);
-        let format = caps.formats.iter()
+        let caps = surface.get_capabilities(&adapter);
+        let format = caps
+            .formats
+            .iter()
             .copied()
             .find(|f| f.is_srgb())
             .unwrap_or(caps.formats[0]);
@@ -1343,12 +1351,12 @@ impl Gpu {
             _ => wgpu::PresentMode::Fifo,
         };
         let base_config = wgpu::SurfaceConfiguration {
-            usage:        wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
-            width:        size.width.max(1),
-            height:       size.height.max(1),
+            width: size.width.max(1),
+            height: size.height.max(1),
             present_mode,
-            alpha_mode:   caps.alpha_modes[0],
+            alpha_mode: caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: if quality_tier < 1.0 { 2 } else { 2 },
         };
@@ -1380,9 +1388,9 @@ impl Gpu {
 
         // Uniform buffer
         let uni_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label:              Some("params"),
-            size:               std::mem::size_of::<Params>() as u64,
-            usage:              wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            label: Some("params"),
+            size: std::mem::size_of::<Params>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -1392,7 +1400,11 @@ impl Gpu {
                 let (tw, th) = img.dimensions();
                 let tex = device.create_texture(&wgpu::TextureDescriptor {
                     label: Some("starmap"),
-                    size: wgpu::Extent3d { width: tw, height: th, depth_or_array_layers: 1 },
+                    size: wgpu::Extent3d {
+                        width: tw,
+                        height: th,
+                        depth_or_array_layers: 1,
+                    },
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
@@ -1413,7 +1425,11 @@ impl Gpu {
                         bytes_per_row: Some(4 * tw),
                         rows_per_image: Some(th),
                     },
-                    wgpu::Extent3d { width: tw, height: th, depth_or_array_layers: 1 },
+                    wgpu::Extent3d {
+                        width: tw,
+                        height: th,
+                        depth_or_array_layers: 1,
+                    },
                 );
                 log::info!("viewer starmap loaded: {} ({}x{})", path, tw, th);
                 let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
@@ -1422,7 +1438,11 @@ impl Gpu {
                 log::warn!("viewer starmap failed to load: {}", path);
                 let tex = device.create_texture(&wgpu::TextureDescriptor {
                     label: Some("starmap_fallback"),
-                    size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                    size: wgpu::Extent3d {
+                        width: 1,
+                        height: 1,
+                        depth_or_array_layers: 1,
+                    },
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
@@ -1431,10 +1451,23 @@ impl Gpu {
                     view_formats: &[],
                 });
                 queue.write_texture(
-                    wgpu::ImageCopyTexture { texture: &tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                    wgpu::ImageCopyTexture {
+                        texture: &tex,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
                     &[0_u8, 0_u8, 0_u8, 0_u8],
-                    wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
-                    wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                    wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(4),
+                        rows_per_image: Some(1),
+                    },
+                    wgpu::Extent3d {
+                        width: 1,
+                        height: 1,
+                        depth_or_array_layers: 1,
+                    },
                 );
                 let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
                 (tex, view)
@@ -1442,7 +1475,11 @@ impl Gpu {
         } else {
             let tex = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("starmap_fallback"),
-                size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -1451,10 +1488,23 @@ impl Gpu {
                 view_formats: &[],
             });
             queue.write_texture(
-                wgpu::ImageCopyTexture { texture: &tex, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                wgpu::ImageCopyTexture {
+                    texture: &tex,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
                 &[0_u8, 0_u8, 0_u8, 0_u8],
-                wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
-                wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: Some(1),
+                },
+                wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
             );
             let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
             (tex, view)
@@ -1472,15 +1522,15 @@ impl Gpu {
 
         // Bind group layout
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label:   Some("bgl"),
+            label: Some("bgl"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
-                    binding:    0,
+                    binding: 0,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty:         wgpu::BindingType::Buffer {
-                        ty:                 wgpu::BufferBindingType::Uniform,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size:   None,
+                        min_binding_size: None,
                     },
                     count: None,
                 },
@@ -1503,11 +1553,11 @@ impl Gpu {
             ],
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label:  Some("bg"),
+            label: Some("bg"),
             layout: &bgl,
             entries: &[
                 wgpu::BindGroupEntry {
-                    binding:  0,
+                    binding: 0,
                     resource: uni_buf.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
@@ -1522,38 +1572,38 @@ impl Gpu {
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label:  Some("bh"),
+            label: Some("bh"),
             source: wgpu::ShaderSource::Wgsl(SHADER.into()),
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label:                Some("pl"),
-            bind_group_layouts:   &[&bgl],
+            label: Some("pl"),
+            bind_group_layouts: &[&bgl],
             push_constant_ranges: &[],
         });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label:  Some("bh_pipe"),
+            label: Some("bh_pipe"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module:              &shader,
-                entry_point:        "vs",
+                module: &shader,
+                entry_point: "vs",
                 compilation_options: Default::default(),
-                buffers:            &[],
+                buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
-                module:              &shader,
-                entry_point:        "fs",
+                module: &shader,
+                entry_point: "fs",
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
-                    blend:      Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            primitive:    wgpu::PrimitiveState::default(),
+            primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
-            multisample:  wgpu::MultisampleState::default(),
-            multiview:    None,
-            cache:        None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
         });
 
         Self {
@@ -1573,33 +1623,34 @@ impl Gpu {
     }
 
     fn resize(&mut self, w: u32, h: u32) {
-        self.config.width  = w.max(1);
+        self.config.width = w.max(1);
         self.config.height = h.max(1);
         self.surface.configure(&self.device, &self.config);
     }
 
     fn upload_params(&self, params: &Params) {
-        self.queue.write_buffer(&self.uni_buf, 0, bytemuck::bytes_of(params));
+        self.queue
+            .write_buffer(&self.uni_buf, 0, bytemuck::bytes_of(params));
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let frame = self.surface.get_current_texture()?;
-        let view  = frame.texture.create_view(&Default::default());
+        let view = frame.texture.create_view(&Default::default());
         let mut enc = self.device.create_command_encoder(&Default::default());
         {
             let mut rp = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label:                    Some("frame"),
-                color_attachments:        &[Some(wgpu::RenderPassColorAttachment {
-                    view:          &view,
+                label: Some("frame"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load:  wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes:         None,
-                occlusion_query_set:      None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             rp.set_pipeline(&self.pipeline);
             rp.set_bind_group(0, &self.bind_group, &[]);
@@ -1614,17 +1665,17 @@ impl Gpu {
 // ── Application ───────────────────────────────────────────────────────────────
 
 struct App {
-    window:       Option<Arc<Window>>,
-    gpu:          Option<Gpu>,
-    camera:       Camera,
-    mouse_down:   bool,
+    window: Option<Arc<Window>>,
+    gpu: Option<Gpu>,
+    camera: Camera,
+    mouse_down: bool,
     mouse_right_down: bool,
-    last_mouse:   PhysicalPosition<f64>,
-    win_size:     (f32, f32), // (width, height) in physical pixels
-    gilrs:        Option<Gilrs>,
-    pad_prev:     PadPrev,
-    held:         HeldKeys,
-    auto_spin:    bool,
+    last_mouse: PhysicalPosition<f64>,
+    win_size: (f32, f32), // (width, height) in physical pixels
+    gilrs: Option<Gilrs>,
+    pad_prev: PadPrev,
+    held: HeldKeys,
+    auto_spin: bool,
     quality_tier: f32,
     last_frame_at: Instant,
     min_frame_dt: Duration,
@@ -1642,7 +1693,9 @@ struct App {
 
 impl App {
     fn recreate_gpu(&mut self) {
-        let Some(win) = self.window.as_ref() else { return };
+        let Some(win) = self.window.as_ref() else {
+            return;
+        };
         log::warn!("Recreating GPU device/surface after loss");
         let gpu = Gpu::new(Arc::clone(win));
         self.apply_quality_tier(gpu.quality_tier);
@@ -1660,17 +1713,17 @@ impl App {
 
     fn new() -> Self {
         Self {
-            window:     None,
-            gpu:        None,
-            camera:     Camera::default(),
+            window: None,
+            gpu: None,
+            camera: Camera::default(),
             mouse_down: false,
             mouse_right_down: false,
             last_mouse: PhysicalPosition::new(0.0, 0.0),
-            win_size:   (800.0, 800.0),
-            gilrs:      Gilrs::new().ok(),
-            pad_prev:   PadPrev::default(),
-            held:       HeldKeys::default(),
-            auto_spin:  false,
+            win_size: (800.0, 800.0),
+            gilrs: Gilrs::new().ok(),
+            pad_prev: PadPrev::default(),
+            held: HeldKeys::default(),
+            auto_spin: false,
             quality_tier: 2.0,
             last_frame_at: Instant::now() - Duration::from_millis(16),
             min_frame_dt: Duration::from_millis(16),
@@ -1691,9 +1744,12 @@ impl App {
 
     fn read_pad_tuning() -> PadTuning {
         let parse_bool = |k: &str| {
-            std::env::var(k)
-                .ok()
-                .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "on" | "ON" | "yes" | "YES"))
+            std::env::var(k).ok().is_some_and(|v| {
+                matches!(
+                    v.as_str(),
+                    "1" | "true" | "TRUE" | "on" | "ON" | "yes" | "YES"
+                )
+            })
         };
         let parse_f32 = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<f32>().ok());
         let mut t = PadTuning::default();
@@ -1743,12 +1799,11 @@ impl App {
     }
 
     fn apply_gamepad(&mut self, el: &ActiveEventLoop) {
-        let Some(gilrs) = self.gilrs.as_mut() else { return };
+        let Some(gilrs) = self.gilrs.as_mut() else {
+            return;
+        };
         while gilrs.next_event().is_some() {}
-        let Some((_, gp)) = gilrs
-            .gamepads()
-            .find(|(_, g)| g.is_connected())
-        else {
+        let Some((_, gp)) = gilrs.gamepads().find(|(_, g)| g.is_connected()) else {
             self.pad_name = None;
             self.pad_dualsense = false;
             return;
@@ -1789,15 +1844,22 @@ impl App {
         if rx != 0.0 || ry != 0.0 {
             self.camera.azimuth += rx * 0.06 * fine * self.pad_tuning.look_sens;
             self.camera.inclination = (self.camera.inclination
-                + ry * 1.8 * fine * self.pad_tuning.look_sens).clamp(1.0, 90.0);
+                + ry * 1.8 * fine * self.pad_tuning.look_sens)
+                .clamp(1.0, 90.0);
             dirty = true;
         }
         if lx != 0.0 || ly != 0.0 {
-            self.camera.move_local(-ly, lx, 0.0, 0.28 * fine * self.pad_tuning.move_sens);
+            self.camera
+                .move_local(-ly, lx, 0.0, 0.28 * fine * self.pad_tuning.move_sens);
             dirty = true;
         }
         if lt > 0.02 || rt > 0.02 {
-            self.camera.move_local(0.0, 0.0, rt - lt, 0.30 * fine * self.pad_tuning.trigger_sens);
+            self.camera.move_local(
+                0.0,
+                0.0,
+                rt - lt,
+                0.30 * fine * self.pad_tuning.trigger_sens,
+            );
             dirty = true;
         }
 
@@ -1836,7 +1898,11 @@ impl App {
             dirty = true;
         }
         if Self::button_pressed(gp.is_pressed(Button::West), &mut self.pad_prev.west) {
-            self.camera.disk_outer = if self.camera.disk_outer < 12.0 { 20.0 } else { 10.0 };
+            self.camera.disk_outer = if self.camera.disk_outer < 12.0 {
+                20.0
+            } else {
+                10.0
+            };
             dirty = true;
         }
         if Self::button_pressed(gp.is_pressed(Button::North), &mut self.pad_prev.north) {
@@ -1883,18 +1949,40 @@ impl App {
     }
 
     fn update_title(&self) {
-        let Some(win) = self.window.as_ref() else { return };
-        let core = if self.camera.gutoe_core { "GUTOE r_c" } else { "GR" };
-        let disk_model = if self.camera.riaf_mode { "RIAF" } else { "Thin" };
-        let stars_mode = if self.camera.local_stars { "stars3d:on" } else { "stars3d:off" };
-        let riaf_vol = if self.camera.riaf_volume { "riafV:on" } else { "riafV:off" };
+        let Some(win) = self.window.as_ref() else {
+            return;
+        };
+        let core = if self.camera.gutoe_core {
+            "GUTOE r_c"
+        } else {
+            "GR"
+        };
+        let disk_model = if self.camera.riaf_mode {
+            "RIAF"
+        } else {
+            "Thin"
+        };
+        let stars_mode = if self.camera.local_stars {
+            "stars3d:on"
+        } else {
+            "stars3d:off"
+        };
+        let riaf_vol = if self.camera.riaf_volume {
+            "riafV:on"
+        } else {
+            "riafV:off"
+        };
         let kerr = if self.camera.kerr_enable {
             format!("kerr:{:+.2}", self.camera.kerr_astar)
         } else {
             "kerr:off".to_string()
         };
         let cam_mode = if self.camera.interior_mode {
-            if self.camera.core_look_mode { "inside→core" } else { "inside→out" }
+            if self.camera.core_look_mode {
+                "inside→core"
+            } else {
+                "inside→out"
+            }
         } else {
             "outside"
         };
@@ -1938,7 +2026,9 @@ impl App {
         }
         self.last_frame_at = now;
 
-        let Some(win) = self.window.as_ref() else { return };
+        let Some(win) = self.window.as_ref() else {
+            return;
+        };
         let frame_start = Instant::now();
         let sz = win.inner_size();
         let pixels = (sz.width as u64).saturating_mul(sz.height as u64);
@@ -1950,7 +2040,9 @@ impl App {
         } else if pixels >= 2_600_000 {
             effective_quality = (effective_quality - 1.0).max(0.0);
         }
-        let params = self.camera.params(sz.width as f32, sz.height as f32, effective_quality);
+        let params = self
+            .camera
+            .params(sz.width as f32, sz.height as f32, effective_quality);
         let render_result = {
             let Some(gpu) = self.gpu.as_mut() else { return };
             gpu.upload_params(&params);
@@ -2032,7 +2124,7 @@ impl ApplicationHandler for App {
         let gpu = Gpu::new(Arc::clone(&win));
         self.apply_quality_tier(gpu.quality_tier);
         self.window = Some(win);
-        self.gpu    = Some(gpu);
+        self.gpu = Some(gpu);
         self.update_title();
         self.push_frame();
     }
@@ -2042,31 +2134,41 @@ impl ApplicationHandler for App {
             // ── Quit ──────────────────────────────────────────────────────────
             WindowEvent::CloseRequested => el.exit(),
 
-            WindowEvent::KeyboardInput { event: KeyEvent { logical_key, state, .. }, .. } => {
+            WindowEvent::KeyboardInput {
+                event: KeyEvent {
+                    logical_key, state, ..
+                },
+                ..
+            } => {
                 let pressed = state == ElementState::Pressed;
                 match logical_key {
                     Key::Named(NamedKey::Escape) if pressed => el.exit(),
                     Key::Named(NamedKey::ArrowUp) if pressed => {
                         self.camera.inclination = (self.camera.inclination + 5.0).min(90.0);
-                        self.update_title(); self.push_frame();
+                        self.update_title();
+                        self.push_frame();
                     }
                     Key::Named(NamedKey::ArrowDown) if pressed => {
                         self.camera.inclination = (self.camera.inclination - 5.0).max(1.0);
-                        self.update_title(); self.push_frame();
+                        self.update_title();
+                        self.push_frame();
                     }
                     Key::Named(NamedKey::ArrowLeft) if pressed => {
                         self.camera.azimuth -= std::f32::consts::PI / 12.0;
-                        self.update_title(); self.push_frame();
+                        self.update_title();
+                        self.push_frame();
                     }
                     Key::Named(NamedKey::ArrowRight) if pressed => {
                         self.camera.azimuth += std::f32::consts::PI / 12.0;
-                        self.update_title(); self.push_frame();
+                        self.update_title();
+                        self.push_frame();
                     }
                     Key::Character(ref s) => match s.as_str() {
                         "q" | "Q" if pressed => el.exit(),
                         "r" | "R" if pressed => {
                             self.camera = Camera::default();
-                            self.update_title(); self.push_frame();
+                            self.update_title();
+                            self.push_frame();
                         }
                         "w" | "W" => self.held.fwd = pressed,
                         "s" | "S" => self.held.back = pressed,
@@ -2081,42 +2183,59 @@ impl ApplicationHandler for App {
                             if !self.camera.interior_mode {
                                 self.camera.core_look_mode = false;
                             }
-                            self.update_title(); self.push_frame();
+                            self.update_title();
+                            self.push_frame();
                         }
                         "o" | "O" if pressed => {
                             self.camera.core_look_mode = !self.camera.core_look_mode;
                             if self.camera.core_look_mode {
                                 self.camera.interior_mode = true;
                             }
-                            self.update_title(); self.push_frame();
+                            self.update_title();
+                            self.push_frame();
                         }
                         "[" if pressed => {
-                            self.camera.r_cam_frac = (self.camera.r_cam_frac - 0.02).clamp(0.05, 0.99);
-                            self.update_title(); self.push_frame();
+                            self.camera.r_cam_frac =
+                                (self.camera.r_cam_frac - 0.02).clamp(0.05, 0.99);
+                            self.update_title();
+                            self.push_frame();
                         }
                         "]" if pressed => {
-                            self.camera.r_cam_frac = (self.camera.r_cam_frac + 0.02).clamp(0.05, 0.99);
-                            self.update_title(); self.push_frame();
+                            self.camera.r_cam_frac =
+                                (self.camera.r_cam_frac + 0.02).clamp(0.05, 0.99);
+                            self.update_title();
+                            self.push_frame();
                         }
                         "g" | "G" if pressed => {
                             self.camera.gutoe_core = !self.camera.gutoe_core;
                             log::info!("GUTOE lattice core: {}", self.camera.gutoe_core);
-                            self.update_title(); self.push_frame();
+                            self.update_title();
+                            self.push_frame();
                         }
                         "t" | "T" if pressed => {
                             self.camera.riaf_mode = !self.camera.riaf_mode;
-                            log::info!("Disk model: {}", if self.camera.riaf_mode { "RIAF composite" } else { "Thin disk" });
-                            self.update_title(); self.push_frame();
+                            log::info!(
+                                "Disk model: {}",
+                                if self.camera.riaf_mode {
+                                    "RIAF composite"
+                                } else {
+                                    "Thin disk"
+                                }
+                            );
+                            self.update_title();
+                            self.push_frame();
                         }
                         "v" | "V" if pressed => {
                             self.camera.local_stars = !self.camera.local_stars;
                             log::info!("Local 3D stars: {}", self.camera.local_stars);
-                            self.update_title(); self.push_frame();
+                            self.update_title();
+                            self.push_frame();
                         }
                         "m" | "M" if pressed => {
                             self.camera.riaf_volume = !self.camera.riaf_volume;
                             log::info!("Volumetric RIAF blend: {}", self.camera.riaf_volume);
-                            self.update_title(); self.push_frame();
+                            self.update_title();
+                            self.push_frame();
                         }
                         "k" | "K" if pressed => {
                             self.camera.kerr_enable = !self.camera.kerr_enable;
@@ -2125,25 +2244,32 @@ impl ApplicationHandler for App {
                                 self.camera.kerr_enable,
                                 self.camera.kerr_astar
                             );
-                            self.update_title(); self.push_frame();
+                            self.update_title();
+                            self.push_frame();
                         }
                         "," if pressed => {
-                            self.camera.kerr_astar = (self.camera.kerr_astar - 0.05).clamp(-0.999, 0.999);
+                            self.camera.kerr_astar =
+                                (self.camera.kerr_astar - 0.05).clamp(-0.999, 0.999);
                             self.camera.kerr_enable = self.camera.kerr_astar.abs() > 1e-6;
-                            self.update_title(); self.push_frame();
+                            self.update_title();
+                            self.push_frame();
                         }
                         "." if pressed => {
-                            self.camera.kerr_astar = (self.camera.kerr_astar + 0.05).clamp(-0.999, 0.999);
+                            self.camera.kerr_astar =
+                                (self.camera.kerr_astar + 0.05).clamp(-0.999, 0.999);
                             self.camera.kerr_enable = self.camera.kerr_astar.abs() > 1e-6;
-                            self.update_title(); self.push_frame();
+                            self.update_title();
+                            self.push_frame();
                         }
                         "=" | "+" if pressed => {
                             self.camera.disk_outer = (self.camera.disk_outer + 1.0).min(30.0);
-                            self.update_title(); self.push_frame();
+                            self.update_title();
+                            self.push_frame();
                         }
                         "-" if pressed => {
                             self.camera.disk_outer = (self.camera.disk_outer - 1.0).max(3.5);
-                            self.update_title(); self.push_frame();
+                            self.update_title();
+                            self.push_frame();
                         }
                         _ => {}
                     },
@@ -2159,13 +2285,11 @@ impl ApplicationHandler for App {
             }
 
             // ── Mouse ─────────────────────────────────────────────────────────
-            WindowEvent::MouseInput { button, state, .. } => {
-                match button {
-                    MouseButton::Left => self.mouse_down = state == ElementState::Pressed,
-                    MouseButton::Right => self.mouse_right_down = state == ElementState::Pressed,
-                    _ => {}
-                }
-            }
+            WindowEvent::MouseInput { button, state, .. } => match button {
+                MouseButton::Left => self.mouse_down = state == ElementState::Pressed,
+                MouseButton::Right => self.mouse_right_down = state == ElementState::Pressed,
+                _ => {}
+            },
 
             WindowEvent::CursorMoved { position, .. } => {
                 if self.mouse_down || self.mouse_right_down {
@@ -2198,11 +2322,10 @@ impl ApplicationHandler for App {
                 // Line delta: 1 notch ≈ 12% fov change — snappy but not jumpy.
                 // Pixel delta (trackpad): scale so ~8px movement = same as one notch.
                 let scroll = match delta {
-                    MouseScrollDelta::LineDelta(_, y)   => y,
-                    MouseScrollDelta::PixelDelta(p)     => p.y as f32 / 8.0,
+                    MouseScrollDelta::LineDelta(_, y) => y,
+                    MouseScrollDelta::PixelDelta(p) => p.y as f32 / 8.0,
                 };
-                self.camera.fov_rs = (self.camera.fov_rs * (1.0 - scroll * 0.12))
-                    .clamp(3.0, 40.0);
+                self.camera.fov_rs = (self.camera.fov_rs * (1.0 - scroll * 0.12)).clamp(3.0, 40.0);
                 self.update_title();
                 self.push_frame();
             }
@@ -2217,7 +2340,13 @@ impl ApplicationHandler for App {
         // Continuous keyboard motion (WASD-style noclip).
         let mut moved = false;
         let speed = 0.12;
-        if self.held.fwd || self.held.back || self.held.left || self.held.right || self.held.up || self.held.down {
+        if self.held.fwd
+            || self.held.back
+            || self.held.left
+            || self.held.right
+            || self.held.up
+            || self.held.down
+        {
             let forward = (self.held.fwd as i32 - self.held.back as i32) as f32;
             let right = (self.held.right as i32 - self.held.left as i32) as f32;
             let up = (self.held.up as i32 - self.held.down as i32) as f32;
@@ -2286,7 +2415,9 @@ fn main() {
     println!("    D-pad nudge camera · A toggle GUTOE/GR · B reset · X disk preset · Y fov preset");
     println!("    Start auto-spin · Back recenter azimuth · LB+RB+Guide quit");
     println!("    LT+RT+X hard reset (default M87 + GUTOE core)");
-    println!("    Env tuning: BH_PAD_DEADZONE, BH_PAD_LOOK_SENS, BH_PAD_MOVE_SENS, BH_PAD_TRIGGER_SENS");
+    println!(
+        "    Env tuning: BH_PAD_DEADZONE, BH_PAD_LOOK_SENS, BH_PAD_MOVE_SENS, BH_PAD_TRIGGER_SENS"
+    );
     println!("    Env invert: BH_PAD_INVERT_X, BH_PAD_INVERT_Y");
     println!("  Title bar shows live: inclination, azimuth, fov, disk size, mode");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

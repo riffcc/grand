@@ -49,4 +49,3 @@ fn main() {
     println!("  Ω_H      = {omega_h:.6}");
     println!("  ω(r=2M, θ=π/2) = {omega_eq_2m:.6}");
 }
-

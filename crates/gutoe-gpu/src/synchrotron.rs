@@ -99,7 +99,11 @@ pub fn synchrotron_emissivity_kerr(
 ///
 /// `t_rel` is local disk temperature relative to ISCO.
 #[inline]
-pub fn band_weight_with_exposure(band: RenderSpectrum, t_rel: f64, fixed_exposure: Option<f64>) -> f64 {
+pub fn band_weight_with_exposure(
+    band: RenderSpectrum,
+    t_rel: f64,
+    fixed_exposure: Option<f64>,
+) -> f64 {
     let t = t_rel.max(1e-6);
     let (x0, mut exposure) = match band {
         RenderSpectrum::Bolometric => return 1.0,
@@ -149,9 +153,15 @@ mod tests {
 
     #[test]
     fn parser_aliases() {
-        assert_eq!(RenderSpectrum::parse("mm"), Some(RenderSpectrum::Millimeter));
+        assert_eq!(
+            RenderSpectrum::parse("mm"),
+            Some(RenderSpectrum::Millimeter)
+        );
         assert_eq!(RenderSpectrum::parse("x-ray"), Some(RenderSpectrum::Xray));
-        assert_eq!(RenderSpectrum::parse("all"), Some(RenderSpectrum::Bolometric));
+        assert_eq!(
+            RenderSpectrum::parse("all"),
+            Some(RenderSpectrum::Bolometric)
+        );
         assert_eq!(RenderSpectrum::parse("???"), None);
     }
 
@@ -176,6 +186,9 @@ mod tests {
         let dimmer = band_weight_with_exposure(RenderSpectrum::Optical, t_rel, Some(0.7));
         let brighter = band_weight_with_exposure(RenderSpectrum::Optical, t_rel, Some(2.1));
         assert!(dimmer < baseline, "dimmer={dimmer} baseline={baseline}");
-        assert!(brighter > baseline, "brighter={brighter} baseline={baseline}");
+        assert!(
+            brighter > baseline,
+            "brighter={brighter} baseline={baseline}"
+        );
     }
 }

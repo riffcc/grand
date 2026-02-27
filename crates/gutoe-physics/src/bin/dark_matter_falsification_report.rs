@@ -22,9 +22,19 @@ fn write_branch_txt(out: &mut File, s: DarkMatterBranchScorecard) {
     writeln!(out, "rotation_rmse_kms = {:.6}", m.rotation_rmse_kms).expect("write");
     writeln!(out, "rotation_mape = {:.9}", m.rotation_mape).expect("write");
     writeln!(out, "rotation_chi2_ndof = {:.6}", m.rotation_chi2_ndof).expect("write");
-    writeln!(out, "lensing_proxy_rmse_rad = {:.12e}", m.lensing_proxy_rmse_rad).expect("write");
+    writeln!(
+        out,
+        "lensing_proxy_rmse_rad = {:.12e}",
+        m.lensing_proxy_rmse_rad
+    )
+    .expect("write");
     writeln!(out, "lensing_proxy_mape = {:.9}", m.lensing_proxy_mape).expect("write");
-    writeln!(out, "predicted_dm_fraction = {:.9}", m.predicted_dm_fraction).expect("write");
+    writeln!(
+        out,
+        "predicted_dm_fraction = {:.9}",
+        m.predicted_dm_fraction
+    )
+    .expect("write");
     writeln!(out, "observed_dm_fraction = {:.9}", m.observed_dm_fraction).expect("write");
     writeln!(out, "dm_fraction_delta = {:.9}", m.dm_fraction_delta).expect("write");
     writeln!(out, "rotation_ok = {}", s.rotation_ok).expect("write");
@@ -48,7 +58,12 @@ fn main() {
     writeln!(txt).expect("write");
     writeln!(txt, "[windows]").expect("write");
     writeln!(txt, "rotation_mape_max = {:.6}", windows.rotation_mape_max).expect("write");
-    writeln!(txt, "lensing_proxy_mape_max = {:.6}", windows.lensing_proxy_mape_max).expect("write");
+    writeln!(
+        txt,
+        "lensing_proxy_mape_max = {:.6}",
+        windows.lensing_proxy_mape_max
+    )
+    .expect("write");
     writeln!(
         txt,
         "dm_fraction_delta_abs_max = {:.6}",

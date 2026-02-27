@@ -23,14 +23,17 @@ fn main() {
         // Find nvcc: honour NVCC env, then /usr/local/cuda/bin, then PATH
         let nvcc = env::var("NVCC").unwrap_or_else(|_| {
             let default = "/usr/local/cuda/bin/nvcc";
-            if std::path::Path::new(default).exists() { default.to_string() }
-            else { "nvcc".to_string() }
+            if std::path::Path::new(default).exists() {
+                default.to_string()
+            } else {
+                "nvcc".to_string()
+            }
         });
 
         // Compile all kernel sources to object files
         let sources = [
             ("kernels/cuda_main.cu", out_dir.join("cuda_main.o")),
-            ("kernels/tracer.cu",    out_dir.join("tracer_gpu.o")),
+            ("kernels/tracer.cu", out_dir.join("tracer_gpu.o")),
         ];
         let mut obj_paths: Vec<String> = Vec::new();
 
@@ -39,12 +42,17 @@ fn main() {
                 .args(&[
                     "-O3",
                     &format!("-arch={arch}"),
-                    "-Xcompiler", "-fPIC",
-                    "-c", src,
-                    "-o", obj.to_str().unwrap(),
+                    "-Xcompiler",
+                    "-fPIC",
+                    "-c",
+                    src,
+                    "-o",
+                    obj.to_str().unwrap(),
                 ])
                 .status()
-                .unwrap_or_else(|_| panic!("nvcc not found — install CUDA toolkit or unset --features cuda"));
+                .unwrap_or_else(|_| {
+                    panic!("nvcc not found — install CUDA toolkit or unset --features cuda")
+                });
 
             if !status.success() {
                 panic!("nvcc compilation failed for {src}");
@@ -64,7 +72,7 @@ fn main() {
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-link-lib=static=schrodinger");
         println!("cargo:rustc-link-lib=cudart");
-        println!("cargo:rustc-link-lib=stdc++");   // nvcc C++ runtime symbols
+        println!("cargo:rustc-link-lib=stdc++"); // nvcc C++ runtime symbols
 
         // Find CUDA lib path
         let cuda_lib = env::var("CUDA_ROOT")
@@ -83,8 +91,11 @@ fn main() {
         // Find hipcc: honour HIPCC env, then /opt/rocm/bin, then PATH
         let hipcc = env::var("HIPCC").unwrap_or_else(|_| {
             let default = "/opt/rocm/bin/hipcc";
-            if std::path::Path::new(default).exists() { default.to_string() }
-            else { "hipcc".to_string() }
+            if std::path::Path::new(default).exists() {
+                default.to_string()
+            } else {
+                "hipcc".to_string()
+            }
         });
 
         // Optional offload arch (e.g. gfx1151 for Strix Halo)
@@ -109,7 +120,7 @@ fn main() {
         // Compile all kernel sources (same .cu sources work with HIP)
         let sources = [
             ("kernels/cuda_main.cu", out_dir.join("hip_main.o")),
-            ("kernels/tracer.cu",    out_dir.join("hip_tracer.o")),
+            ("kernels/tracer.cu", out_dir.join("hip_tracer.o")),
         ];
         let mut selected_wavefront: Option<String> = None;
         let mut wavefront_candidates: Vec<Option<String>> = Vec::new();
@@ -124,10 +135,7 @@ fn main() {
             if v != "64" {
                 wavefront_candidates.push(Some("64".to_string()));
             }
-        } else if gfx_arch
-            .as_deref()
-            .is_some_and(|g| g.starts_with("gfx11"))
-        {
+        } else if gfx_arch.as_deref().is_some_and(|g| g.starts_with("gfx11")) {
             wavefront_candidates.extend([Some("32".to_string()), None, Some("64".to_string())]);
         } else {
             wavefront_candidates.extend([None, Some("64".to_string()), Some("32".to_string())]);
@@ -177,7 +185,10 @@ fn main() {
         let lib = out_dir.join("libschrodinger.a");
         let mut ar_args = vec!["rcs".to_string(), lib.to_str().unwrap().to_string()];
         ar_args.extend(obj_paths);
-        Command::new("ar").args(&ar_args).status().expect("ar failed");
+        Command::new("ar")
+            .args(&ar_args)
+            .status()
+            .expect("ar failed");
 
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-link-lib=static=schrodinger");

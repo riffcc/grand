@@ -16,9 +16,7 @@ pub mod state;
 pub mod store;
 
 pub use actor::Actor;
-pub use gate::{
-    CompositeGate, EmHopGate, FullStepGate, Gate, XorProductGate, Z3CycleGate,
-};
+pub use gate::{CompositeGate, EmHopGate, FullStepGate, Gate, XorProductGate, Z3CycleGate};
 pub use metrics::{ExperimentResult, RoundMetrics};
 pub use orchestrator::Orchestrator;
 pub use state::{CowLattice, LatticeState};

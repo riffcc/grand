@@ -22,8 +22,12 @@ fn main() {
     writeln!(txt, "eta10_ref = {:.12}", ETA10_REF).expect("write");
     writeln!(txt, "deuterium_eta_exp = {:.12}", DEUTERIUM_ETA_EXP).expect("write");
     writeln!(txt, "helium3_eta_exp = {:.12}", HELIUM3_ETA_EXP).expect("write");
-    writeln!(txt, "lithium7_tension_amplification = {:.12}", LITHIUM7_TENSION_AMPLIFICATION)
-        .expect("write");
+    writeln!(
+        txt,
+        "lithium7_tension_amplification = {:.12}",
+        LITHIUM7_TENSION_AMPLIFICATION
+    )
+    .expect("write");
     writeln!(txt, "Y_p_pred = {:.12e}", score.yp_pred).expect("write");
     writeln!(txt, "D/H_pred = {:.12e}", score.dh_pred).expect("write");
     writeln!(txt, "3He/H_pred = {:.12e}", score.he3h_pred).expect("write");

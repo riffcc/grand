@@ -31,12 +31,12 @@
 //!
 //! See: /mnt/castle/garage/gutoe-research/GUTOE.md
 
-pub mod states;
-pub mod gates;
 pub mod errors;
+pub mod gates;
 pub mod hex_states;
+pub mod states;
 
-pub use states::*;
-pub use gates::*;
 pub use errors::*;
+pub use gates::*;
 pub use hex_states::*;
+pub use states::*;

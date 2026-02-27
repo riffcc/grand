@@ -15,7 +15,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const ELECTRON_MASS_MEV_OBS: f64 = 0.510_998_950;
 const PROTON_MASS_MEV_OBS: f64 = 938.272_088_16;
 const NEUTRON_MASS_MEV_OBS: f64 = 939.565_420_52;
-const BETA_MASS_COEFF_Z_MEV: f64 = (PROTON_MASS_MEV_OBS + ELECTRON_MASS_MEV_OBS) - NEUTRON_MASS_MEV_OBS;
+const BETA_MASS_COEFF_Z_MEV: f64 =
+    (PROTON_MASS_MEV_OBS + ELECTRON_MASS_MEV_OBS) - NEUTRON_MASS_MEV_OBS;
 
 #[derive(Clone, Copy, Debug)]
 struct ScoreboardDriftRow {
@@ -153,7 +154,10 @@ fn observed_stable_mass_numbers_for_z(z: u16) -> Option<&'static [u16]> {
     }
 }
 
-fn classify_long_lived(r: &NucleusRecord, beta_stable_local_min: bool) -> (bool, bool, bool, bool, bool, bool) {
+fn classify_long_lived(
+    r: &NucleusRecord,
+    beta_stable_local_min: bool,
+) -> (bool, bool, bool, bool, bool, bool) {
     let fail_beta_optimal = !beta_stable_local_min;
     let fail_fissility = r.fissility > 1.0;
     let fail_s2n = if r.n <= 2 {
@@ -243,7 +247,8 @@ fn env_bool(name: &str, default: bool) -> bool {
 }
 
 fn main() -> anyhow::Result<()> {
-    let out_dir = env::var("GUTOE_MASS_PERIODIC_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart".to_string());
+    let out_dir =
+        env::var("GUTOE_MASS_PERIODIC_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart".to_string());
     fs::create_dir_all(&out_dir)?;
     let out = PathBuf::from(out_dir);
 
@@ -265,9 +270,15 @@ fn main() -> anyhow::Result<()> {
             amplitude_z: env_f64("GUTOE_NUCLEAR_AMP_Z", default_shell.amplitude_z),
             amplitude_n: env_f64("GUTOE_NUCLEAR_AMP_N", default_shell.amplitude_n),
             shell_amp: env_f64("GUTOE_NUCLEAR_SHELL_AMP", default_shell.shell_amp),
-            shell_scale_exp: env_f64("GUTOE_NUCLEAR_SHELL_SCALE_EXP", default_shell.shell_scale_exp),
+            shell_scale_exp: env_f64(
+                "GUTOE_NUCLEAR_SHELL_SCALE_EXP",
+                default_shell.shell_scale_exp,
+            ),
             use_strutinsky: env_bool("GUTOE_NUCLEAR_USE_STRUTINSKY", default_shell.use_strutinsky),
-            strutinsky_gamma: env_f64("GUTOE_NUCLEAR_STRUTINSKY_GAMMA", default_shell.strutinsky_gamma),
+            strutinsky_gamma: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_GAMMA",
+                default_shell.strutinsky_gamma,
+            ),
             strutinsky_spacing_mev: env_f64(
                 "GUTOE_NUCLEAR_STRUTINSKY_SPACING_MEV",
                 default_shell.strutinsky_spacing_mev,
@@ -340,8 +351,14 @@ fn main() -> anyhow::Result<()> {
             heavy_sigma_z: env_f64("GUTOE_NUCLEAR_HEAVY_SIGMA_Z", default_shell.heavy_sigma_z),
             heavy_sigma_n: env_f64("GUTOE_NUCLEAR_HEAVY_SIGMA_N", default_shell.heavy_sigma_n),
             heavy_amplitude: env_f64("GUTOE_NUCLEAR_HEAVY_AMP", default_shell.heavy_amplitude),
-            heavy_gate_z_min: env_u16("GUTOE_NUCLEAR_HEAVY_GATE_Z_MIN", default_shell.heavy_gate_z_min),
-            heavy_gate_n_min: env_u16("GUTOE_NUCLEAR_HEAVY_GATE_N_MIN", default_shell.heavy_gate_n_min),
+            heavy_gate_z_min: env_u16(
+                "GUTOE_NUCLEAR_HEAVY_GATE_Z_MIN",
+                default_shell.heavy_gate_z_min,
+            ),
+            heavy_gate_n_min: env_u16(
+                "GUTOE_NUCLEAR_HEAVY_GATE_N_MIN",
+                default_shell.heavy_gate_n_min,
+            ),
             z50_isovector_valley_amplitude: env_f64(
                 "GUTOE_NUCLEAR_Z50_ISOVECTOR_VALLEY_AMP",
                 default_shell.z50_isovector_valley_amplitude,
@@ -380,8 +397,10 @@ fn main() -> anyhow::Result<()> {
         *isotopes_per_z.entry(r.z).or_insert(0) += 1;
     }
 
-    let binding_by_za: BTreeMap<(u16, u16), f64> =
-        records.iter().map(|r| ((r.z, r.a), r.binding_mev)).collect();
+    let binding_by_za: BTreeMap<(u16, u16), f64> = records
+        .iter()
+        .map(|r| ((r.z, r.a), r.binding_mev))
+        .collect();
 
     // Tin diagnostics (magic-proton showcase): compare exact stable A-set.
     let mut tin_predicted_a: Vec<u16> = stable_like
@@ -438,9 +457,13 @@ fn main() -> anyhow::Result<()> {
     let mut tin_csv = String::from(
         "A,N,predicted_long_lived,observed_stable,fail_beta_optimal,fail_fissility,fail_s2n,fail_s2p,fail_sf,stability_score,s2n_mev,s2p_mev,delta_binding_vs_zminus1_mev,delta_binding_vs_zplus1_mev,fissility,sf_log10_half_life_s\n",
     );
-    for r in records.iter().filter(|r| r.z == 50 && (100..=130).contains(&r.a)) {
+    for r in records
+        .iter()
+        .filter(|r| r.z == 50 && (100..=130).contains(&r.a))
+    {
         let beta_ok = beta_local_min.get(&(r.z, r.n)).copied().unwrap_or(false);
-        let (pred, fail_beta, fail_fiss, fail_s2n, fail_s2p, fail_sf) = classify_long_lived(r, beta_ok);
+        let (pred, fail_beta, fail_fiss, fail_s2n, fail_s2p, fail_sf) =
+            classify_long_lived(r, beta_ok);
         let observed = tin_observed_a.contains(&r.a);
         let delta_vs_zminus1 = binding_by_za
             .get(&(49, r.a))
@@ -618,33 +641,34 @@ fn main() -> anyhow::Result<()> {
     for z in cfg.z_min..=cfg.z_max {
         let pred_count = isotopes_per_z.get(&z).copied().unwrap_or(0);
         let pred_has = pred_count > 0;
-        let (obs_ref_s, obs_has, signed_drift_s, abs_drift_s) = match observed_stable_isotope_count(z) {
-            Some(obs_ref) => {
-                let obs_has = obs_ref > 0;
-                stable_presence_total += 1;
-                if pred_has == obs_has {
-                    stable_presence_correct += 1;
+        let (obs_ref_s, obs_has, signed_drift_s, abs_drift_s) =
+            match observed_stable_isotope_count(z) {
+                Some(obs_ref) => {
+                    let obs_has = obs_ref > 0;
+                    stable_presence_total += 1;
+                    if pred_has == obs_has {
+                        stable_presence_correct += 1;
+                    }
+                    let signed_drift = pred_count as f64 - obs_ref as f64;
+                    let abs_drift = signed_drift.abs();
+                    ref_count_abs_error_sum += abs_drift;
+                    ref_count_samples += 1;
+                    drift_rows.push(ScoreboardDriftRow {
+                        z,
+                        predicted_count: pred_count,
+                        observed_count: obs_ref,
+                        signed_drift,
+                        abs_drift,
+                    });
+                    (
+                        obs_ref.to_string(),
+                        obs_has,
+                        format!("{signed_drift:.3}"),
+                        format!("{abs_drift:.3}"),
+                    )
                 }
-                let signed_drift = pred_count as f64 - obs_ref as f64;
-                let abs_drift = signed_drift.abs();
-                ref_count_abs_error_sum += abs_drift;
-                ref_count_samples += 1;
-                drift_rows.push(ScoreboardDriftRow {
-                    z,
-                    predicted_count: pred_count,
-                    observed_count: obs_ref,
-                    signed_drift,
-                    abs_drift,
-                });
-                (
-                    obs_ref.to_string(),
-                    obs_has,
-                    format!("{signed_drift:.3}"),
-                    format!("{abs_drift:.3}"),
-                )
-            }
-            None => (String::new(), false, String::new(), String::new()),
-        };
+                None => (String::new(), false, String::new(), String::new()),
+            };
         scoreboard_csv.push_str(&format!(
             "{},{},{},{},{},{},{}\n",
             z, pred_count, pred_has, obs_has, obs_ref_s, signed_drift_s, abs_drift_s
@@ -652,7 +676,11 @@ fn main() -> anyhow::Result<()> {
     }
     fs::write(out.join("periodic_table_scoreboard.csv"), scoreboard_csv)?;
     let mut drift_sorted = drift_rows.clone();
-    drift_sorted.sort_by(|a, b| b.abs_drift.total_cmp(&a.abs_drift).then_with(|| a.z.cmp(&b.z)));
+    drift_sorted.sort_by(|a, b| {
+        b.abs_drift
+            .total_cmp(&a.abs_drift)
+            .then_with(|| a.z.cmp(&b.z))
+    });
     let summary_top_n = env::var("GUTOE_PERIODIC_SUMMARY_TOP")
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
@@ -671,7 +699,10 @@ fn main() -> anyhow::Result<()> {
             row.abs_drift
         ));
     }
-    fs::write(out.join("periodic_table_scoreboard_summary.csv"), summary_csv)?;
+    fs::write(
+        out.join("periodic_table_scoreboard_summary.csv"),
+        summary_csv,
+    )?;
 
     let stable_presence_accuracy = if stable_presence_total > 0 {
         stable_presence_correct as f64 / stable_presence_total as f64
@@ -905,7 +936,10 @@ fn main() -> anyhow::Result<()> {
             .and_then(|s| s.lines().next().map(|line| line.trim().to_string()))
             .unwrap_or_default();
         if existing_header != trend_header {
-            let legacy_path = out.join(format!("periodic_table_trend.legacy_{}.csv", report_timestamp));
+            let legacy_path = out.join(format!(
+                "periodic_table_trend.legacy_{}.csv",
+                report_timestamp
+            ));
             fs::rename(&trend_path, &legacy_path)?;
             println!(
                 "Archived legacy trend schema {} -> {}",
@@ -915,7 +949,10 @@ fn main() -> anyhow::Result<()> {
             trend_needs_header = true;
         }
     }
-    let mut trend = OpenOptions::new().create(true).append(true).open(&trend_path)?;
+    let mut trend = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&trend_path)?;
     if trend_needs_header {
         writeln!(trend, "{trend_header}")?;
     }
@@ -948,14 +985,23 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     println!("Wrote {}", out.join("mass_periodic_report.json").display());
-    println!("Wrote {}", out.join("periodic_table_scoreboard.csv").display());
+    println!(
+        "Wrote {}",
+        out.join("periodic_table_scoreboard.csv").display()
+    );
     println!(
         "Wrote {}",
         out.join("periodic_table_scoreboard_summary.csv").display()
     );
     println!("Wrote {}", out.join("shell_gap_attenuation.csv").display());
-    println!("Wrote {}", out.join("superheavy_closure_derivation.csv").display());
-    println!("Wrote {}", out.join("tin_isotope_diagnostics.csv").display());
+    println!(
+        "Wrote {}",
+        out.join("superheavy_closure_derivation.csv").display()
+    );
+    println!(
+        "Wrote {}",
+        out.join("tin_isotope_diagnostics.csv").display()
+    );
     println!("Appended {}", trend_path.display());
     Ok(())
 }

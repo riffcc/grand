@@ -1,11 +1,11 @@
 //! EWSB/Higgs mass-sector closure report from structural Cl(1,3) inputs.
 
 use gutoe_em::weak::{
-    electroweak_vev_from_fermi, electroweak_vev_from_lattice_order_parameter,
-    electron_mass_from_proton_anchor, higgs_mass_from_vev, normalized_higgs_order_parameter,
-    w_mass_from_vev_and_alpha, w_z_mass_ratio, z_mass_from_vev_and_alpha, ALPHA_EW_MZ,
-    EWSB_SCALE_FACTOR, HIGGS_CRITICAL_VOID_FRACTION, HIGGS_QUARTIC_LAMBDA, PROTON_MASS_ANCHOR_MEV,
-    VEV_OVER_PROTON,
+    electron_mass_from_proton_anchor, electroweak_vev_from_fermi,
+    electroweak_vev_from_lattice_order_parameter, higgs_mass_from_vev,
+    normalized_higgs_order_parameter, w_mass_from_vev_and_alpha, w_z_mass_ratio,
+    z_mass_from_vev_and_alpha, ALPHA_EW_MZ, EWSB_SCALE_FACTOR, HIGGS_CRITICAL_VOID_FRACTION,
+    HIGGS_QUARTIC_LAMBDA, PROTON_MASS_ANCHOR_MEV, VEV_OVER_PROTON,
 };
 use std::fs::{self, File};
 use std::io::Write;
@@ -45,12 +45,27 @@ fn main() {
     let mut txt = File::create(&txt_path).expect("create txt");
     writeln!(txt, "[ewsb_structural]").expect("write");
     writeln!(txt, "higgs_lambda = {:.12}", HIGGS_QUARTIC_LAMBDA).expect("write");
-    writeln!(txt, "critical_void_fraction = {:.12}", HIGGS_CRITICAL_VOID_FRACTION).expect("write");
+    writeln!(
+        txt,
+        "critical_void_fraction = {:.12}",
+        HIGGS_CRITICAL_VOID_FRACTION
+    )
+    .expect("write");
     writeln!(txt, "sin2_theta_w = {:.12}", 3.0 / 13.0).expect("write");
     writeln!(txt, "w_over_z_ratio = {:.12}", w_z_mass_ratio()).expect("write");
     writeln!(txt, "ewsb_scale_factor = {:.12}", EWSB_SCALE_FACTOR).expect("write");
-    writeln!(txt, "proton_mass_anchor_mev = {:.12}", PROTON_MASS_ANCHOR_MEV).expect("write");
-    writeln!(txt, "electron_mass_anchor_mev = {:.12}", electron_mass_from_proton_anchor()).expect("write");
+    writeln!(
+        txt,
+        "proton_mass_anchor_mev = {:.12}",
+        PROTON_MASS_ANCHOR_MEV
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "electron_mass_anchor_mev = {:.12}",
+        electron_mass_from_proton_anchor()
+    )
+    .expect("write");
     writeln!(txt, "vev_over_proton = {:.12}", VEV_OVER_PROTON).expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[mass_sector_fermi_branch]").expect("write");
@@ -114,22 +129,14 @@ fn main() {
     println!("wrote {json_path}");
     println!(
         "Fermi branch:   v={:.3} GeV, m_W={:.3}, m_Z={:.3}, m_H={:.3}",
-        v_fermi,
-        m_w_fermi,
-        m_z_fermi,
-        m_h_fermi
+        v_fermi, m_w_fermi, m_z_fermi, m_h_fermi
     );
     println!(
         "Lattice branch: v={:.3} GeV, m_W={:.3}, m_Z={:.3}, m_H={:.3}",
-        v_lattice,
-        m_w_lattice,
-        m_z_lattice,
-        m_h_lattice
+        v_lattice, m_w_lattice, m_z_lattice, m_h_lattice
     );
     println!(
         "λ_H={:.6}, f_c={:.6}, v/mp={:.6}",
-        HIGGS_QUARTIC_LAMBDA,
-        HIGGS_CRITICAL_VOID_FRACTION,
-        VEV_OVER_PROTON,
+        HIGGS_QUARTIC_LAMBDA, HIGGS_CRITICAL_VOID_FRACTION, VEV_OVER_PROTON,
     );
 }

@@ -68,7 +68,13 @@ pub fn detect_quarks(lattice: &[u8], cfg: &LatticeConfig) -> Vec<Quark> {
             } else {
                 QuarkType::Down
             };
-            quarks.push(Quark { site, r, c, z, quark_type: qtype });
+            quarks.push(Quark {
+                site,
+                r,
+                c,
+                z,
+                quark_type: qtype,
+            });
         }
     }
 
@@ -86,8 +92,7 @@ pub fn find_proton_triplets(quarks: &[Quark], cfg: &LatticeConfig) -> Vec<[usize
     let nbr_cache: HashMap<usize, HashSet<usize>> = quarks
         .iter()
         .map(|q| {
-            let nbrs: HashSet<usize> =
-                mesh_neighbours(q.r, q.c, q.z, cfg).into_iter().collect();
+            let nbrs: HashSet<usize> = mesh_neighbours(q.r, q.c, q.z, cfg).into_iter().collect();
             (q.site, nbrs)
         })
         .collect();
@@ -194,12 +199,12 @@ pub fn analyze(lattice: &[u8], gauge: Option<&GaugeFields>, cfg: &LatticeConfig)
         .count();
 
     // Layer-restricted enrichment
-    let proton_layers: HashSet<usize> = trips
-        .iter()
-        .map(|&[d, _, _]| d / layer_stride)
-        .collect();
+    let proton_layers: HashSet<usize> = trips.iter().map(|&[d, _, _]| d / layer_stride).collect();
 
-    let lep_shell = p_shell.iter().filter(|&&s| lattice[s] == LEPTON_SEED).count();
+    let lep_shell = p_shell
+        .iter()
+        .filter(|&&s| lattice[s] == LEPTON_SEED)
+        .count();
     let shell_sz = p_shell.len().max(1);
 
     let bg_sites: Vec<usize> = (0..n)
@@ -209,7 +214,10 @@ pub fn analyze(lattice: &[u8], gauge: Option<&GaugeFields>, cfg: &LatticeConfig)
                 && !p_shell.contains(&s)
         })
         .collect();
-    let lep_bg = bg_sites.iter().filter(|&&s| lattice[s] == LEPTON_SEED).count();
+    let lep_bg = bg_sites
+        .iter()
+        .filter(|&&s| lattice[s] == LEPTON_SEED)
+        .count();
     let bg_sz = bg_sites.len().max(1);
 
     let rs = lep_shell as f64 / shell_sz as f64;
@@ -235,13 +243,23 @@ pub fn analyze(lattice: &[u8], gauge: Option<&GaugeFields>, cfg: &LatticeConfig)
             .sum();
         let n_bg = n - n_lep;
         let phi_lep = lep_sum / n_lep as f64;
-        let phi_bg = if n_bg > 0 { bg_sum / n_bg as f64 } else { phi_lep };
+        let phi_bg = if n_bg > 0 {
+            bg_sum / n_bg as f64
+        } else {
+            phi_lep
+        };
         phi_lep - phi_bg
     } else {
         0.0
     };
 
-    AnalysisResult { protons: trips.len(), leptons: n_lep, hydrogen: n_h, enrich, phi_ratio }
+    AnalysisResult {
+        protons: trips.len(),
+        leptons: n_lep,
+        hydrogen: n_h,
+        enrich,
+        phi_ratio,
+    }
 }
 
 #[cfg(test)]

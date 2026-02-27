@@ -80,7 +80,11 @@ pub fn decode_emulator_state_payload(bytes: &[u8]) -> Option<EmulatorState> {
     for m in &mut matter {
         *m = read_f64(bytes, &mut o)?;
     }
-    Some(EmulatorState { tick, gauge, matter })
+    Some(EmulatorState {
+        tick,
+        gauge,
+        matter,
+    })
 }
 
 impl RuntimeSmEmulator {

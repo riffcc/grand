@@ -86,7 +86,11 @@ mod tests {
         let gate = Z3CycleGate;
         actor.apply_gate(&gate, &cfg);
         assert_eq!(actor.history().len(), 2);
-        assert_ne!(actor.history()[0], actor.history()[1], "Z3 should change hash");
+        assert_ne!(
+            actor.history()[0],
+            actor.history()[1],
+            "Z3 should change hash"
+        );
 
         actor.apply_gate(&gate, &cfg);
         assert_eq!(actor.history().len(), 3);
@@ -95,7 +99,8 @@ mod tests {
         actor.apply_gate(&gate, &cfg);
         assert_eq!(actor.history().len(), 4);
         assert_eq!(
-            actor.history()[0], actor.history()[3],
+            actor.history()[0],
+            actor.history()[3],
             "Z3³ should return to initial state"
         );
     }

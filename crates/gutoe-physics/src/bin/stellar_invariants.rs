@@ -13,7 +13,8 @@ fn main() {
     let mut multi = MultiZoneBurn::baseline().seed_zones(3);
     let multi_burn = MultiZoneBurn::baseline();
 
-    let mut csv = String::from("step,single_sum,single_min,single_h,single_power,multi_min,multi_max_dev\n");
+    let mut csv =
+        String::from("step,single_sum,single_min,single_h,single_power,multi_min,multi_max_dev\n");
     for step in 0..steps {
         burn.step(&mut single, 0.02, 1.0e6);
         multi_burn.step(&mut multi, 1.0e5);

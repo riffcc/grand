@@ -2,7 +2,10 @@
 //!
 //! These thresholds mirror `findings/009-falsifiable-predictions-catalog.md`.
 
-use crate::{dynamics_map::StandardModelDynamicsMap, constants::{ALPHA, LAMBDA_QG}};
+use crate::{
+    constants::{ALPHA, LAMBDA_QG},
+    dynamics_map::StandardModelDynamicsMap,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GateWindow {
@@ -29,9 +32,18 @@ pub struct FalsificationWindows {
 impl Default for FalsificationWindows {
     fn default() -> Self {
         Self {
-            sin2_theta_w_ew: GateWindow { min: 0.23100, max: 0.23140 },
-            mz_over_mw: GateWindow { min: 1.1335, max: 1.1355 },
-            alpha_inverse: GateWindow { min: 137.034, max: 137.038 },
+            sin2_theta_w_ew: GateWindow {
+                min: 0.23100,
+                max: 0.23140,
+            },
+            mz_over_mw: GateWindow {
+                min: 1.1335,
+                max: 1.1355,
+            },
+            alpha_inverse: GateWindow {
+                min: 137.034,
+                max: 137.038,
+            },
             // |d_n| < 1e-26 e*cm implies |theta_qcd| < 1e-26 / (2.4e-16) ~= 4.17e-11.
             // Keep a tiny safety margin in the default gate.
             theta_qcd_abs_max: 4.2e-11,
@@ -67,7 +79,8 @@ impl FalsificationScorecard {
 /// Structural gates that do not require measured-scale correction inputs.
 pub fn evaluate_structural() -> FalsificationScorecard {
     let m = StandardModelDynamicsMap::from_clifford_z3();
-    let lambda_ok = LAMBDA_QG > 0.0 && (LAMBDA_QG - 1.0 / 12.0).abs() <= FalsificationWindows::default().lambda_qg_abs_tol;
+    let lambda_ok = LAMBDA_QG > 0.0
+        && (LAMBDA_QG - 1.0 / 12.0).abs() <= FalsificationWindows::default().lambda_qg_abs_tol;
     FalsificationScorecard {
         structural_ok: m.validate_internal_constraints(),
         corrected_ok: true,
@@ -82,12 +95,11 @@ pub fn evaluate_with_corrected(
     windows: FalsificationWindows,
 ) -> FalsificationScorecard {
     let structural = evaluate_structural();
-    let corrected_ok =
-        windows.sin2_theta_w_ew.contains(corrected.sin2_theta_w_ew) &&
-        windows.mz_over_mw.contains(corrected.mz_over_mw) &&
-        windows.alpha_inverse.contains(corrected.alpha_inverse) &&
-        corrected.theta_qcd.abs() <= windows.theta_qcd_abs_max &&
-        corrected.neutron_edm_e_cm.abs() <= windows.neutron_edm_abs_max_e_cm;
+    let corrected_ok = windows.sin2_theta_w_ew.contains(corrected.sin2_theta_w_ew)
+        && windows.mz_over_mw.contains(corrected.mz_over_mw)
+        && windows.alpha_inverse.contains(corrected.alpha_inverse)
+        && corrected.theta_qcd.abs() <= windows.theta_qcd_abs_max
+        && corrected.neutron_edm_e_cm.abs() <= windows.neutron_edm_abs_max_e_cm;
     FalsificationScorecard {
         structural_ok: structural.structural_ok,
         corrected_ok,
@@ -152,6 +164,9 @@ mod tests {
             neutron_edm_e_cm: windows.neutron_edm_abs_max_e_cm * 1.05,
         };
         let s = evaluate_with_corrected(corr, windows);
-        assert!(!s.corrected_ok, "theta/EDM overflow must fail corrected gates");
+        assert!(
+            !s.corrected_ok,
+            "theta/EDM overflow must fail corrected gates"
+        );
     }
 }

@@ -39,7 +39,11 @@ fn main() {
             let lerp = |u: u8, v: u8| -> u8 {
                 ((1.0 - alpha) * u as f32 + alpha * v as f32).round() as u8
             };
-            out_img.put_pixel(x, y, Rgb([lerp(p0[0], p1[0]), lerp(p0[1], p1[1]), lerp(p0[2], p1[2])]));
+            out_img.put_pixel(
+                x,
+                y,
+                Rgb([lerp(p0[0], p1[0]), lerp(p0[1], p1[1]), lerp(p0[2], p1[2])]),
+            );
         }
     }
     out_img.save(&out).expect("save stream probe");

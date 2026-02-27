@@ -60,4 +60,3 @@ fn main() {
     println!("alpha_s(M_Z) = {alpha_mz:.9} (target {ALPHA_S_MZ_TARGET:.6})");
     println!("wrote {out_csv}");
 }
-

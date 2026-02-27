@@ -23,9 +23,9 @@
 //! "O(1) distance calculation: max(|q1-q2|, |r1-r2|, |s1-s2|)"
 
 pub mod hex_lattice;
-pub mod vector_rails;
 pub mod lattice_3d;
+pub mod vector_rails;
 
 pub use hex_lattice::*;
-pub use vector_rails::*;
 pub use lattice_3d::*;
+pub use vector_rails::*;

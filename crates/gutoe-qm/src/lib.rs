@@ -26,20 +26,17 @@
 // This is the test. If the hex lattice shows P(screen) → 0 at Δφ = π,
 // the simulation is quantum mechanical. The classical sim cannot pass this test.
 
-pub mod hilbert;
 pub mod gates;
+pub mod hilbert;
 pub mod interference;
 
 pub use hilbert::{
-    SiteAmp, SpatialPsi,
-    pure_state, inner, norm_sq, normalize_site, born_prob,
-    init_at, init_superposition,
-    spatial_norm_sq, spatial_normalize, spatial_prob, measure_and_collapse,
+    born_prob, init_at, init_superposition, inner, measure_and_collapse, norm_sq, normalize_site,
+    pure_state, spatial_norm_sq, spatial_normalize, spatial_prob, SiteAmp, SpatialPsi,
 };
 
 pub use gates::{
-    hop_unitary, em_phase, em_phase_all,
-    z3_gate, clifford_phase, quantum_lepton_step,
+    clifford_phase, em_phase, em_phase_all, hop_unitary, quantum_lepton_step, z3_gate,
 };
 
 pub use interference::{aharonov_bohm_test, hex_lattice_interference, InterferenceResult};
@@ -49,8 +46,8 @@ pub use interference::{aharonov_bohm_test, hex_lattice_interference, Interferenc
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::f64::consts::PI;
     use num_complex::Complex64;
+    use std::f64::consts::PI;
 
     // ── Unitarity tests ────────────────────────────────────────────────────────
 
@@ -76,10 +73,7 @@ mod tests {
     #[test]
     fn em_phase_is_unitary() {
         // Phase rotation preserves norm
-        let mut psi = vec![
-            Complex64::new(0.6, 0.8),
-            Complex64::new(0.0, 0.0),
-        ];
+        let mut psi = vec![Complex64::new(0.6, 0.8), Complex64::new(0.0, 0.0)];
         let norm_before: f64 = psi.iter().map(|a| a.norm_sqr()).sum();
 
         em_phase(&mut psi, 0, 2.7, -1.0); // charge = -1, potential = 2.7
@@ -104,7 +98,8 @@ mod tests {
         // After Z₃: γ¹ (s=3) → γ² (s=5)
         assert!(
             (amp[5] - Complex64::new(1.0, 0.0)).norm() < 1e-14,
-            "Z₃ should map γ¹ → γ²: amp[5]={}", amp[5]
+            "Z₃ should map γ¹ → γ²: amp[5]={}",
+            amp[5]
         );
     }
 
@@ -115,7 +110,8 @@ mod tests {
         z3_gate(&mut amp);
         assert!(
             (amp[2] - Complex64::new(1.0, 0.0)).norm() < 1e-14,
-            "Z₃ should fix γ⁰: amp[2]={}", amp[2]
+            "Z₃ should fix γ⁰: amp[2]={}",
+            amp[2]
         );
     }
 
@@ -131,7 +127,8 @@ mod tests {
             assert!(
                 (amp[s] - original[s]).norm() < 1e-14,
                 "Z₃³ ≠ identity at s={s}: amp={} original={}",
-                amp[s], original[s]
+                amp[s],
+                original[s]
             );
         }
     }
@@ -142,7 +139,10 @@ mod tests {
     fn born_rule_sums_to_one() {
         let amp = pure_state(2); // γ⁰
         let total: f64 = (0..=16).map(|s| born_prob(&amp, s)).sum();
-        assert!((total - 1.0).abs() < 1e-14, "Born probabilities must sum to 1");
+        assert!(
+            (total - 1.0).abs() < 1e-14,
+            "Born probabilities must sum to 1"
+        );
     }
 
     #[test]
@@ -191,12 +191,27 @@ mod tests {
         );
 
         println!("  Quantum interference verified (2-mode MZI, symmetric BS):");
-        println!("    P(Δφ=0)   = {:.6}  (= 1/2, equal mix)", result.p_measured[0]);
-        println!("    P(Δφ=π/2) = {:.2e}  (EXACTLY ZERO — destructive)", p_at_half_pi);
-        println!("    P(Δφ=π)   = {:.6}  (= 1/2, equal mix again)", result.p_measured[20]);
-        println!("    P(Δφ=3π/2)= {:.6}  (= 1.0, fully constructive)", p_at_3half_pi);
+        println!(
+            "    P(Δφ=0)   = {:.6}  (= 1/2, equal mix)",
+            result.p_measured[0]
+        );
+        println!(
+            "    P(Δφ=π/2) = {:.2e}  (EXACTLY ZERO — destructive)",
+            p_at_half_pi
+        );
+        println!(
+            "    P(Δφ=π)   = {:.6}  (= 1/2, equal mix again)",
+            result.p_measured[20]
+        );
+        println!(
+            "    P(Δφ=3π/2)= {:.6}  (= 1.0, fully constructive)",
+            p_at_3half_pi
+        );
         println!("    Classical: P = 0.5 always (no Δφ dependence)");
-        println!("    Visibility = {:.6}  (1.0 = perfect coherence)", result.visibility);
+        println!(
+            "    Visibility = {:.6}  (1.0 = perfect coherence)",
+            result.visibility
+        );
     }
 
     #[test]
@@ -236,13 +251,20 @@ mod tests {
         let p_exclusive: f64 = f64::min(p_path1 + p_path2, 1.0);
         let p_independent = 1.0 - (1.0 - p_path1) * (1.0 - p_path2);
 
-        assert!(p_exclusive   > 0.4, "Classical exclusive model: P > 0 always");
-        assert!(p_independent > 0.4, "Classical independent model: P > 0 always");
+        assert!(p_exclusive > 0.4, "Classical exclusive model: P > 0 always");
+        assert!(
+            p_independent > 0.4,
+            "Classical independent model: P > 0 always"
+        );
 
         // The QUANTUM model gives P = 0 at Δφ = π/2 with the symmetric beam splitter.
         // This is only possible because quantum amplitudes CANCEL (destructive interference).
         let result = aharonov_bohm_test(40);
-        let p_quantum_min = result.p_measured.iter().cloned().fold(f64::INFINITY, f64::min);
+        let p_quantum_min = result
+            .p_measured
+            .iter()
+            .cloned()
+            .fold(f64::INFINITY, f64::min);
 
         assert!(
             p_quantum_min < 0.001,
@@ -255,7 +277,10 @@ mod tests {
 
         println!("  Classical minimum: ~{p_independent:.3}");
         println!("  Quantum minimum:   {p_quantum_min:.2e}");
-        println!("  Ratio: {:.0}x  — quantum interference reduces P by this factor", p_independent / p_quantum_min);
+        println!(
+            "  Ratio: {:.0}x  — quantum interference reduces P by this factor",
+            p_independent / p_quantum_min
+        );
     }
 
     fn p_classical_min_model() -> f64 {

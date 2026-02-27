@@ -102,7 +102,8 @@ fn parse_ame_binding_row(line: &str) -> Option<AmeBindingRow> {
 }
 
 fn load_ame2020_bindings(path: &Path) -> anyhow::Result<Vec<AmeBindingRow>> {
-    let text = fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let text =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
     let mut out = Vec::new();
     for line in text.lines() {
         if let Some(row) = parse_ame_binding_row(line) {
@@ -142,12 +143,14 @@ fn ensure_ame_file(path: &Path, url: &str, auto_fetch: bool) -> anyhow::Result<(
 }
 
 fn main() -> anyhow::Result<()> {
-    let out_dir = env::var("GUTOE_MASS_PERIODIC_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart".to_string());
+    let out_dir =
+        env::var("GUTOE_MASS_PERIODIC_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart".to_string());
     fs::create_dir_all(&out_dir)?;
     let out = PathBuf::from(out_dir);
 
     let ame_path = PathBuf::from(
-        env::var("GUTOE_AME2020_PATH").unwrap_or_else(|_| "/tmp/ame2020_mass_1.mas20.txt".to_string()),
+        env::var("GUTOE_AME2020_PATH")
+            .unwrap_or_else(|_| "/tmp/ame2020_mass_1.mas20.txt".to_string()),
     );
     let ame_url = env::var("GUTOE_AME2020_URL").unwrap_or_else(|_| DEFAULT_AME2020_URL.to_string());
     let auto_fetch = env_bool("GUTOE_AME2020_AUTO_FETCH", true);
@@ -164,9 +167,15 @@ fn main() -> anyhow::Result<()> {
             amplitude_z: env_f64("GUTOE_NUCLEAR_AMP_Z", default_shell.amplitude_z),
             amplitude_n: env_f64("GUTOE_NUCLEAR_AMP_N", default_shell.amplitude_n),
             shell_amp: env_f64("GUTOE_NUCLEAR_SHELL_AMP", default_shell.shell_amp),
-            shell_scale_exp: env_f64("GUTOE_NUCLEAR_SHELL_SCALE_EXP", default_shell.shell_scale_exp),
+            shell_scale_exp: env_f64(
+                "GUTOE_NUCLEAR_SHELL_SCALE_EXP",
+                default_shell.shell_scale_exp,
+            ),
             use_strutinsky: env_bool("GUTOE_NUCLEAR_USE_STRUTINSKY", default_shell.use_strutinsky),
-            strutinsky_gamma: env_f64("GUTOE_NUCLEAR_STRUTINSKY_GAMMA", default_shell.strutinsky_gamma),
+            strutinsky_gamma: env_f64(
+                "GUTOE_NUCLEAR_STRUTINSKY_GAMMA",
+                default_shell.strutinsky_gamma,
+            ),
             strutinsky_spacing_mev: env_f64(
                 "GUTOE_NUCLEAR_STRUTINSKY_SPACING_MEV",
                 default_shell.strutinsky_spacing_mev,
@@ -239,8 +248,14 @@ fn main() -> anyhow::Result<()> {
             heavy_sigma_z: env_f64("GUTOE_NUCLEAR_HEAVY_SIGMA_Z", default_shell.heavy_sigma_z),
             heavy_sigma_n: env_f64("GUTOE_NUCLEAR_HEAVY_SIGMA_N", default_shell.heavy_sigma_n),
             heavy_amplitude: env_f64("GUTOE_NUCLEAR_HEAVY_AMP", default_shell.heavy_amplitude),
-            heavy_gate_z_min: env_u16("GUTOE_NUCLEAR_HEAVY_GATE_Z_MIN", default_shell.heavy_gate_z_min),
-            heavy_gate_n_min: env_u16("GUTOE_NUCLEAR_HEAVY_GATE_N_MIN", default_shell.heavy_gate_n_min),
+            heavy_gate_z_min: env_u16(
+                "GUTOE_NUCLEAR_HEAVY_GATE_Z_MIN",
+                default_shell.heavy_gate_z_min,
+            ),
+            heavy_gate_n_min: env_u16(
+                "GUTOE_NUCLEAR_HEAVY_GATE_N_MIN",
+                default_shell.heavy_gate_n_min,
+            ),
             z50_isovector_valley_amplitude: env_f64(
                 "GUTOE_NUCLEAR_Z50_ISOVECTOR_VALLEY_AMP",
                 default_shell.z50_isovector_valley_amplitude,
@@ -254,7 +269,10 @@ fn main() -> anyhow::Result<()> {
     };
 
     let records = scan_nuclear_chart(cfg);
-    let pred_by_zn: BTreeMap<(u16, u16), f64> = records.iter().map(|r| ((r.z, r.n), r.binding_mev)).collect();
+    let pred_by_zn: BTreeMap<(u16, u16), f64> = records
+        .iter()
+        .map(|r| ((r.z, r.n), r.binding_mev))
+        .collect();
 
     let mut residuals = Vec::new();
     for row in ame_rows.iter().copied() {
@@ -284,7 +302,12 @@ fn main() -> anyhow::Result<()> {
     }
 
     let n = residuals.len() as f64;
-    let rmse = (residuals.iter().map(|r| r.residual_mev * r.residual_mev).sum::<f64>() / n).sqrt();
+    let rmse = (residuals
+        .iter()
+        .map(|r| r.residual_mev * r.residual_mev)
+        .sum::<f64>()
+        / n)
+        .sqrt();
     let mae = residuals.iter().map(|r| r.abs_residual_mev).sum::<f64>() / n;
     let bias = residuals.iter().map(|r| r.residual_mev).sum::<f64>() / n;
 
@@ -312,11 +335,20 @@ fn main() -> anyhow::Result<()> {
         f64::NAN
     };
 
-    let mut all_csv = String::from("Z,N,A,pred_binding_mev,obs_binding_mev,obs_unc_mev,residual_mev,abs_residual_mev\n");
+    let mut all_csv = String::from(
+        "Z,N,A,pred_binding_mev,obs_binding_mev,obs_unc_mev,residual_mev,abs_residual_mev\n",
+    );
     for r in &residuals {
         all_csv.push_str(&format!(
             "{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
-            r.z, r.n, r.a, r.pred_binding_mev, r.obs_binding_mev, r.obs_unc_mev, r.residual_mev, r.abs_residual_mev
+            r.z,
+            r.n,
+            r.a,
+            r.pred_binding_mev,
+            r.obs_binding_mev,
+            r.obs_unc_mev,
+            r.residual_mev,
+            r.abs_residual_mev
         ));
     }
     fs::write(out.join("ame2020_residuals.csv"), all_csv)?;
@@ -324,12 +356,20 @@ fn main() -> anyhow::Result<()> {
     let mut top = residuals.clone();
     top.sort_by(|a, b| b.abs_residual_mev.total_cmp(&a.abs_residual_mev));
     top.truncate(50);
-    let mut top_csv =
-        String::from("Z,N,A,pred_binding_mev,obs_binding_mev,obs_unc_mev,residual_mev,abs_residual_mev\n");
+    let mut top_csv = String::from(
+        "Z,N,A,pred_binding_mev,obs_binding_mev,obs_unc_mev,residual_mev,abs_residual_mev\n",
+    );
     for r in &top {
         top_csv.push_str(&format!(
             "{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
-            r.z, r.n, r.a, r.pred_binding_mev, r.obs_binding_mev, r.obs_unc_mev, r.residual_mev, r.abs_residual_mev
+            r.z,
+            r.n,
+            r.a,
+            r.pred_binding_mev,
+            r.obs_binding_mev,
+            r.obs_unc_mev,
+            r.residual_mev,
+            r.abs_residual_mev
         ));
     }
     fs::write(out.join("ame2020_residuals_top50.csv"), top_csv)?;
@@ -353,7 +393,10 @@ fn main() -> anyhow::Result<()> {
 
     println!("Wrote {}", out.join("ame2020_benchmark.json").display());
     println!("Wrote {}", out.join("ame2020_residuals.csv").display());
-    println!("Wrote {}", out.join("ame2020_residuals_top50.csv").display());
+    println!(
+        "Wrote {}",
+        out.join("ame2020_residuals_top50.csv").display()
+    );
     println!(
         "AME2020 benchmark: matched={} rmse={:.4} MeV mae={:.4} MeV bias={:.4} MeV wrmse={:.4} MeV chi2ν={:.3}",
         residuals.len(),

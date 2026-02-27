@@ -199,7 +199,11 @@ mod tests {
     #[test]
     fn bbn_gate_primary_passes_and_lithium_tension_is_present() {
         let score = evaluate_bbn_gate(BbnWindows::default());
-        assert!(score.passes_primary(), "primary BBN gate failed: {:?}", score);
+        assert!(
+            score.passes_primary(),
+            "primary BBN gate failed: {:?}",
+            score
+        );
         assert!(
             score.li_tension_ok,
             "expected lithium tension not reproduced: {:?}",

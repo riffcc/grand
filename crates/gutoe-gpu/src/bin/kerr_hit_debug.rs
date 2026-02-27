@@ -29,16 +29,7 @@ fn main() {
             let by_raw = sy;
             let bx = ca * bx_raw - sa * by_raw;
             let by = sa * bx_raw + ca * by_raw;
-            let tr = trace_photon_kerr(
-                &k,
-                disk_inner,
-                disk_outer,
-                bx,
-                by,
-                inc_deg,
-                max_phi,
-                dphi,
-            );
+            let tr = trace_photon_kerr(&k, disk_inner, disk_outer, bx, by, inc_deg, max_phi, dphi);
             match tr {
                 TraceResult::DiskHit { .. } => {
                     hit += 1;

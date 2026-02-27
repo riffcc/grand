@@ -5,8 +5,8 @@
 
 use gutoe_em::{
     ckm_from_clifford, ckm_from_textures, cp_violation_witness, pmns_from_clifford,
-    pmns_from_textures, within_envelope, MixingEnvelope, MixingObservables, CP_PHASE_TOL_DEG,
-    CKM_CP_J_MIN, CKM_PDG_ENVELOPE, PMNS_CP_J_MIN, PMNS_PDG_ENVELOPE,
+    pmns_from_textures, within_envelope, MixingEnvelope, MixingObservables, CKM_CP_J_MIN,
+    CKM_PDG_ENVELOPE, CP_PHASE_TOL_DEG, PMNS_CP_J_MIN, PMNS_PDG_ENVELOPE,
 };
 use std::fs::{self, File};
 use std::io::Write;
@@ -60,7 +60,8 @@ fn main() {
         ),
     ];
 
-    let out_dir = std::env::var("GUTOE_FLAVOR_GATE_OUT").unwrap_or_else(|_| "/tmp/bh_renders".to_string());
+    let out_dir =
+        std::env::var("GUTOE_FLAVOR_GATE_OUT").unwrap_or_else(|_| "/tmp/bh_renders".to_string());
     let _ = fs::create_dir_all(&out_dir);
     let json_path = format!("{out_dir}/flavor_ci_gate.json");
     let mut json = File::create(&json_path).expect("create gate json");

@@ -14,10 +14,10 @@
 //   - Quantum: P = 2 sin²θ cos²(Δφ/2)  — cosine fringes
 //   - Classical: P = sin²θ             — constant, no fringes
 
-use std::f64::consts::PI;
-use num_complex::Complex64;
-use crate::hilbert::{init_superposition, spatial_prob, spatial_normalize};
 use crate::gates::{em_phase, hop_unitary};
+use crate::hilbert::{init_superposition, spatial_normalize, spatial_prob};
+use num_complex::Complex64;
+use std::f64::consts::PI;
 
 /// Result of the Aharonov-Bohm interference test.
 #[derive(Debug, Clone)]
@@ -98,7 +98,9 @@ pub fn aharonov_bohm_test(n_phi_steps: usize) -> InterferenceResult {
         p_expected.push(p_pred);
     }
 
-    let max_error = p_measured.iter().zip(p_expected.iter())
+    let max_error = p_measured
+        .iter()
+        .zip(p_expected.iter())
         .map(|(m, e)| (m - e).abs())
         .fold(0.0_f64, f64::max);
 
@@ -181,7 +183,9 @@ pub fn hex_lattice_interference() -> InterferenceResult {
         p_expected.push(p_max * (dphi / 2.0).cos().powi(2));
     }
 
-    let max_error = p_measured.iter().zip(p_expected.iter())
+    let max_error = p_measured
+        .iter()
+        .zip(p_expected.iter())
         .map(|(m, e)| (m - e).abs())
         .fold(0.0_f64, f64::max);
 

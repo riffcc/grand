@@ -10,7 +10,7 @@ use rand::Rng;
 
 pub const VOID: u8 = 0;
 pub const LEPTON_SEED: u8 = 2; // γ⁰  (mi = 0b0001, grade 1)
-pub const QUARK_SEED: u8 = 3;  // γ¹  (mi = 0b0010, grade 1)
+pub const QUARK_SEED: u8 = 3; // γ¹  (mi = 0b0010, grade 1)
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -103,20 +103,15 @@ pub fn make_veracity_table() -> [[f32; 17]; 17] {
     t
 }
 
-pub const Z3_ORBITS: [[u8; 3]; 4] = [
-    [3, 5, 9],
-    [4, 6, 10],
-    [7, 11, 13],
-    [8, 12, 14],
-];
+pub const Z3_ORBITS: [[u8; 3]; 4] = [[3, 5, 9], [4, 6, 10], [7, 11, 13], [8, 12, 14]];
 
 // ── Geometry ───────────────────────────────────────────────────────────────────
 
 pub fn site_coords(site: usize, cfg: &LatticeConfig) -> (usize, usize, usize) {
-    let z   = site / (cfg.hex_rows * cfg.hex_cols);
+    let z = site / (cfg.hex_rows * cfg.hex_cols);
     let rem = site % (cfg.hex_rows * cfg.hex_cols);
-    let r   = rem / cfg.hex_cols;
-    let c   = rem % cfg.hex_cols;
+    let r = rem / cfg.hex_cols;
+    let c = rem % cfg.hex_cols;
     (r, c, z)
 }
 
@@ -200,10 +195,17 @@ impl GutoeState {
         }
         let n = 6.0f32;
         // z3 curvature: max over orbits of (orbit members seen - 1) / 2
-        let z3_curv = Z3_ORBITS.iter().map(|orbit| {
-            let count = orbit.iter().filter(|&&s| nbr_set[s as usize]).count();
-            if count > 0 { (count - 1) as f32 / 2.0 } else { 0.0 }
-        }).fold(0.0f32, f32::max);
+        let z3_curv = Z3_ORBITS
+            .iter()
+            .map(|orbit| {
+                let count = orbit.iter().filter(|&&s| nbr_set[s as usize]).count();
+                if count > 0 {
+                    (count - 1) as f32 / 2.0
+                } else {
+                    0.0
+                }
+            })
+            .fold(0.0f32, f32::max);
         (total_v / n, z3_curv, grad / n)
     }
 
@@ -232,7 +234,9 @@ impl GutoeState {
                 }
                 let active: usize = nbrs.iter().filter(|&&ni| self.lattice[ni] != VOID).count();
                 let total = nbrs.len();
-                if active >= 2.max(total / 4) && rng.gen::<f64>() < active as f64 / total as f64 * 0.4 {
+                if active >= 2.max(total / 4)
+                    && rng.gen::<f64>() < active as f64 / total as f64 * 0.4
+                {
                     new[site] = QUARK_SEED;
                 }
             } else if state == LEPTON_SEED {
@@ -244,10 +248,15 @@ impl GutoeState {
                 if r_val < cfg.cycle_prob {
                     new[site] = self.z3_table[state as usize];
                 } else if r_val < cfg.cycle_prob + cfg.clifford_prob {
-                    let active_nbrs: Vec<u8> = nbrs.iter()
+                    let active_nbrs: Vec<u8> = nbrs
+                        .iter()
                         .filter_map(|&ni| {
                             let ns = self.lattice[ni];
-                            if ns != VOID { Some(ns) } else { None }
+                            if ns != VOID {
+                                Some(ns)
+                            } else {
+                                None
+                            }
                         })
                         .collect();
                     if !active_nbrs.is_empty() {
@@ -256,10 +265,15 @@ impl GutoeState {
                     }
                 } else if r_val < cfg.cycle_prob + cfg.clifford_prob + cfg.alignment_strength {
                     // Alignment with void votes
-                    let nbr_states: Vec<u8> = nbrs.iter()
+                    let nbr_states: Vec<u8> = nbrs
+                        .iter()
                         .filter_map(|&ni| {
                             let ns = self.lattice[ni];
-                            if ns != VOID { Some(ns) } else { None }
+                            if ns != VOID {
+                                Some(ns)
+                            } else {
+                                None
+                            }
                         })
                         .collect();
                     if !nbr_states.is_empty() {
@@ -269,7 +283,9 @@ impl GutoeState {
                             counts[s as usize] += 1;
                         }
                         // Find winner
-                        let (winner, winner_count) = counts.iter().enumerate()
+                        let (winner, winner_count) = counts
+                            .iter()
+                            .enumerate()
                             .max_by_key(|&(_, &c)| c)
                             .map(|(i, &c)| (i as u8, c as usize))
                             .unwrap();
@@ -284,9 +300,7 @@ impl GutoeState {
         // ── Pass 2: lepton EM hops ─────────────────────────────────────────────
         if self.phase == 2 {
             // Collect lepton sites from new (pass-1 result)
-            let lepton_sites: Vec<usize> = (0..n)
-                .filter(|&s| new[s] == LEPTON_SEED)
-                .collect();
+            let lepton_sites: Vec<usize> = (0..n).filter(|&s| new[s] == LEPTON_SEED).collect();
 
             for site in lepton_sites {
                 if new[site] != LEPTON_SEED {
@@ -302,8 +316,12 @@ impl GutoeState {
                 let mut best_phi = f64::NEG_INFINITY;
                 let mut best_nb = None;
                 for &nb in &nbrs {
-                    if new[nb] == LEPTON_SEED { continue; }
-                    if proton_sites.contains(&nb) { continue; }
+                    if new[nb] == LEPTON_SEED {
+                        continue;
+                    }
+                    if proton_sites.contains(&nb) {
+                        continue;
+                    }
                     let p = phi[nb];
                     if p > best_phi {
                         best_phi = p;
@@ -351,15 +369,24 @@ pub fn detect_quarks(state: &GutoeState, cfg: &LatticeConfig) -> Vec<Quark> {
     let mut quarks = Vec::new();
     for site in 0..n {
         let s = state.lattice[site];
-        if s == VOID { continue; }
+        if s == VOID {
+            continue;
+        }
         let (r, c, z) = site_coords(site, cfg);
         let nbrs = mesh_neighbours(r, c, z, cfg);
         let (v, curv, grad) = state.local_fields(site, &nbrs);
         let bc = v / (1.0 + grad);
         if bc >= cfg.quark_threshold as f32 {
             quarks.push(Quark {
-                site, r, c, z,
-                quark_type: if v > curv { QuarkType::Up } else { QuarkType::Down },
+                site,
+                r,
+                c,
+                z,
+                quark_type: if v > curv {
+                    QuarkType::Up
+                } else {
+                    QuarkType::Down
+                },
                 binding_coherence: bc,
                 veracity: v,
                 curvature: curv,
@@ -374,23 +401,30 @@ pub fn find_proton_triplets(quarks: &[Quark], cfg: &LatticeConfig) -> Vec<(usize
     let quark_map: std::collections::HashMap<usize, &Quark> =
         quarks.iter().map(|q| (q.site, q)).collect();
 
-    let nbr_cache: std::collections::HashMap<usize, std::collections::HashSet<usize>> =
-        quarks.iter().map(|q| {
+    let nbr_cache: std::collections::HashMap<usize, std::collections::HashSet<usize>> = quarks
+        .iter()
+        .map(|q| {
             let nbrs = mesh_neighbours(q.r, q.c, q.z, cfg);
             (q.site, nbrs.iter().cloned().collect())
-        }).collect();
+        })
+        .collect();
 
     let mut used = std::collections::HashSet::new();
     let mut triplets = Vec::new();
 
     for q in quarks {
-        if q.quark_type != QuarkType::Down || used.contains(&q.site) { continue; }
-        let up_nbrs: Vec<&Quark> = nbr_cache[&q.site].iter()
+        if q.quark_type != QuarkType::Down || used.contains(&q.site) {
+            continue;
+        }
+        let up_nbrs: Vec<&Quark> = nbr_cache[&q.site]
+            .iter()
             .filter_map(|ni| quark_map.get(ni))
             .filter(|nq| nq.quark_type == QuarkType::Up && !used.contains(&nq.site))
             .cloned()
             .collect();
-        if up_nbrs.len() < 2 { continue; }
+        if up_nbrs.len() < 2 {
+            continue;
+        }
         'outer: for i in 0..up_nbrs.len() {
             for j in (i + 1)..up_nbrs.len() {
                 let p1 = up_nbrs[i].site;
@@ -417,12 +451,12 @@ pub fn inject_leptons<R: Rng>(
     cfg: &LatticeConfig,
 ) {
     let layer_stride = cfg.hex_rows * cfg.hex_cols;
-    let proton_sites: std::collections::HashSet<usize> = triplets.iter()
+    let proton_sites: std::collections::HashSet<usize> = triplets
+        .iter()
         .flat_map(|&(d, u1, u2)| [d, u1, u2])
         .collect();
-    let proton_layers: std::collections::HashSet<usize> = triplets.iter()
-        .map(|&(d, _, _)| d / layer_stride)
-        .collect();
+    let proton_layers: std::collections::HashSet<usize> =
+        triplets.iter().map(|&(d, _, _)| d / layer_stride).collect();
 
     let n = state.n(cfg);
     let mut candidates: Vec<usize> = (0..n)
@@ -448,8 +482,12 @@ pub fn inject_leptons<R: Rng>(
 }
 
 /// Proton shell: sites adjacent to any proton quark site (excluding proton sites themselves)
-pub fn proton_shell(triplets: &[(usize, usize, usize)], cfg: &LatticeConfig) -> std::collections::HashSet<usize> {
-    let proton_sites: std::collections::HashSet<usize> = triplets.iter()
+pub fn proton_shell(
+    triplets: &[(usize, usize, usize)],
+    cfg: &LatticeConfig,
+) -> std::collections::HashSet<usize> {
+    let proton_sites: std::collections::HashSet<usize> = triplets
+        .iter()
         .flat_map(|&(d, u1, u2)| [d, u1, u2])
         .collect();
     let mut shell = std::collections::HashSet::new();

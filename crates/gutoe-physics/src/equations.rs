@@ -61,7 +61,7 @@ impl WaveEquation {
     /// Check reduces to standard wave equation
     pub fn reduces_to_classical(&self, k: f64, v: f64) -> bool {
         let quantum = self.dispersion(k, v);
-        let classical = v * k;
+        let _classical = v * k;
 
         // With λ_QG → 0, should equal classical
         let lambda_zero = WaveEquation::new(0.0);
@@ -111,7 +111,7 @@ impl BlackHoleEntropy {
     /// Plus GUTOE quantum correction: + α k_B ln(A/l_P²)
     pub fn entropy(&self, area: f64) -> f64 {
         let classical = KB * C * C * C * area / (4.0 * HBAR * G);
-        let quantum   = self.alpha * KB * (area / (PLANCK_LENGTH * PLANCK_LENGTH)).ln();
+        let quantum = self.alpha * KB * (area / (PLANCK_LENGTH * PLANCK_LENGTH)).ln();
         classical + quantum
     }
 
@@ -130,7 +130,8 @@ impl BlackHoleEntropy {
     pub fn hawking_power(&self, area: f64) -> f64 {
         let temp = self.temperature(area);
         // P = σAT⁴ (Stefan-Boltzmann)
-        let sigma = std::f64::consts::PI * std::f64::consts::PI * KB.powi(4) / (60.0 * HBAR.powi(3) * C.powi(2));
+        let sigma = std::f64::consts::PI * std::f64::consts::PI * KB.powi(4)
+            / (60.0 * HBAR.powi(3) * C.powi(2));
         sigma * area * temp.powi(4)
     }
 
@@ -138,7 +139,7 @@ impl BlackHoleEntropy {
     /// For macroscopic black holes the α ln(A/l_P²) term is negligible.
     pub fn classical_limit(&self, area: f64) -> bool {
         let classical = KB * C.powi(3) * area / (4.0 * HBAR * G);
-        let quantum   = self.alpha * KB * (area / (PLANCK_LENGTH * PLANCK_LENGTH)).ln();
+        let quantum = self.alpha * KB * (area / (PLANCK_LENGTH * PLANCK_LENGTH)).ln();
         quantum.abs() < classical * 0.1
     }
 }
@@ -352,7 +353,13 @@ pub fn lane_emden_residual_n0(xi: f64) -> f64 {
 /// Integer-index multiplied Lane-Emden residual:
 /// ξ² θ'' + 2 ξ θ' + ξ² θ^n.
 #[inline]
-pub fn lane_emden_residual_nat(n: u32, xi: f64, theta: f64, theta_prime: f64, theta_double_prime: f64) -> f64 {
+pub fn lane_emden_residual_nat(
+    n: u32,
+    xi: f64,
+    theta: f64,
+    theta_prime: f64,
+    theta_double_prime: f64,
+) -> f64 {
     xi * xi * theta_double_prime + 2.0 * xi * theta_prime + xi * xi * theta.powi(n as i32)
 }
 
@@ -365,7 +372,11 @@ pub fn lane_emden_regular_origin(theta0: f64, theta_prime0: f64, tol: f64) -> bo
 /// Integrate the integer-index Lane-Emden ODE with RK4 using the
 /// regular center expansion for initialization:
 /// θ(ξ) ≈ 1 - ξ²/6, θ'(ξ) ≈ -ξ/3.
-pub fn lane_emden_integrate_rk4_nat(n: u32, xi_max: f64, step: f64) -> Option<Vec<(f64, f64, f64)>> {
+pub fn lane_emden_integrate_rk4_nat(
+    n: u32,
+    xi_max: f64,
+    step: f64,
+) -> Option<Vec<(f64, f64, f64)>> {
     if xi_max <= 0.0 || step <= 0.0 || !xi_max.is_finite() || !step.is_finite() {
         return None;
     }
@@ -535,7 +546,14 @@ pub fn minimum_polytropic_compression(g: f64, mu: f64, xi: f64, t_ign: f64) -> f
 
 /// Ignition condition in the polytropic proxy model.
 #[inline]
-pub fn polytropic_ignition_condition(g: f64, mu: f64, xi: f64, t_ign: f64, mass: f64, rho_c: f64) -> bool {
+pub fn polytropic_ignition_condition(
+    g: f64,
+    mu: f64,
+    xi: f64,
+    t_ign: f64,
+    mass: f64,
+    rho_c: f64,
+) -> bool {
     lane_emden_compression_proxy(mass, rho_c) >= minimum_polytropic_compression(g, mu, xi, t_ign)
 }
 
@@ -552,8 +570,10 @@ mod tests {
         // Key claim: ω² = v²k² - λ_QG l_P² k⁴  reduces to ω = vk when k→0.
         // At radio-wave k (1e10 /m), the Planck-scale correction is negligible.
         let wave = WaveEquation::new(LAMBDA_QG);
-        assert!(wave.reduces_to_classical(1e10, C),
-            "classical limit NOT recovered at low k — dispersion relation is wrong");
+        assert!(
+            wave.reduces_to_classical(1e10, C),
+            "classical limit NOT recovered at low k — dispersion relation is wrong"
+        );
     }
 
     #[test]
@@ -561,8 +581,10 @@ mod tests {
         let wave = WaveEquation::new(LAMBDA_QG);
         // k_crit = v / sqrt(λ_QG) / l_P ≈ enormous; any reasonable k is stable.
         let omega = wave.dispersion(1e20, C);
-        assert!(!omega.is_nan(),
-            "ω is NaN for k=1e20 — wave is unstable where it shouldn't be");
+        assert!(
+            !omega.is_nan(),
+            "ω is NaN for k=1e20 — wave is unstable where it shouldn't be"
+        );
         assert!(omega > 0.0, "ω ≤ 0 for a stable wave");
     }
 
@@ -577,9 +599,11 @@ mod tests {
         let omega_cl = v * k;
 
         if !omega_qg.is_nan() {
-            assert!(omega_qg <= omega_cl + EPSILON,
+            assert!(
+                omega_qg <= omega_cl + EPSILON,
                 "ω_QG ({omega_qg:.6e}) > ω_classical ({omega_cl:.6e}) — \
-                 quantum gravity increases frequency, violating the dispersion relation");
+                 quantum gravity increases frequency, violating the dispersion relation"
+            );
         }
     }
 
@@ -592,11 +616,15 @@ mod tests {
         // Test across a range of physically plausible wavenumbers.
         for &k in &[1e5f64, 1e10, 1e15, 1e20] {
             let omega = wave.dispersion(k, v);
-            if omega.is_nan() { continue; }
+            if omega.is_nan() {
+                continue;
+            }
 
             let vg = wave.group_velocity(k, v);
-            assert!(vg <= v + EPSILON,
-                "v_g = {vg:.4e} > v = {v:.4e} at k = {k:.1e} — causality violated!");
+            assert!(
+                vg <= v + EPSILON,
+                "v_g = {vg:.4e} > v = {v:.4e} at k = {k:.1e} — causality violated!"
+            );
         }
     }
 
@@ -606,14 +634,20 @@ mod tests {
         let wave = WaveEquation::new(LAMBDA_QG);
         for &k in &[1e5f64, 1e10, 1e15] {
             let omega = wave.dispersion(k, v_from_c());
-            if omega.is_nan() { continue; }
+            if omega.is_nan() {
+                continue;
+            }
             let vg = wave.group_velocity(k, v_from_c());
-            assert!(vg >= 0.0,
-                "v_g = {vg:.4e} < 0 at k = {k:.1e} — negative group velocity");
+            assert!(
+                vg >= 0.0,
+                "v_g = {vg:.4e} < 0 at k = {k:.1e} — negative group velocity"
+            );
         }
     }
 
-    fn v_from_c() -> f64 { 1.0 } // unit velocity for dimensionless tests
+    fn v_from_c() -> f64 {
+        1.0
+    } // unit velocity for dimensionless tests
 
     #[test]
     fn polytropic_ignition_threshold_matches_temperature_proxy() {
@@ -662,7 +696,10 @@ mod tests {
             let theta_pp = lane_emden_theta_n0_prime_prime(xi);
             let r_nat = lane_emden_residual_nat(0, xi, theta, theta_p, theta_pp);
             let r_n0 = lane_emden_residual_n0(xi);
-            assert!((r_nat - r_n0).abs() < 1e-12, "xi={xi}: r_nat={r_nat}, r_n0={r_n0}");
+            assert!(
+                (r_nat - r_n0).abs() < 1e-12,
+                "xi={xi}: r_nat={r_nat}, r_n0={r_n0}"
+            );
         }
     }
 
@@ -677,7 +714,10 @@ mod tests {
         let sol = lane_emden_integrate_rk4_nat(0, 1.0, 1.0e-3).expect("solution");
         let (_xi, theta, _z) = sol.last().copied().expect("last");
         let expected = lane_emden_theta_n0(1.0);
-        assert!((theta - expected).abs() < 2.0e-3, "theta={theta}, expected={expected}");
+        assert!(
+            (theta - expected).abs() < 2.0e-3,
+            "theta={theta}, expected={expected}"
+        );
     }
 
     #[test]
@@ -685,7 +725,10 @@ mod tests {
         let sol = lane_emden_integrate_rk4_nat(1, 1.0, 1.0e-3).expect("solution");
         let (_xi, theta, _z) = sol.last().copied().expect("last");
         let expected = 1.0f64.sin() / 1.0;
-        assert!((theta - expected).abs() < 1.0e-2, "theta={theta}, expected={expected}");
+        assert!(
+            (theta - expected).abs() < 1.0e-2,
+            "theta={theta}, expected={expected}"
+        );
     }
 
     #[test]
@@ -734,14 +777,18 @@ mod tests {
     fn lane_emden_n1_profile_is_nonincreasing_on_nonnegative_window() {
         let profile = lane_emden_integrate_rk4_nat(1, 2.5, 1.0e-3).expect("profile");
         assert!(lane_emden_profile_is_nonincreasing(&profile, 1e-6));
-        assert!(lane_emden_envelope_le_one_from_monotone_profile(&profile, 1e-6));
+        assert!(lane_emden_envelope_le_one_from_monotone_profile(
+            &profile, 1e-6
+        ));
     }
 
     #[test]
     fn lane_emden_n3_profile_is_nonincreasing_on_nonnegative_window() {
         let profile = lane_emden_integrate_rk4_nat(3, 2.0, 1.0e-3).expect("profile");
         assert!(lane_emden_profile_is_nonincreasing(&profile, 1e-6));
-        assert!(lane_emden_envelope_le_one_from_monotone_profile(&profile, 1e-6));
+        assert!(lane_emden_envelope_le_one_from_monotone_profile(
+            &profile, 1e-6
+        ));
     }
 
     #[test]
@@ -828,10 +875,12 @@ mod tests {
     #[test]
     fn quantum_correction_is_small_for_solar_mass() {
         // KEY CLAIM: For macroscopic black holes, quantum correction < 10% of classical.
-        let bh  = BlackHoleEntropy::new();
+        let bh = BlackHoleEntropy::new();
         let area = solar_mass_area();
-        assert!(bh.classical_limit(area),
-            "Quantum correction > 10% for solar-mass BH — GUTOE claims it should be tiny");
+        assert!(
+            bh.classical_limit(area),
+            "Quantum correction > 10% for solar-mass BH — GUTOE claims it should be tiny"
+        );
     }
 
     #[test]
@@ -839,8 +888,10 @@ mod tests {
         let bh = BlackHoleEntropy::new();
         let a1 = solar_mass_area();
         let a2 = a1 * 4.0; // 2× mass → 4× area (Schwarzschild)
-        assert!(bh.entropy(a2) > bh.entropy(a1),
-            "S(4A) ≤ S(A) — entropy is not monotone in area");
+        assert!(
+            bh.entropy(a2) > bh.entropy(a1),
+            "S(4A) ≤ S(A) — entropy is not monotone in area"
+        );
     }
 
     #[test]
@@ -848,11 +899,15 @@ mod tests {
         let bh = BlackHoleEntropy::new();
         let area = solar_mass_area();
         let t = bh.temperature(area);
-        assert!(t.is_finite() && t > 0.0,
-            "Hawking temperature = {t} — should be small positive number");
+        assert!(
+            t.is_finite() && t > 0.0,
+            "Hawking temperature = {t} — should be small positive number"
+        );
         // Solar-mass BH Hawking temp ≈ 60 nK
-        assert!(t < 1e-6,
-            "T = {t:.4e} K — far too hot for a solar-mass black hole (expect ~60 nK)");
+        assert!(
+            t < 1e-6,
+            "T = {t:.4e} K — far too hot for a solar-mass black hole (expect ~60 nK)"
+        );
     }
 
     #[test]
@@ -860,8 +915,10 @@ mod tests {
         let bh = BlackHoleEntropy::new();
         let area = solar_mass_area();
         let p = bh.hawking_power(area);
-        assert!(p > 0.0 && p.is_finite(),
-            "Hawking power = {p} — should be tiny but positive");
+        assert!(
+            p > 0.0 && p.is_finite(),
+            "Hawking power = {p} — should be tiny but positive"
+        );
     }
 
     fn solar_mass_area() -> f64 {
@@ -876,8 +933,10 @@ mod tests {
     fn effective_g_reduces_to_classical_at_large_scales() {
         // KEY CLAIM: G_eff → G as scale → macroscopic.
         let einstein = ModifiedEinstein::new();
-        assert!(einstein.reduces_to_gr(),
-            "Modified G does not reduce to classical GR at 1 metre scale");
+        assert!(
+            einstein.reduces_to_gr(),
+            "Modified G does not reduce to classical GR at 1 metre scale"
+        );
     }
 
     #[test]
@@ -885,10 +944,12 @@ mod tests {
         // The GUTOE correction adds ε = λ_QG (l_P / scale)² > 0,
         // so G_eff > G at small scales.
         let einstein = ModifiedEinstein::new();
-        let g_macroscopic = einstein.effective_g(1.0);         // 1 metre
-        let g_planck      = einstein.effective_g(PLANCK_LENGTH); // Planck scale
-        assert!(g_planck > g_macroscopic,
-            "G_Planck ≤ G_macroscopic — correction has wrong sign");
+        let g_macroscopic = einstein.effective_g(1.0); // 1 metre
+        let g_planck = einstein.effective_g(PLANCK_LENGTH); // Planck scale
+        assert!(
+            g_planck > g_macroscopic,
+            "G_Planck ≤ G_macroscopic — correction has wrong sign"
+        );
     }
 
     // ── Gravitational wave dispersion ────────────────────────────────────────
@@ -896,14 +957,16 @@ mod tests {
     #[test]
     fn gw_dispersion_is_proportional_to_energy_squared() {
         // Δv/c ∝ (E/E_QG)² — doubling E quadruples the dispersion.
-        let e_qg  = 1e28_f64; // Planck energy in joules
-        let e1    = 1e19_f64;
-        let e2    = 2.0 * e1;
-        let d1    = gravitational_wave_dispersion(e1, e_qg);
-        let d2    = gravitational_wave_dispersion(e2, e_qg);
+        let e_qg = 1e28_f64; // Planck energy in joules
+        let e1 = 1e19_f64;
+        let e2 = 2.0 * e1;
+        let d1 = gravitational_wave_dispersion(e1, e_qg);
+        let d2 = gravitational_wave_dispersion(e2, e_qg);
         let ratio = d2 / d1;
-        assert!((ratio - 4.0).abs() < 1e-10,
-            "Δv/c does not scale as E² (ratio = {ratio:.6}, expected 4.0)");
+        assert!(
+            (ratio - 4.0).abs() < 1e-10,
+            "Δv/c does not scale as E² (ratio = {ratio:.6}, expected 4.0)"
+        );
     }
 
     // ── λ_QG² mass scaling ────────────────────────────────────────────────────
@@ -916,12 +979,14 @@ mod tests {
         // Runtime baseline uses shared λ_QG = 1/12.
         // Python precision_qg_tuner converged on λ_QG = 0.120000.
         // Mass ratio = (0.120 / (1/12))² > 2.0 — strong quadratic sensitivity.
-        let lambda_rust   = LAMBDA_QG;
+        let lambda_rust = LAMBDA_QG;
         let lambda_python = 0.120000_f64;
         let mass_ratio = lambda_python.powi(2) / lambda_rust.powi(2);
-        assert!(mass_ratio > 2.0,
+        assert!(
+            mass_ratio > 2.0,
             "λ_rust={lambda_rust}, λ_python={lambda_python}: \
-             mass ratio={mass_ratio:.4} — expected >2× (quadratic dependence)");
+             mass ratio={mass_ratio:.4} — expected >2× (quadratic dependence)"
+        );
     }
 
     #[test]
@@ -934,8 +999,10 @@ mod tests {
             1.0 * 1.0 * 1.0 / 1.0 * lambda.powi(2)
         }
         let lambda = 0.1_f64;
-        assert!((quark_mass(2.0 * lambda) - 4.0 * quark_mass(lambda)).abs() < 1e-15,
-            "m(2λ) ≠ 4·m(λ) — mass does not scale quadratically with λ_QG");
+        assert!(
+            (quark_mass(2.0 * lambda) - 4.0 * quark_mass(lambda)).abs() < 1e-15,
+            "m(2λ) ≠ 4·m(λ) — mass does not scale quadratically with λ_QG"
+        );
     }
 
     #[test]

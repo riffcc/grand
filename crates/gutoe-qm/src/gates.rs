@@ -10,9 +10,8 @@
 //   z3_perm        — Z₃ permutation of Clifford basis states (16×16 unitary)
 //   clifford_phase — diagonal phase from the Clifford metric (16×16 unitary)
 
+use crate::hilbert::{SiteAmp, SpatialPsi};
 use num_complex::Complex64;
-use crate::hilbert::{SpatialPsi, SiteAmp};
-
 
 // ── Spatial gates ──────────────────────────────────────────────────────────────
 
@@ -81,23 +80,23 @@ pub fn z3_gate(amp: &mut SiteAmp) {
     // Z₃ table: Z3_TABLE[s] gives the image of state s under Z₃
     // From gutoe_em::sim::Z3_TABLE (0-indexed here)
     const Z3: [usize; 17] = [
-        0,   // VOID → VOID
-        1,   // s=1 (scalar) → 1 (fixed)
-        2,   // s=2 (γ⁰, lepton) → 2 (FIXED POINT)
-        5,   // s=3 (γ¹) → s=5 (γ²)
-        6,   // s=4 (γ⁰¹) → s=6 (γ⁰²)
-        9,   // s=5 (γ²) → s=9 (γ³)
-        10,  // s=6 (γ⁰²) → s=10 (γ⁰³)
-        13,  // s=7 (γ¹²) → s=13 (γ²³)
-        14,  // s=8 (γ⁰¹²) → s=14 (γ⁰²³)
-        3,   // s=9 (γ³) → s=3 (γ¹)
-        4,   // s=10 (γ⁰³) → s=4 (γ⁰¹)
-        7,   // s=11 (γ¹³) → s=7 (γ¹²)
-        8,   // s=12 (γ⁰¹³) → s=8 (γ⁰¹²)
-        11,  // s=13 (γ²³) → s=11 (γ¹³)
-        12,  // s=14 (γ⁰²³) → s=12 (γ⁰¹³)
-        15,  // s=15 (γ¹²³) → 15 (fixed, all spatial bits = 1)
-        16,  // s=16 (γ⁰¹²³) → 16 (fixed, pseudoscalar)
+        0,  // VOID → VOID
+        1,  // s=1 (scalar) → 1 (fixed)
+        2,  // s=2 (γ⁰, lepton) → 2 (FIXED POINT)
+        5,  // s=3 (γ¹) → s=5 (γ²)
+        6,  // s=4 (γ⁰¹) → s=6 (γ⁰²)
+        9,  // s=5 (γ²) → s=9 (γ³)
+        10, // s=6 (γ⁰²) → s=10 (γ⁰³)
+        13, // s=7 (γ¹²) → s=13 (γ²³)
+        14, // s=8 (γ⁰¹²) → s=14 (γ⁰²³)
+        3,  // s=9 (γ³) → s=3 (γ¹)
+        4,  // s=10 (γ⁰³) → s=4 (γ⁰¹)
+        7,  // s=11 (γ¹³) → s=7 (γ¹²)
+        8,  // s=12 (γ⁰¹³) → s=8 (γ⁰¹²)
+        11, // s=13 (γ²³) → s=11 (γ¹³)
+        12, // s=14 (γ⁰²³) → s=12 (γ⁰¹³)
+        15, // s=15 (γ¹²³) → 15 (fixed, all spatial bits = 1)
+        16, // s=16 (γ⁰¹²³) → 16 (fixed, pseudoscalar)
     ];
     let old = *amp;
     for s in 0..=16 {

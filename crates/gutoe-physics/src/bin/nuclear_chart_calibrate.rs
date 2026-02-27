@@ -1,7 +1,8 @@
 use gutoe_physics::{
-    closest_to_target_island, magic_s2n_summary, rank_island_candidates_with_config, scan_nuclear_chart,
-    shell_gate_metrics, write_magic_discontinuities_csv, write_magic_summary_csv, write_records_csv,
-    IslandRankingConfig, MagicSummaryRow, ScanConfig, ShellParams, MONITORED_SUPERHEAVY_PROTON_CLOSURES,
+    closest_to_target_island, magic_s2n_summary, rank_island_candidates_with_config,
+    scan_nuclear_chart, shell_gate_metrics, write_magic_discontinuities_csv,
+    write_magic_summary_csv, write_records_csv, IslandRankingConfig, MagicSummaryRow, ScanConfig,
+    ShellParams, MONITORED_SUPERHEAVY_PROTON_CLOSURES,
 };
 use std::env;
 use std::fs;
@@ -95,7 +96,8 @@ fn band_penalty(value: f64, low: f64, high: f64) -> f64 {
 }
 
 fn main() -> anyhow::Result<()> {
-    let output_dir = env::var("GUTOE_NUCLEAR_CAL_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart_cal".to_string());
+    let output_dir =
+        env::var("GUTOE_NUCLEAR_CAL_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart_cal".to_string());
     fs::create_dir_all(&output_dir)?;
     let out = PathBuf::from(output_dir);
 
@@ -125,11 +127,18 @@ fn main() -> anyhow::Result<()> {
     let shell_amp_grid = parse_list("GUTOE_NUCLEAR_SHELL_AMP_GRID", &[12.0]);
     let shell_scale_exp_grid = parse_list("GUTOE_NUCLEAR_SHELL_SCALE_EXP_GRID", &[0.33]);
     let shell_sigma_grid = parse_list("GUTOE_NUCLEAR_SHELL_SIGMA_GRID", &[]);
-    let use_strutinsky_grid = parse_bool_list("GUTOE_NUCLEAR_USE_STRUTINSKY_GRID", &[default_shell.use_strutinsky]);
-    let strutinsky_mix_grid =
-        parse_list("GUTOE_NUCLEAR_STRUTINSKY_MIX_GRID", &[default_shell.strutinsky_mix]);
-    let strutinsky_gamma_grid =
-        parse_list("GUTOE_NUCLEAR_STRUTINSKY_GAMMA_GRID", &[default_shell.strutinsky_gamma]);
+    let use_strutinsky_grid = parse_bool_list(
+        "GUTOE_NUCLEAR_USE_STRUTINSKY_GRID",
+        &[default_shell.use_strutinsky],
+    );
+    let strutinsky_mix_grid = parse_list(
+        "GUTOE_NUCLEAR_STRUTINSKY_MIX_GRID",
+        &[default_shell.strutinsky_mix],
+    );
+    let strutinsky_gamma_grid = parse_list(
+        "GUTOE_NUCLEAR_STRUTINSKY_GAMMA_GRID",
+        &[default_shell.strutinsky_gamma],
+    );
     let strutinsky_spacing_grid = parse_list(
         "GUTOE_NUCLEAR_STRUTINSKY_SPACING_GRID",
         &[default_shell.strutinsky_spacing_mev],
@@ -165,17 +174,26 @@ fn main() -> anyhow::Result<()> {
         shell_sigma_grid.iter().map(|&s| (s, s)).collect()
     };
     let superheavy_proton_amp_grid = parse_list("GUTOE_NUCLEAR_SUPERHEAVY_PROTON_AMP_GRID", &[2.0]);
-    let superheavy_proton_sigma_grid = parse_list("GUTOE_NUCLEAR_SUPERHEAVY_PROTON_SIGMA_GRID", &[5.0]);
+    let superheavy_proton_sigma_grid =
+        parse_list("GUTOE_NUCLEAR_SUPERHEAVY_PROTON_SIGMA_GRID", &[5.0]);
     let heavy_amp_grid = parse_list("GUTOE_NUCLEAR_HEAVY_AMP_GRID", &[0.0, 1.2, 2.4, 3.6]);
     let heavy_sigma_z_grid = parse_list("GUTOE_NUCLEAR_HEAVY_SIGMA_Z_GRID", &[7.0, 9.0, 12.0]);
     let heavy_sigma_n_grid = parse_list("GUTOE_NUCLEAR_HEAVY_SIGMA_N_GRID", &[10.0, 14.0, 18.0]);
     let heavy_target_z_grid = parse_list(
         "GUTOE_NUCLEAR_HEAVY_TARGET_Z_GRID",
-        &[target_z.saturating_sub(6) as f64, target_z as f64, target_z.saturating_add(6) as f64],
+        &[
+            target_z.saturating_sub(6) as f64,
+            target_z as f64,
+            target_z.saturating_add(6) as f64,
+        ],
     );
     let heavy_target_n_grid = parse_list(
         "GUTOE_NUCLEAR_HEAVY_TARGET_N_GRID",
-        &[target_n.saturating_sub(8) as f64, target_n as f64, target_n.saturating_add(8) as f64],
+        &[
+            target_n.saturating_sub(8) as f64,
+            target_n as f64,
+            target_n.saturating_add(8) as f64,
+        ],
     );
 
     #[derive(Clone, Copy)]
@@ -243,17 +261,35 @@ fn main() -> anyhow::Result<()> {
                             for &strutinsky_gamma in &strutinsky_gamma_grid {
                                 for &strutinsky_spacing_mev in &strutinsky_spacing_grid {
                                     for &strutinsky_spin_orbit_mev in &strutinsky_spin_orbit_grid {
-                                        for &strutinsky_coulomb_shift_mev in &strutinsky_coulomb_shift_grid {
-                                            for &strutinsky_ws_depth_mev in &strutinsky_ws_depth_grid {
-                                                for &strutinsky_ws_diffuseness_fm in &strutinsky_ws_diffuseness_grid {
-                                                    for &strutinsky_ws_a_ref in &strutinsky_ws_a_ref_grid {
-                                            for &(sigma_z, sigma_n) in &sigma_pairs {
-                                                for &superheavy_proton_amp in &superheavy_proton_amp_grid {
-                                                    for &superheavy_proton_sigma in &superheavy_proton_sigma_grid {
-                                                        for &heavy_amp in &heavy_amp_grid {
-                                                            for &heavy_sigma_z in &heavy_sigma_z_grid {
-                                                                for &heavy_sigma_n in &heavy_sigma_n_grid {
-                                                                    for &heavy_target_z_f in &heavy_target_z_grid {
+                                        for &strutinsky_coulomb_shift_mev in
+                                            &strutinsky_coulomb_shift_grid
+                                        {
+                                            for &strutinsky_ws_depth_mev in
+                                                &strutinsky_ws_depth_grid
+                                            {
+                                                for &strutinsky_ws_diffuseness_fm in
+                                                    &strutinsky_ws_diffuseness_grid
+                                                {
+                                                    for &strutinsky_ws_a_ref in
+                                                        &strutinsky_ws_a_ref_grid
+                                                    {
+                                                        for &(sigma_z, sigma_n) in &sigma_pairs {
+                                                            for &superheavy_proton_amp in
+                                                                &superheavy_proton_amp_grid
+                                                            {
+                                                                for &superheavy_proton_sigma in
+                                                                    &superheavy_proton_sigma_grid
+                                                                {
+                                                                    for &heavy_amp in
+                                                                        &heavy_amp_grid
+                                                                    {
+                                                                        for &heavy_sigma_z in
+                                                                            &heavy_sigma_z_grid
+                                                                        {
+                                                                            for &heavy_sigma_n in
+                                                                                &heavy_sigma_n_grid
+                                                                            {
+                                                                                for &heavy_target_z_f in &heavy_target_z_grid {
                                                                         for &heavy_target_n_f in &heavy_target_n_grid {
                                                                             let cfg = ScanConfig {
                                                                                 z_min,
@@ -404,12 +440,12 @@ fn main() -> anyhow::Result<()> {
                                                                             }
                                                                         }
                                                                     }
+                                                                            }
+                                                                        }
+                                                                    }
                                                                 }
                                                             }
                                                         }
-                                                    }
-                                                }
-                                            }
                                                     }
                                                 }
                                             }
@@ -551,7 +587,11 @@ fn main() -> anyhow::Result<()> {
         out.join("summary.txt"),
         format!(
             "target=({}, {})\n{}\nobjective_top={:.6}\nrows={}\n",
-            target_z, target_n, best_desc, best_score, best_records.len()
+            target_z,
+            target_n,
+            best_desc,
+            best_score,
+            best_records.len()
         ),
     )?;
 

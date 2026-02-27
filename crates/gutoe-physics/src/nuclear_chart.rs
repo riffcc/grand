@@ -10,8 +10,8 @@
  *   - superheavy island ranking
  */
 
-use crate::dynamics_map::StandardModelDynamicsMap;
 use crate::constants::LAMBDA_QG;
+use crate::dynamics_map::StandardModelDynamicsMap;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
@@ -489,13 +489,19 @@ fn proton_coulomb_mev(r_fm: f64, shell: ShellParams) -> f64 {
 
 const HBAR2_OVER_2M_NUCLEON_MEV_FM2: f64 = 20.735_53;
 
-fn radial_effective_potential_mev(r_fm: f64, l: u8, ls: f64, is_proton: bool, shell: ShellParams) -> f64 {
+fn radial_effective_potential_mev(
+    r_fm: f64,
+    l: u8,
+    ls: f64,
+    is_proton: bool,
+    shell: ShellParams,
+) -> f64 {
     let r = r_fm.max(1e-4);
     let v_ws = woods_saxon_central_mev(r, shell);
     let d_v_dr = woods_saxon_derivative_mev_per_fm(r, shell);
     let r_surface = woods_saxon_surface_radius_fm(shell).max(1e-3);
-    let peak_shape =
-        (1.0 / r_surface) * (shell.strutinsky_ws_depth_mev / (4.0 * shell.strutinsky_ws_diffuseness_fm.max(1e-3)));
+    let peak_shape = (1.0 / r_surface)
+        * (shell.strutinsky_ws_depth_mev / (4.0 * shell.strutinsky_ws_diffuseness_fm.max(1e-3)));
     let so_shape = ((1.0 / r) * d_v_dr) / peak_shape.max(1e-6);
     let spin_orbit = -shell.strutinsky_spin_orbit_mev * so_shape * ls;
     let coulomb = if is_proton {
@@ -525,15 +531,16 @@ fn numerov_nodes_and_tail(
         let r_prev = (((i - 1) as f64) * dr_fm).max(dr_fm * 0.5);
         let r_curr = (i as f64 * dr_fm).max(dr_fm * 0.5);
         let r_next = ((i + 1) as f64 * dr_fm).max(dr_fm * 0.5);
-        let q_prev =
-            (radial_effective_potential_mev(r_prev, l, ls, is_proton, shell) - energy_mev) / HBAR2_OVER_2M_NUCLEON_MEV_FM2;
-        let q_curr =
-            (radial_effective_potential_mev(r_curr, l, ls, is_proton, shell) - energy_mev) / HBAR2_OVER_2M_NUCLEON_MEV_FM2;
-        let q_next =
-            (radial_effective_potential_mev(r_next, l, ls, is_proton, shell) - energy_mev) / HBAR2_OVER_2M_NUCLEON_MEV_FM2;
+        let q_prev = (radial_effective_potential_mev(r_prev, l, ls, is_proton, shell) - energy_mev)
+            / HBAR2_OVER_2M_NUCLEON_MEV_FM2;
+        let q_curr = (radial_effective_potential_mev(r_curr, l, ls, is_proton, shell) - energy_mev)
+            / HBAR2_OVER_2M_NUCLEON_MEV_FM2;
+        let q_next = (radial_effective_potential_mev(r_next, l, ls, is_proton, shell) - energy_mev)
+            / HBAR2_OVER_2M_NUCLEON_MEV_FM2;
         let denom = 1.0 + h2 * q_next / 12.0;
         let u_next = if denom.abs() > 1e-12 {
-            (2.0 * (1.0 - 5.0 * h2 * q_curr / 12.0) * u_curr - (1.0 + h2 * q_prev / 12.0) * u_prev) / denom
+            (2.0 * (1.0 - 5.0 * h2 * q_curr / 12.0) * u_curr - (1.0 + h2 * q_prev / 12.0) * u_prev)
+                / denom
         } else {
             0.0
         };
@@ -591,7 +598,8 @@ fn solve_radial_orbital_energy_mev(orb: Orbital, is_proton: bool, shell: ShellPa
     if let Some((mut lo, mut hi)) = bracket {
         for _ in 0..72 {
             let mid = 0.5 * (lo + hi);
-            let (nodes, tail) = numerov_nodes_and_tail(mid, l, ls, is_proton, shell, r_max_fm, dr_fm);
+            let (nodes, tail) =
+                numerov_nodes_and_tail(mid, l, ls, is_proton, shell, r_max_fm, dr_fm);
             if nodes > target_nodes {
                 hi = mid;
             } else {
@@ -643,7 +651,12 @@ fn build_strutinsky_shell_table(max_count: u16, is_proton: bool, shell: ShellPar
     let mut shells: Vec<(f64, usize)> = SP_ORBITALS
         .iter()
         .copied()
-        .map(|orb| (orbital_energy_mev(orb, is_proton, shell), orb.j2 as usize + 1))
+        .map(|orb| {
+            (
+                orbital_energy_mev(orb, is_proton, shell),
+                orb.j2 as usize + 1,
+            )
+        })
         .collect();
     shells.sort_by(|a, b| a.0.total_cmp(&b.0));
     for (e, degeneracy) in shells {
@@ -786,7 +799,11 @@ fn semf_binding_mev(
     };
     // Add explicit proton shell support around superheavy candidates (Z=114/120),
     // gated near the neutron-rich heavy corridor.
-    let proton_gate_n = gaussian_proximity(n as f64, shell.heavy_target_n, shell.superheavy_proton_gate_n_sigma);
+    let proton_gate_n = gaussian_proximity(
+        n as f64,
+        shell.heavy_target_n,
+        shell.superheavy_proton_gate_n_sigma,
+    );
     let shell_superheavy_proton = heavy_gate
         * shell_bonus(
             z,
@@ -796,7 +813,8 @@ fn semf_binding_mev(
         )
         * proton_gate_n;
     let shell_z50_isovector = z50_isovector_valley_term_mev(z, n, shell);
-    let shell_baseline = (shell_z + shell_n + shell_superheavy_proton) * shell_scale + shell_z50_isovector;
+    let shell_baseline =
+        (shell_z + shell_n + shell_superheavy_proton) * shell_scale + shell_z50_isovector;
     // Separate heavy-island sharpening layer centered near candidate IoS region.
     let shell_heavy = heavy_gate
         * shell.heavy_amplitude
@@ -856,10 +874,15 @@ fn stability_score(
 ) -> f64 {
     let s2n_term = s2n.unwrap_or(-10.0).clamp(-10.0, 20.0);
     let s2p_term = s2p.unwrap_or(-10.0).clamp(-10.0, 20.0);
-    let fissility_penalty = if fissility > 1.0 { (fissility - 1.0) * 2.5 } else { 0.0 };
+    let fissility_penalty = if fissility > 1.0 {
+        (fissility - 1.0) * 2.5
+    } else {
+        0.0
+    };
     let barrier_term = 0.015 * fission_barrier_mev.clamp(0.0, 60.0);
     let sf_term = 0.004 * sf_log10_half_life_s.clamp(-30.0, 30.0);
-    binding_per_nucleon + 0.02 * s2n_term + 0.02 * s2p_term + barrier_term + sf_term - fissility_penalty
+    binding_per_nucleon + 0.02 * s2n_term + 0.02 * s2p_term + barrier_term + sf_term
+        - fissility_penalty
 }
 
 /// Build a full nuclide table with SEMF+shell observables.
@@ -875,7 +898,8 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
     } else {
         None
     };
-    let mut binding_map: BTreeMap<(u16, u16), (f64, f64, f64, f64, f64, f64, f64)> = BTreeMap::new();
+    let mut binding_map: BTreeMap<(u16, u16), (f64, f64, f64, f64, f64, f64, f64)> =
+        BTreeMap::new();
     for z in cfg.z_min..=cfg.z_max {
         for n in cfg.n_min..=cfg.n_max {
             let (
@@ -911,8 +935,18 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
     }
 
     let mut out = Vec::with_capacity(binding_map.len());
-    for (&(z, n), &(binding, shell_bonus_mev, shell_bonus_baseline_mev, shell_bonus_heavy_mev, shell_bonus_superheavy_proton_mev, shell_scale_a, pairing_mev)) in
-        &binding_map
+    for (
+        &(z, n),
+        &(
+            binding,
+            shell_bonus_mev,
+            shell_bonus_baseline_mev,
+            shell_bonus_heavy_mev,
+            shell_bonus_superheavy_proton_mev,
+            shell_scale_a,
+            pairing_mev,
+        ),
+    ) in &binding_map
     {
         let a = z + n;
         let s2n = if n >= cfg.n_min + 2 {
@@ -985,7 +1019,10 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
 }
 
 /// Return strongest neutron shell closure signatures around magic N.
-pub fn magic_s2n_discontinuities(records: &[NucleusRecord], top_k: usize) -> Vec<MagicDiscontinuity> {
+pub fn magic_s2n_discontinuities(
+    records: &[NucleusRecord],
+    top_k: usize,
+) -> Vec<MagicDiscontinuity> {
     let mut by_zn: BTreeMap<(u16, u16), &NucleusRecord> = BTreeMap::new();
     for r in records {
         by_zn.insert((r.z, r.n), r);
@@ -1057,7 +1094,10 @@ pub fn magic_s2n_summary(records: &[NucleusRecord]) -> Vec<MagicSummaryRow> {
 }
 
 /// Return strongest proton shell-closure signatures around selected closure Z.
-pub fn proton_s2p_discontinuities(records: &[NucleusRecord], top_k: usize) -> Vec<ProtonDiscontinuity> {
+pub fn proton_s2p_discontinuities(
+    records: &[NucleusRecord],
+    top_k: usize,
+) -> Vec<ProtonDiscontinuity> {
     proton_s2p_discontinuities_for_closures(records, &derived_superheavy_proton_candidates(), top_k)
 }
 
@@ -1105,7 +1145,10 @@ pub fn proton_s2p_summary(records: &[NucleusRecord]) -> Vec<ProtonSummaryRow> {
 }
 
 /// Summarize S2p shell cliffs for an explicit closure list.
-pub fn proton_s2p_summary_for_closures(records: &[NucleusRecord], closures: &[u16]) -> Vec<ProtonSummaryRow> {
+pub fn proton_s2p_summary_for_closures(
+    records: &[NucleusRecord],
+    closures: &[u16],
+) -> Vec<ProtonSummaryRow> {
     let all = proton_s2p_discontinuities_for_closures(records, closures, records.len());
     let mut out = Vec::new();
     for &closure_z in closures {
@@ -1162,8 +1205,10 @@ pub fn score_derived_superheavy_closures(
                         && r.fissility < 1.1
                 })
                 .max_by(|a, b| {
-                    let sa = a.stability_score + 0.35 * gaussian_proximity(a.n as f64, target_n as f64, 14.0);
-                    let sb = b.stability_score + 0.35 * gaussian_proximity(b.n as f64, target_n as f64, 14.0);
+                    let sa = a.stability_score
+                        + 0.35 * gaussian_proximity(a.n as f64, target_n as f64, 14.0);
+                    let sb = b.stability_score
+                        + 0.35 * gaussian_proximity(b.n as f64, target_n as f64, 14.0);
                     sa.total_cmp(&sb)
                 });
             let (local_n, local_score) = best_local
@@ -1237,7 +1282,11 @@ pub fn rank_island_candidates_with_config(
 }
 
 /// Backwards-compatible ranker with default target pull toward the superheavy region.
-pub fn rank_island_candidates(records: &[NucleusRecord], min_z: u16, top_k: usize) -> Vec<NucleusRecord> {
+pub fn rank_island_candidates(
+    records: &[NucleusRecord],
+    min_z: u16,
+    top_k: usize,
+) -> Vec<NucleusRecord> {
     let cfg = IslandRankingConfig {
         min_z,
         ..IslandRankingConfig::default()
@@ -1255,7 +1304,12 @@ pub fn shell_gate_metrics(records: &[NucleusRecord]) -> ShellGateMetrics {
     let top_delta = neutron_rows.first().map(|r| r.delta_s2n_mev).unwrap_or(0.0);
     let top5_len = neutron_rows.len().min(5);
     let avg_top5 = if top5_len > 0 {
-        neutron_rows.iter().take(top5_len).map(|r| r.delta_s2n_mev).sum::<f64>() / top5_len as f64
+        neutron_rows
+            .iter()
+            .take(top5_len)
+            .map(|r| r.delta_s2n_mev)
+            .sum::<f64>()
+            / top5_len as f64
     } else {
         0.0
     };
@@ -1281,7 +1335,10 @@ pub fn shell_gate_metrics(records: &[NucleusRecord]) -> ShellGateMetrics {
 }
 
 fn proton_summary_stats(summary: &[ProtonSummaryRow]) -> (f64, f64, f64) {
-    let proton_deltas: Vec<f64> = summary.iter().map(|row| row.strongest_delta_s2p_mev).collect();
+    let proton_deltas: Vec<f64> = summary
+        .iter()
+        .map(|row| row.strongest_delta_s2p_mev)
+        .collect();
     let proton_avg = if proton_deltas.is_empty() {
         0.0
     } else {
@@ -1297,24 +1354,38 @@ fn proton_summary_stats(summary: &[ProtonSummaryRow]) -> (f64, f64, f64) {
 }
 
 pub fn valley_of_stability(records: &[NucleusRecord]) -> Vec<NucleusRecord> {
-    records.iter().copied().filter(|r| r.beta_optimal_for_a).collect()
+    records
+        .iter()
+        .copied()
+        .filter(|r| r.beta_optimal_for_a)
+        .collect()
 }
 
-pub fn closest_to_target_island(records: &[NucleusRecord], target_z: u16, target_n: u16) -> Option<NucleusRecord> {
+pub fn closest_to_target_island(
+    records: &[NucleusRecord],
+    target_z: u16,
+    target_n: u16,
+) -> Option<NucleusRecord> {
     records
         .iter()
         .copied()
         .filter(|r| r.s2n_mev.unwrap_or(-1.0) > 0.0 && r.s2p_mev.unwrap_or(-1.0) > 0.0)
         .min_by(|a, b| {
-            let da = ((a.z as i32 - target_z as i32).abs() + (a.n as i32 - target_n as i32).abs()) as i64;
-            let db = ((b.z as i32 - target_z as i32).abs() + (b.n as i32 - target_n as i32).abs()) as i64;
+            let da = ((a.z as i32 - target_z as i32).abs() + (a.n as i32 - target_n as i32).abs())
+                as i64;
+            let db = ((b.z as i32 - target_z as i32).abs() + (b.n as i32 - target_n as i32).abs())
+                as i64;
             da.cmp(&db)
                 .then_with(|| b.stability_score.total_cmp(&a.stability_score))
         })
 }
 
 /// Rank superheavy candidates by coarse stability score.
-pub fn rank_island_candidates_legacy(records: &[NucleusRecord], min_z: u16, top_k: usize) -> Vec<NucleusRecord> {
+pub fn rank_island_candidates_legacy(
+    records: &[NucleusRecord],
+    min_z: u16,
+    top_k: usize,
+) -> Vec<NucleusRecord> {
     let mut candidates: Vec<NucleusRecord> = records
         .iter()
         .copied()
@@ -1379,7 +1450,10 @@ pub fn write_magic_discontinuities_csv(
     Ok(())
 }
 
-pub fn write_magic_summary_csv(path: impl AsRef<Path>, rows: &[MagicSummaryRow]) -> std::io::Result<()> {
+pub fn write_magic_summary_csv(
+    path: impl AsRef<Path>,
+    rows: &[MagicSummaryRow],
+) -> std::io::Result<()> {
     let mut file = fs::File::create(path)?;
     writeln!(
         file,
@@ -1389,13 +1463,20 @@ pub fn write_magic_summary_csv(path: impl AsRef<Path>, rows: &[MagicSummaryRow])
         writeln!(
             file,
             "{},{:.6},{:.6},{},{}",
-            row.magic_n, row.strongest_delta_s2n_mev, row.mean_delta_s2n_mev, row.z_at_strongest, row.sample_count
+            row.magic_n,
+            row.strongest_delta_s2n_mev,
+            row.mean_delta_s2n_mev,
+            row.z_at_strongest,
+            row.sample_count
         )?;
     }
     Ok(())
 }
 
-pub fn write_proton_discontinuities_csv(path: impl AsRef<Path>, rows: &[ProtonDiscontinuity]) -> std::io::Result<()> {
+pub fn write_proton_discontinuities_csv(
+    path: impl AsRef<Path>,
+    rows: &[ProtonDiscontinuity],
+) -> std::io::Result<()> {
     let mut file = fs::File::create(path)?;
     writeln!(file, "closure_z,N,delta_s2p_mev")?;
     for row in rows {
@@ -1404,7 +1485,10 @@ pub fn write_proton_discontinuities_csv(path: impl AsRef<Path>, rows: &[ProtonDi
     Ok(())
 }
 
-pub fn write_proton_summary_csv(path: impl AsRef<Path>, rows: &[ProtonSummaryRow]) -> std::io::Result<()> {
+pub fn write_proton_summary_csv(
+    path: impl AsRef<Path>,
+    rows: &[ProtonSummaryRow],
+) -> std::io::Result<()> {
     let mut file = fs::File::create(path)?;
     writeln!(
         file,
@@ -1414,7 +1498,11 @@ pub fn write_proton_summary_csv(path: impl AsRef<Path>, rows: &[ProtonSummaryRow
         writeln!(
             file,
             "{},{:.6},{:.6},{},{}",
-            row.closure_z, row.strongest_delta_s2p_mev, row.mean_delta_s2p_mev, row.n_at_strongest, row.sample_count
+            row.closure_z,
+            row.strongest_delta_s2p_mev,
+            row.mean_delta_s2p_mev,
+            row.n_at_strongest,
+            row.sample_count
         )?;
     }
     Ok(())
@@ -1462,7 +1550,8 @@ mod tests {
     fn ranking_with_config_returns_nonempty_superheavy_list() {
         let cfg = ScanConfig::default();
         let records = scan_nuclear_chart(cfg);
-        let ranked = rank_island_candidates_with_config(&records, IslandRankingConfig::default(), 20);
+        let ranked =
+            rank_island_candidates_with_config(&records, IslandRankingConfig::default(), 20);
         assert!(!ranked.is_empty());
         assert!(ranked.iter().all(|r| r.z >= 104));
     }
@@ -1531,7 +1620,9 @@ mod tests {
         let records = scan_nuclear_chart(cfg);
         let summary = proton_s2p_summary(&records);
         for z in derived_superheavy_proton_candidates() {
-            assert!(summary.iter().any(|row| row.closure_z == z && row.sample_count > 0));
+            assert!(summary
+                .iter()
+                .any(|row| row.closure_z == z && row.sample_count > 0));
         }
     }
 
@@ -1539,7 +1630,8 @@ mod tests {
     fn monitored_proton_summary_tracks_114_120_126_only() {
         let cfg = ScanConfig::default();
         let records = scan_nuclear_chart(cfg);
-        let summary = proton_s2p_summary_for_closures(&records, &MONITORED_SUPERHEAVY_PROTON_CLOSURES);
+        let summary =
+            proton_s2p_summary_for_closures(&records, &MONITORED_SUPERHEAVY_PROTON_CLOSURES);
         let closures: Vec<u16> = summary.iter().map(|r| r.closure_z).collect();
         assert_eq!(closures, MONITORED_SUPERHEAVY_PROTON_CLOSURES);
         assert!(summary.iter().all(|row| row.sample_count > 0));

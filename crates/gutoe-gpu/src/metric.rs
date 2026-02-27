@@ -161,7 +161,11 @@ impl GutoeMetric {
         let r_areal = 1.5 * self.r_s;
         let rc = self.r_core();
         let arg = r_areal * r_areal - rc * rc;
-        if arg > 0.0 { Some(arg.sqrt()) } else { None }
+        if arg > 0.0 {
+            Some(arg.sqrt())
+        } else {
+            None
+        }
     }
 
     /// Coordinate radius of the ISCO (innermost stable circular orbit).
@@ -172,7 +176,11 @@ impl GutoeMetric {
         let r_areal = 3.0 * self.r_s;
         let rc = self.r_core();
         let arg = r_areal * r_areal - rc * rc;
-        if arg > 0.0 { Some(arg.sqrt()) } else { None }
+        if arg > 0.0 {
+            Some(arg.sqrt())
+        } else {
+            None
+        }
     }
 
     /// Hawking temperature in natural units (ℏ = c = G = k_B = 1).
@@ -226,12 +234,21 @@ mod tests {
         let m = GutoeMetric::planck_units(R_S);
         let rc = m.r_core();
         // r_eff(0) = r_core — not zero, not infinity
-        assert!((m.r_eff(0.0) - rc).abs() < EPS, "r_eff(0) must equal r_core");
+        assert!(
+            (m.r_eff(0.0) - rc).abs() < EPS,
+            "r_eff(0) must equal r_core"
+        );
         // g_tt(0) = -(1 - r_s/r_core) — finite
         let g = m.g_tt(0.0);
-        assert!(g.is_finite(), "g_tt at r=0 must be finite (singularity resolved)");
+        assert!(
+            g.is_finite(),
+            "g_tt at r=0 must be finite (singularity resolved)"
+        );
         let expected = -(1.0 - R_S / rc);
-        assert!((g - expected).abs() < EPS, "g_tt(0) = {g:.8}, expected {expected:.8}");
+        assert!(
+            (g - expected).abs() < EPS,
+            "g_tt(0) = {g:.8}, expected {expected:.8}"
+        );
     }
 
     #[test]
@@ -266,7 +283,8 @@ mod tests {
         // r_eff(r_h) = r_s → g_tt = -(1 - 1) = 0
         assert!(
             m.g_tt(r_h).abs() < EPS,
-            "g_tt at horizon must be 0, got {}", m.g_tt(r_h)
+            "g_tt at horizon must be 0, got {}",
+            m.g_tt(r_h)
         );
     }
 
@@ -302,14 +320,21 @@ mod tests {
     #[test]
     fn photon_sphere_areal_radius_matches_gr() {
         let m = GutoeMetric::planck_units(R_S);
-        let r_ph = m.r_photon_sphere().expect("photon sphere must exist for r_s >> r_core");
+        let r_ph = m
+            .r_photon_sphere()
+            .expect("photon sphere must exist for r_s >> r_core");
         // Areal radius must be exactly 3r_s/2
         assert!(
             (m.r_eff(r_ph) - 1.5 * R_S).abs() < EPS,
-            "photon sphere areal radius = {:.6}, expected {:.6}", m.r_eff(r_ph), 1.5 * R_S
+            "photon sphere areal radius = {:.6}, expected {:.6}",
+            m.r_eff(r_ph),
+            1.5 * R_S
         );
         // Coordinate radius is slightly less than areal radius
-        assert!(r_ph < 1.5 * R_S, "coordinate r_ph must be less than areal 3r_s/2");
+        assert!(
+            r_ph < 1.5 * R_S,
+            "coordinate r_ph must be less than areal 3r_s/2"
+        );
     }
 
     #[test]
@@ -319,10 +344,15 @@ mod tests {
         // Areal radius must be exactly 3r_s
         assert!(
             (m.r_eff(r_isco) - 3.0 * R_S).abs() < EPS,
-            "ISCO areal radius = {:.6}, expected {:.6}", m.r_eff(r_isco), 3.0 * R_S
+            "ISCO areal radius = {:.6}, expected {:.6}",
+            m.r_eff(r_isco),
+            3.0 * R_S
         );
         // Coordinate radius is slightly less than areal radius
-        assert!(r_isco < 3.0 * R_S, "coordinate r_ISCO must be less than areal 3r_s");
+        assert!(
+            r_isco < 3.0 * R_S,
+            "coordinate r_ISCO must be less than areal 3r_s"
+        );
     }
 
     #[test]
@@ -366,8 +396,17 @@ mod tests {
         let r_ph = m.r_photon_sphere().expect("photon sphere must exist");
         let r_isco = m.r_isco().expect("ISCO must exist");
         // Physical hierarchy: r_core < r_h < r_ph < r_ISCO
-        assert!(rc < r_h,    "r_core={rc:.4} must be less than r_horizon={r_h:.4}");
-        assert!(r_h < r_ph,  "horizon={r_h:.4} must be inside photon sphere={r_ph:.4}");
-        assert!(r_ph < r_isco, "photon sphere={r_ph:.4} must be inside ISCO={r_isco:.4}");
+        assert!(
+            rc < r_h,
+            "r_core={rc:.4} must be less than r_horizon={r_h:.4}"
+        );
+        assert!(
+            r_h < r_ph,
+            "horizon={r_h:.4} must be inside photon sphere={r_ph:.4}"
+        );
+        assert!(
+            r_ph < r_isco,
+            "photon sphere={r_ph:.4} must be inside ISCO={r_isco:.4}"
+        );
     }
 }

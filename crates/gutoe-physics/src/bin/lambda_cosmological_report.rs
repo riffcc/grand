@@ -2,11 +2,12 @@
 
 use gutoe_physics::constants::{
     lambda_cosmological_full_candidate, lambda_cosmological_signature_candidate,
-    lambda_cosmological_structural, lambda_cosmological_suppression, lambda_micro_finite_mode_rescale,
-    lambda_micro_mode_count, lambda_micro_mode_count_from_ternary_depth,
-    lorentz_signature_factor_from_bivector_split, ALPHA_INV_LEADING_ORDER,
-    BIVECTOR_TIMELIKE_SPACELIKE_COUNT, BIVECTOR_TOTAL_COUNT, EWSB_SCALE_FACTOR_STRUCTURAL,
-    HIGGS_QUARTIC_STRUCTURAL, LAMBDA_COSMOLOGICAL_OBSERVED, PLANCK_LENGTH, Z3_FIXED_GRADE1_COUNT,
+    lambda_cosmological_structural, lambda_cosmological_suppression,
+    lambda_micro_finite_mode_rescale, lambda_micro_mode_count,
+    lambda_micro_mode_count_from_ternary_depth, lorentz_signature_factor_from_bivector_split,
+    ALPHA_INV_LEADING_ORDER, BIVECTOR_TIMELIKE_SPACELIKE_COUNT, BIVECTOR_TOTAL_COUNT,
+    EWSB_SCALE_FACTOR_STRUCTURAL, HIGGS_QUARTIC_STRUCTURAL, LAMBDA_COSMOLOGICAL_OBSERVED,
+    PLANCK_LENGTH, Z3_FIXED_GRADE1_COUNT,
 };
 use std::f64::consts::SQRT_2;
 use std::fs::{self, File};
@@ -23,12 +24,14 @@ fn main() {
     let k_required = lambda_struct / LAMBDA_COSMOLOGICAL_OBSERVED;
     let k_signature = lorentz_signature_factor_from_bivector_split();
     let ratio_struct = lambda_struct / LAMBDA_COSMOLOGICAL_OBSERVED;
-    let rel_err_struct = (lambda_struct - LAMBDA_COSMOLOGICAL_OBSERVED).abs() / LAMBDA_COSMOLOGICAL_OBSERVED;
+    let rel_err_struct =
+        (lambda_struct - LAMBDA_COSMOLOGICAL_OBSERVED).abs() / LAMBDA_COSMOLOGICAL_OBSERVED;
     let ratio_signature = lambda_signature / LAMBDA_COSMOLOGICAL_OBSERVED;
     let rel_err_signature =
         (lambda_signature - LAMBDA_COSMOLOGICAL_OBSERVED).abs() / LAMBDA_COSMOLOGICAL_OBSERVED;
     let ratio_full = lambda_full / LAMBDA_COSMOLOGICAL_OBSERVED;
-    let rel_err_full = (lambda_full - LAMBDA_COSMOLOGICAL_OBSERVED).abs() / LAMBDA_COSMOLOGICAL_OBSERVED;
+    let rel_err_full =
+        (lambda_full - LAMBDA_COSMOLOGICAL_OBSERVED).abs() / LAMBDA_COSMOLOGICAL_OBSERVED;
 
     let out_dir = "/tmp/bh_renders";
     let _ = fs::create_dir_all(out_dir);
@@ -43,21 +46,50 @@ fn main() {
     writeln!(txt, "suppression = {:.12e}", suppression).expect("write");
     writeln!(txt, "sqrt2 = {:.12}", SQRT_2).expect("write");
     writeln!(txt, "bivector_total = {:.0}", BIVECTOR_TOTAL_COUNT).expect("write");
-    writeln!(txt, "bivector_timelike_spacelike = {:.0}", BIVECTOR_TIMELIKE_SPACELIKE_COUNT).expect("write");
+    writeln!(
+        txt,
+        "bivector_timelike_spacelike = {:.0}",
+        BIVECTOR_TIMELIKE_SPACELIKE_COUNT
+    )
+    .expect("write");
     writeln!(txt, "k_signature = {:.12}", k_signature).expect("write");
     writeln!(txt, "k_required = {:.12}", k_required).expect("write");
-    writeln!(txt, "k_required_over_k_signature = {:.12}", k_required / k_signature).expect("write");
-    writeln!(txt, "ewsb_scale_factor = {:.0}", EWSB_SCALE_FACTOR_STRUCTURAL).expect("write");
+    writeln!(
+        txt,
+        "k_required_over_k_signature = {:.12}",
+        k_required / k_signature
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "ewsb_scale_factor = {:.0}",
+        EWSB_SCALE_FACTOR_STRUCTURAL
+    )
+    .expect("write");
     writeln!(txt, "z3_fixed_grade1_count = {:.0}", Z3_FIXED_GRADE1_COUNT).expect("write");
     writeln!(txt, "micro_mode_count = {:.0}", micro_mode_count).expect("write");
-    writeln!(txt, "micro_mode_count_ternary = {:.0}", micro_mode_count_ternary).expect("write");
-    writeln!(txt, "micro_count_ratio_ewsb_over_ternary = {:.12}", micro_mode_count / micro_mode_count_ternary)
-        .expect("write");
+    writeln!(
+        txt,
+        "micro_mode_count_ternary = {:.0}",
+        micro_mode_count_ternary
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "micro_count_ratio_ewsb_over_ternary = {:.12}",
+        micro_mode_count / micro_mode_count_ternary
+    )
+    .expect("write");
     writeln!(txt, "micro_rescale = {:.12}", micro_rescale).expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[lambda_cosmological_structural]").expect("write");
     writeln!(txt, "lambda_structural = {:.12e}", lambda_struct).expect("write");
-    writeln!(txt, "lambda_observed = {:.12e}", LAMBDA_COSMOLOGICAL_OBSERVED).expect("write");
+    writeln!(
+        txt,
+        "lambda_observed = {:.12e}",
+        LAMBDA_COSMOLOGICAL_OBSERVED
+    )
+    .expect("write");
     writeln!(txt, "ratio_struct_over_obs = {:.12}", ratio_struct).expect("write");
     writeln!(txt, "relative_error = {:.12}", rel_err_struct).expect("write");
     writeln!(txt).expect("write");

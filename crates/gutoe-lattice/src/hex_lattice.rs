@@ -45,7 +45,8 @@ impl HexCoord {
     /// Distance to another hex (O(1) calculation)
     /// From GUTOE.md: max(|q1-q2|, |r1-r2|, |s1-s2|)
     pub fn distance(&self, other: &HexCoord) -> u32 {
-        ((self.q - other.q).abs().max((self.r - other.r).abs())).max((self.s - other.s).abs()) as u32
+        ((self.q - other.q).abs().max((self.r - other.r).abs())).max((self.s - other.s).abs())
+            as u32
     }
 
     /// Get all 6 neighbors (6-fold symmetry)
@@ -86,8 +87,8 @@ impl fmt::Display for HexCoord {
 #[derive(Debug, Clone)]
 pub struct LatticeNode {
     pub coord: HexCoord,
-    pub veracity: f64,      // Connection strength (0.0 to 1.0)
-    pub coherence: f64,     // Quantum coherence
+    pub veracity: f64,  // Connection strength (0.0 to 1.0)
+    pub coherence: f64, // Quantum coherence
 }
 
 impl LatticeNode {
@@ -149,7 +150,9 @@ impl HexLattice {
 
     /// Add a node at coordinates
     pub fn add_node(&mut self, coord: HexCoord) {
-        self.nodes.entry(coord).or_insert_with(|| LatticeNode::new(coord.q, coord.r));
+        self.nodes
+            .entry(coord)
+            .or_insert_with(|| LatticeNode::new(coord.q, coord.r));
     }
 
     /// Number of nodes in lattice
@@ -169,7 +172,8 @@ impl HexLattice {
 
     /// All neighbors of a coordinate that exist in lattice
     pub fn existing_neighbors(&self, coord: &HexCoord) -> Vec<HexCoord> {
-        coord.neighbors()
+        coord
+            .neighbors()
             .into_iter()
             .filter(|c| self.contains(c))
             .collect()
@@ -266,7 +270,11 @@ mod tests {
         let lattice = HexLattice::new(3);
         let center = HexCoord::new(0, 0);
         let neighbors = lattice.existing_neighbors(&center);
-        assert_eq!(neighbors.len(), 6, "interior node should have exactly 6 neighbors");
+        assert_eq!(
+            neighbors.len(),
+            6,
+            "interior node should have exactly 6 neighbors"
+        );
 
         // Count edges among neighbors (unordered pairs)
         let mut edge_count = 0;
@@ -278,8 +286,10 @@ mod tests {
             }
         }
         // In a hex lattice ring, consecutive neighbors are adjacent: exactly 6 edges.
-        assert_eq!(edge_count, 6,
-            "interior hex node: {edge_count} edges among neighbors, expected 6 (ring)");
+        assert_eq!(
+            edge_count, 6,
+            "interior hex node: {edge_count} edges among neighbors, expected 6 (ring)"
+        );
     }
 
     #[test]
@@ -296,11 +306,15 @@ mod tests {
         let lattice = HexLattice::new(5); // Large enough for mostly-interior nodes
         let cc = lattice.clustering_coefficient();
 
-        assert!((cc - 0.4).abs() < 0.1,
+        assert!(
+            (cc - 0.4).abs() < 0.1,
             "clustering coefficient = {cc:.4}, expected ~0.4 \
-             (GUTOE claims 0.72±0.05, which contradicts hex lattice geometry)");
-        assert!(cc < 0.67,
+             (GUTOE claims 0.72±0.05, which contradicts hex lattice geometry)"
+        );
+        assert!(
+            cc < 0.67,
             "clustering coefficient = {cc:.4} is near the claimed 0.72±0.05, \
-             but interior hex nodes give C = 6/15 = 0.4");
+             but interior hex nodes give C = 6/15 = 0.4"
+        );
     }
 }

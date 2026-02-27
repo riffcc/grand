@@ -114,12 +114,7 @@ impl KerrMetric {
     /// Conventions follow the standard Bardeen/Carter setup:
     ///   xi  = -alpha * sin(theta_obs)
     ///   eta = beta² + (alpha² - a²) cos²(theta_obs)
-    pub fn image_to_constants(
-        &self,
-        alpha: f64,
-        beta: f64,
-        theta_obs: f64,
-    ) -> (f64, f64) {
+    pub fn image_to_constants(&self, alpha: f64, beta: f64, theta_obs: f64) -> (f64, f64) {
         let s = theta_obs.sin();
         let c = theta_obs.cos();
         let a = self.a();
@@ -208,7 +203,11 @@ mod tests {
         let r_pro = k.equatorial_photon_orbit_radius(true);
         let r_ret = k.equatorial_photon_orbit_radius(false);
         assert!((r_pro - m).abs() < 1e-12, "r_pro={r_pro}, M={m}");
-        assert!((r_ret - 4.0 * m).abs() < 1e-12, "r_ret={r_ret}, 4M={}", 4.0 * m);
+        assert!(
+            (r_ret - 4.0 * m).abs() < 1e-12,
+            "r_ret={r_ret}, 4M={}",
+            4.0 * m
+        );
     }
 
     #[test]
@@ -247,7 +246,11 @@ mod tests {
         let alpha = -1.7;
         let beta = 0.6;
         let (_, eta) = k.image_to_constants(alpha, beta, FRAC_PI_2);
-        assert!((eta - beta * beta).abs() < 1e-12, "eta={eta}, beta^2={}", beta * beta);
+        assert!(
+            (eta - beta * beta).abs() < 1e-12,
+            "eta={eta}, beta^2={}",
+            beta * beta
+        );
     }
 
     #[test]
@@ -260,6 +263,9 @@ mod tests {
         // a=0 => R = r^4 - Δ*(xi^2 + eta), with Δ=r^2-r_s*r
         let delta = r * r - k.r_s * r;
         let expected = r.powi(4) - delta * (xi * xi + eta);
-        assert!((rpot - expected).abs() < 1e-10, "rpot={rpot}, expected={expected}");
+        assert!(
+            (rpot - expected).abs() < 1e-10,
+            "rpot={rpot}, expected={expected}"
+        );
     }
 }

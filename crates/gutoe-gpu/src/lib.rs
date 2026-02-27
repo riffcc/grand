@@ -15,27 +15,39 @@
 //   Memory: ~200 MB (fits in 12 GB)
 //   Expected runtime: ~15s (FP64 memory-bandwidth limited)
 
-pub mod watson;
-pub mod speculative;
-pub mod metric;
-pub mod kerr;
-pub mod synchrotron;
-pub mod transfer;
-pub mod tracer;
 pub mod geodesic3d;
-pub mod snapshot;
+pub mod kerr;
+pub mod metric;
 pub mod playback;
+pub mod snapshot;
+pub mod speculative;
+pub mod synchrotron;
+pub mod tracer;
+pub mod transfer;
+pub mod watson;
 
 use gutoe_em::quantum_lepton::{bohr_test_3d, BohrResult};
 
 // ── Backend enum ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Backend { Cpu, #[cfg(feature = "cuda")] Cuda, #[cfg(feature = "rocm")] Rocm }
+pub enum Backend {
+    Cpu,
+    #[cfg(feature = "cuda")]
+    Cuda,
+    #[cfg(feature = "rocm")]
+    Rocm,
+}
 
 pub fn detect_backend() -> Backend {
-    #[cfg(feature = "rocm")] { return Backend::Rocm; }
-    #[cfg(feature = "cuda")] { return Backend::Cuda; }
+    #[cfg(feature = "rocm")]
+    {
+        return Backend::Rocm;
+    }
+    #[cfg(feature = "cuda")]
+    {
+        return Backend::Cuda;
+    }
     #[allow(unreachable_code)]
     Backend::Cpu
 }
@@ -44,23 +56,36 @@ pub fn detect_backend() -> Backend {
 
 #[derive(Debug, Clone)]
 pub struct SolverConfig {
-    pub alpha:     f64,
-    pub l:         usize,   // L×L×L cube
-    pub n_jacobi:  usize,
-    pub n_iter:    usize,
-    pub dtau:      f64,
-    pub backend:   Backend,
+    pub alpha: f64,
+    pub l: usize, // L×L×L cube
+    pub n_jacobi: usize,
+    pub n_iter: usize,
+    pub dtau: f64,
+    pub backend: Backend,
 }
 
 impl SolverConfig {
     /// RTX 3070 Ti: α=0.1, L=144 — Bohr radius (10) fits, ~200 MB VRAM
     pub fn bohr_3070ti() -> Self {
-        Self { alpha: 0.1, l: 144, n_jacobi: 5000, n_iter: 20_000, dtau: 0.001,
-               backend: detect_backend() }
+        Self {
+            alpha: 0.1,
+            l: 144,
+            n_jacobi: 5000,
+            n_iter: 20_000,
+            dtau: 0.001,
+            backend: detect_backend(),
+        }
     }
     /// Fast CPU test: α=0.5, L=12
     pub fn fast_test(backend: Backend) -> Self {
-        Self { alpha: 0.5, l: 12, n_jacobi: 200, n_iter: 5_000, dtau: 0.01, backend }
+        Self {
+            alpha: 0.5,
+            l: 12,
+            n_jacobi: 200,
+            n_iter: 5_000,
+            dtau: 0.01,
+            backend,
+        }
     }
     /// Multi-point scan for Bohr convergence
     pub fn scan_point(alpha: f64, backend: Backend) -> Self {
@@ -68,7 +93,14 @@ impl SolverConfig {
         let n_iter = ((3.0 / (alpha * alpha)) as usize).min(50_000).max(2_000);
         let dtau = 0.003 * alpha.min(1.0);
         let n_jacobi = 1000;
-        Self { alpha, l, n_jacobi, n_iter, dtau, backend }
+        Self {
+            alpha,
+            l,
+            n_jacobi,
+            n_iter,
+            dtau,
+            backend,
+        }
     }
 }
 
@@ -76,9 +108,11 @@ impl SolverConfig {
 
 pub fn solve_hydrogen_3d(cfg: &SolverConfig) -> BohrResult {
     match cfg.backend {
-        Backend::Cpu                     => solve_cpu(cfg),
-        #[cfg(feature = "cuda")] Backend::Cuda => solve_gpu(cfg),
-        #[cfg(feature = "rocm")] Backend::Rocm => solve_gpu(cfg),
+        Backend::Cpu => solve_cpu(cfg),
+        #[cfg(feature = "cuda")]
+        Backend::Cuda => solve_gpu(cfg),
+        #[cfg(feature = "rocm")]
+        Backend::Rocm => solve_gpu(cfg),
     }
 }
 
@@ -91,36 +125,48 @@ fn solve_cpu(cfg: &SolverConfig) -> BohrResult {
 #[cfg(any(feature = "cuda", feature = "rocm"))]
 extern "C" {
     fn run_hydrogen_cuda(
-        alpha_em:    f64,
-        hex_rows:    i32, hex_cols: i32, layers: i32,
-        n_jacobi:    i32, n_iter:   i32, renorm_every: i32,
-        dtau:        f64,
+        alpha_em: f64,
+        hex_rows: i32,
+        hex_cols: i32,
+        layers: i32,
+        n_jacobi: i32,
+        n_iter: i32,
+        renorm_every: i32,
+        dtau: f64,
         out_e_total: *mut f64,
-        out_e_kin:   *mut f64,
-        out_e_pot:   *mut f64,
+        out_e_kin: *mut f64,
+        out_e_pot: *mut f64,
     );
     /// Open-boundary variant: small box, φ=α/r and ψ=0 at walls.
     /// Equivalent to L=∞ periodic for localised states. Memory ∝ (2R+1)³
     /// where R ≈ 8/α — independent of the physical box size.
     fn run_hydrogen_obc(
-        alpha_em:    f64,
-        hex_rows:    i32, hex_cols: i32, layers: i32,
-        n_jacobi:    i32, n_iter:   i32, renorm_every: i32,
-        dtau:        f64,
+        alpha_em: f64,
+        hex_rows: i32,
+        hex_cols: i32,
+        layers: i32,
+        n_jacobi: i32,
+        n_iter: i32,
+        renorm_every: i32,
+        dtau: f64,
         out_e_total: *mut f64,
-        out_e_kin:   *mut f64,
-        out_e_pot:   *mut f64,
+        out_e_kin: *mut f64,
+        out_e_pot: *mut f64,
     );
     /// Periodic-boundary variant: SOR Poisson with PBC (cold start),
     /// periodic Hamiltonian. Includes Madelung-like image corrections.
     fn run_hydrogen_pbc(
-        alpha_em:    f64,
-        hex_rows:    i32, hex_cols: i32, layers: i32,
-        n_jacobi:    i32, n_iter:   i32, renorm_every: i32,
-        dtau:        f64,
+        alpha_em: f64,
+        hex_rows: i32,
+        hex_cols: i32,
+        layers: i32,
+        n_jacobi: i32,
+        n_iter: i32,
+        renorm_every: i32,
+        dtau: f64,
         out_e_total: *mut f64,
-        out_e_kin:   *mut f64,
-        out_e_pot:   *mut f64,
+        out_e_kin: *mut f64,
+        out_e_pot: *mut f64,
     );
 }
 
@@ -130,38 +176,70 @@ fn solve_gpu(cfg: &SolverConfig) -> BohrResult {
     unsafe {
         run_hydrogen_cuda(
             cfg.alpha,
-            cfg.l as i32, cfg.l as i32, cfg.l as i32,
-            cfg.n_jacobi as i32, cfg.n_iter as i32, 10_i32,
+            cfg.l as i32,
+            cfg.l as i32,
+            cfg.l as i32,
+            cfg.n_jacobi as i32,
+            cfg.n_iter as i32,
+            10_i32,
             cfg.dtau,
-            &mut e_total, &mut e_kin, &mut e_pot,
+            &mut e_total,
+            &mut e_kin,
+            &mut e_pot,
         );
     }
     let bohr_3d = -cfg.alpha * cfg.alpha / 2.0;
-    BohrResult { alpha: cfg.alpha, l: cfg.l, e_total, e_kin, e_pot,
-                 bohr_3d, ratio: e_total / bohr_3d }
+    BohrResult {
+        alpha: cfg.alpha,
+        l: cfg.l,
+        e_total,
+        e_kin,
+        e_pot,
+        bohr_3d,
+        ratio: e_total / bohr_3d,
+    }
 }
 
 /// Open-boundary Schrödinger solver — CoW memory: allocates only (2R+1)³ sites.
 /// For α=0.1: R≈82, box=165³≈4.5M sites regardless of physical L.
 /// For α=0.01: R≈802, box=1605³ — scale R with 1/α.
 #[cfg(any(feature = "cuda", feature = "rocm"))]
-pub fn solve_hydrogen_obc(alpha: f64, n_jacobi: usize, n_iter: usize, dtau: f64,
-                           _backend: Backend) -> BohrResult {
+pub fn solve_hydrogen_obc(
+    alpha: f64,
+    n_jacobi: usize,
+    n_iter: usize,
+    dtau: f64,
+    _backend: Backend,
+) -> BohrResult {
     // Active radius: 8 Bohr radii (exp(-8)≈3e-4, energy error negligible)
     let r_active = ((8.0 / alpha).ceil() as usize).max(8);
-    let l = 2 * r_active + 1;   // small cube, open BC
+    let l = 2 * r_active + 1; // small cube, open BC
     let (mut e_total, mut e_kin, mut e_pot) = (0.0_f64, 0.0_f64, 0.0_f64);
     unsafe {
         run_hydrogen_obc(
             alpha,
-            l as i32, l as i32, l as i32,
-            n_jacobi as i32, n_iter as i32, 10_i32,
+            l as i32,
+            l as i32,
+            l as i32,
+            n_jacobi as i32,
+            n_iter as i32,
+            10_i32,
             dtau,
-            &mut e_total, &mut e_kin, &mut e_pot,
+            &mut e_total,
+            &mut e_kin,
+            &mut e_pot,
         );
     }
     let bohr_3d = -alpha * alpha / 2.0;
-    BohrResult { alpha, l, e_total, e_kin, e_pot, bohr_3d, ratio: e_total / bohr_3d }
+    BohrResult {
+        alpha,
+        l,
+        e_total,
+        e_kin,
+        e_pot,
+        bohr_3d,
+        ratio: e_total / bohr_3d,
+    }
 }
 
 // ── Bohr convergence scan ─────────────────────────────────────────────────────
@@ -171,15 +249,23 @@ pub fn solve_hydrogen_obc(alpha: f64, n_jacobi: usize, n_iter: usize, dtau: f64,
 /// 10-point scan is feasible as a single benchmark run.
 pub fn bohr_convergence_scan(alphas: &[f64], backend: Backend) {
     println!("GUTOE Bohr convergence: E₀ ∝ α^n, n → 2.0 as L → ∞");
-    println!("{:>8}  {:>6}  {:>10}  {:>10}  {:>8}", "α", "L", "E_total", "−α²/2", "ratio");
-    println!("{:>8}  {:>6}  {:>10}  {:>10}  {:>8}", "─", "─", "─", "─", "─");
+    println!(
+        "{:>8}  {:>6}  {:>10}  {:>10}  {:>8}",
+        "α", "L", "E_total", "−α²/2", "ratio"
+    );
+    println!(
+        "{:>8}  {:>6}  {:>10}  {:>10}  {:>8}",
+        "─", "─", "─", "─", "─"
+    );
 
     let mut prev_e: Option<(f64, f64)> = None;
     for &alpha in alphas {
         let cfg = SolverConfig::scan_point(alpha, backend);
         let r = solve_hydrogen_3d(&cfg);
-        println!("{:>8.4}  {:>6}  {:>10.6}  {:>10.6}  {:>8.3}",
-            alpha, cfg.l, r.e_total, r.bohr_3d, r.ratio);
+        println!(
+            "{:>8.4}  {:>6}  {:>10.6}  {:>10.6}  {:>8.3}",
+            alpha, cfg.l, r.e_total, r.bohr_3d, r.ratio
+        );
 
         if let Some((a0, e0)) = prev_e {
             let exp = (e0.abs() / r.e_total.abs()).ln() / (a0 / alpha).ln();
@@ -199,9 +285,17 @@ mod tests {
     fn cpu_backend_gives_bound_state() {
         let cfg = SolverConfig::fast_test(Backend::Cpu);
         let r = solve_hydrogen_3d(&cfg);
-        assert!(r.e_total < 0.0,
-            "CPU: α={:.2} L={} E={:.6} must be bound", cfg.alpha, cfg.l, r.e_total);
-        println!("  CPU: α={:.2} L={} E={:.6} C={:.3}", cfg.alpha, cfg.l, r.e_total, r.ratio);
+        assert!(
+            r.e_total < 0.0,
+            "CPU: α={:.2} L={} E={:.6} must be bound",
+            cfg.alpha,
+            cfg.l,
+            r.e_total
+        );
+        println!(
+            "  CPU: α={:.2} L={} E={:.6} C={:.3}",
+            cfg.alpha, cfg.l, r.e_total, r.ratio
+        );
     }
 
     #[test]
@@ -217,10 +311,18 @@ mod tests {
     #[cfg(any(feature = "cuda", feature = "rocm"))]
     fn gpu_bohr_test() {
         let cfg = SolverConfig::bohr_3070ti();
-        println!("  Running on {:?}: α={} L={}³ N={}", cfg.backend, cfg.alpha, cfg.l, cfg.l.pow(3));
+        println!(
+            "  Running on {:?}: α={} L={}³ N={}",
+            cfg.backend,
+            cfg.alpha,
+            cfg.l,
+            cfg.l.pow(3)
+        );
         let r = solve_hydrogen_3d(&cfg);
-        println!("  E_kin={:.6} E_pot={:.6} E_total={:.6} C={:.3}",
-            r.e_kin, r.e_pot, r.e_total, r.ratio);
+        println!(
+            "  E_kin={:.6} E_pot={:.6} E_total={:.6} C={:.3}",
+            r.e_kin, r.e_pot, r.e_total, r.ratio
+        );
         println!("  Bohr −α²/2 = {:.6}", r.bohr_3d);
         assert!(r.e_total < 0.0, "GPU: must be bound at α=0.1 L=144");
     }
@@ -238,24 +340,42 @@ mod tests {
         // Scale iterations down for large L to stay within ROCm iGPU limits.
         // C(L) trend is what matters; we don't need full ground-state convergence.
         let configs = [
-            (0.1_f64, 336_usize, 5_000, 20_000, 0.001),  // sanity: should work
-            (0.1_f64, 432_usize, 2_000,  8_000, 0.001),
-            (0.1_f64, 576_usize, 2_000,  8_000, 0.001),
-            (0.1_f64, 720_usize, 1_000,  4_000, 0.001),
-            (0.1_f64, 960_usize, 1_000,  4_000, 0.001),
+            (0.1_f64, 336_usize, 5_000, 20_000, 0.001), // sanity: should work
+            (0.1_f64, 432_usize, 2_000, 8_000, 0.001),
+            (0.1_f64, 576_usize, 2_000, 8_000, 0.001),
+            (0.1_f64, 720_usize, 1_000, 4_000, 0.001),
+            (0.1_f64, 960_usize, 1_000, 4_000, 0.001),
         ];
         println!("\n  GUTOE Bohr convergence scan — backend: {backend:?}");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}  {:>8}",
-                 "L", "L/a₀", "E_total", "−α²/2", "C", "sites");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}  {:>8}",
-                 "─", "─", "─", "─", "─", "─");
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}  {:>8}",
+            "L", "L/a₀", "E_total", "−α²/2", "C", "sites"
+        );
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}  {:>8}",
+            "─", "─", "─", "─", "─", "─"
+        );
         for (alpha, l, n_jacobi, n_iter, dtau) in configs {
-            let cfg = SolverConfig { alpha, l, n_jacobi, n_iter, dtau, backend };
+            let cfg = SolverConfig {
+                alpha,
+                l,
+                n_jacobi,
+                n_iter,
+                dtau,
+                backend,
+            };
             let n = l * l * l;
             println!("  L={l} ({n} sites)…");
             let r = solve_hydrogen_3d(&cfg);
-            println!("  {:>6}  {:>8.2}  {:>10.6}  {:>10.6}  {:>8.4}  {:>8}",
-                     l, (l as f64) * alpha, r.e_total, r.bohr_3d, r.ratio, n);
+            println!(
+                "  {:>6}  {:>8.2}  {:>10.6}  {:>10.6}  {:>8.4}  {:>8}",
+                l,
+                (l as f64) * alpha,
+                r.e_total,
+                r.bohr_3d,
+                r.ratio,
+                n
+            );
             assert!(r.e_total < 0.0, "must be bound at L={l}");
         }
     }
@@ -277,25 +397,31 @@ mod tests {
         // n_jacobi ∝ L² = (16/α)²; n_iter ∝ 1/α² so τ∝1/α² ≈ 2/ΔE.
         let alphas: &[(f64, usize, usize, f64)] = &[
             //  α    n_sor    n_iter   dtau    L=16/α  ω≈2-2π/L  theory n_sor×2
-            (0.30,    200,   4_000, 0.05),  // L=55,  ω=1.889,  n≈ 80
-            (0.20,    300,   9_000, 0.05),  // L=81,  ω=1.925,  n≈120
-            (0.10,    500,  34_000, 0.05),  // L=161, ω=1.962,  n≈200
-            (0.07,    700,  70_000, 0.05),  // L=231, ω=1.973,  n≈270
-            (0.05,   1000, 134_000, 0.05),  // L=321, ω=1.980,  n≈345
+            (0.30, 200, 4_000, 0.05),    // L=55,  ω=1.889,  n≈ 80
+            (0.20, 300, 9_000, 0.05),    // L=81,  ω=1.925,  n≈120
+            (0.10, 500, 34_000, 0.05),   // L=161, ω=1.962,  n≈200
+            (0.07, 700, 70_000, 0.05),   // L=231, ω=1.973,  n≈270
+            (0.05, 1000, 134_000, 0.05), // L=321, ω=1.980,  n≈345
         ];
         println!("\n  GUTOE OBC α-scan (open BC, L/a₀≈16, n_jac∝L²) — backend: {backend:?}");
-        println!("  {:>6}  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "α", "L_box", "sites", "E_total", "−α²/2", "C");
-        println!("  {:>6}  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "─", "─", "─", "─", "─", "─");
+        println!(
+            "  {:>6}  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "α", "L_box", "sites", "E_total", "−α²/2", "C"
+        );
+        println!(
+            "  {:>6}  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "─", "─", "─", "─", "─", "─"
+        );
         for &(alpha, n_jacobi, n_iter, dtau) in alphas {
             let r_active = ((8.0 / alpha).ceil() as usize).max(8);
             let l = 2 * r_active + 1;
             let n = l * l * l;
             println!("  α={alpha:.2} → L_box={l} ({n} sites)…");
             let res = solve_hydrogen_obc(alpha, n_jacobi, n_iter, dtau, backend);
-            println!("  {:>6.2}  {:>6}  {:>8}  {:>10.6}  {:>10.6}  {:>8.4}",
-                     alpha, l, n, res.e_total, res.bohr_3d, res.ratio);
+            println!(
+                "  {:>6.2}  {:>6}  {:>8}  {:>10.6}  {:>10.6}  {:>8.4}",
+                alpha, l, n, res.e_total, res.bohr_3d, res.ratio
+            );
             assert!(res.e_total < 0.0, "OBC: must be bound at α={alpha}");
         }
         // C_∞(α) ≈ C_box(α) + 19/L where L=16/α; from L-scan: C_∞(0.1) ≈ 0.550.
@@ -315,8 +441,8 @@ mod tests {
         let backend = detect_backend();
         let bohr = -alpha * alpha / 2.0;
 
-        let l = 961_usize;   // odd = centred proton; 961³=888M, ~36 GB peak
-        let n_sor = 1_000;   // convergence diagnostic: 5× more SOR than previous run
+        let l = 961_usize; // odd = centred proton; 961³=888M, ~36 GB peak
+        let n_sor = 1_000; // convergence diagnostic: 5× more SOR than previous run
         let n_iter = 30_000; // τ=1500, matching alpha-scan convergence depth
         let dtau = 0.05;
         let n = l * l * l;
@@ -327,17 +453,28 @@ mod tests {
         unsafe {
             run_hydrogen_obc(
                 alpha,
-                l as i32, l as i32, l as i32,
-                n_sor as i32, n_iter as i32, 10_i32,
+                l as i32,
+                l as i32,
+                l as i32,
+                n_sor as i32,
+                n_iter as i32,
+                10_i32,
                 dtau,
-                &mut et, &mut ek, &mut ep,
+                &mut et,
+                &mut ek,
+                &mut ep,
             );
         }
         let c = et / bohr;
         let c_pred = 0.547 - 18.2 / l as f64;
-        println!("  L={l}  L/a₀={:.1}  E_total={et:.6}  −α²/2={bohr:.6}  C={c:.4}",
-                 l as f64 / a0);
-        println!("  Richardson prediction: C={c_pred:.4}  (Δ={:.4})", c - c_pred);
+        println!(
+            "  L={l}  L/a₀={:.1}  E_total={et:.6}  −α²/2={bohr:.6}  C={c:.4}",
+            l as f64 / a0
+        );
+        println!(
+            "  Richardson prediction: C={c_pred:.4}  (Δ={:.4})",
+            c - c_pred
+        );
         assert!(et < 0.0, "OBC: must be bound at L={l}");
     }
 
@@ -350,7 +487,7 @@ mod tests {
     #[cfg(any(feature = "cuda", feature = "rocm"))]
     fn bohr_obc_lscan() {
         let alpha = 0.10_f64;
-        let a0 = 1.0 / alpha;   // Bohr radius = 10 lattice sites
+        let a0 = 1.0 / alpha; // Bohr radius = 10 lattice sites
         let backend = detect_backend();
         let bohr = -alpha * alpha / 2.0;
 
@@ -358,17 +495,21 @@ mod tests {
         // n_iter = 34000, dtau = 0.05 → τ = 1700 for all (same imaginary time)
         let configs: &[(usize, usize, usize, f64)] = &[
             //   L    n_sor    n_iter   dtau    ω=2/(1+sin(π/L))  theory n_sor×2
-            ( 161,    500,  34_000, 0.05),  // L/a₀=16, ω=1.962,  n≈200
-            ( 241,    700,  34_000, 0.05),  // L/a₀=24, ω=1.974,  n≈270
-            ( 321,   1000,  34_000, 0.05),  // L/a₀=32, ω=1.980,  n≈345
-            ( 481,   1500,  34_000, 0.05),  // L/a₀=48, ω=1.987,  n≈950
-            ( 960,   2000,  17_000, 0.05),  // L/a₀=96, ω=1.993,  n≈1050 (τ=850)
+            (161, 500, 34_000, 0.05),  // L/a₀=16, ω=1.962,  n≈200
+            (241, 700, 34_000, 0.05),  // L/a₀=24, ω=1.974,  n≈270
+            (321, 1000, 34_000, 0.05), // L/a₀=32, ω=1.980,  n≈345
+            (481, 1500, 34_000, 0.05), // L/a₀=48, ω=1.987,  n≈950
+            (960, 2000, 17_000, 0.05), // L/a₀=96, ω=1.993,  n≈1050 (τ=850)
         ];
         println!("\n  GUTOE OBC L-scan (α={alpha}, open BC, n_iter=34K, dtau=0.05) — {backend:?}");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "L", "L/a₀", "E_total", "−α²/2", "C");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "─", "─", "─", "─", "─");
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "L", "L/a₀", "E_total", "−α²/2", "C"
+        );
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "─", "─", "─", "─", "─"
+        );
         for &(l, n_jacobi, n_iter, dtau) in configs {
             let n = l * l * l;
             println!("  L={l} ({n} sites, n_jacobi={n_jacobi})…");
@@ -376,15 +517,27 @@ mod tests {
             unsafe {
                 run_hydrogen_obc(
                     alpha,
-                    l as i32, l as i32, l as i32,
-                    n_jacobi as i32, n_iter as i32, 10_i32,
+                    l as i32,
+                    l as i32,
+                    l as i32,
+                    n_jacobi as i32,
+                    n_iter as i32,
+                    10_i32,
                     dtau,
-                    &mut et, &mut ek, &mut ep,
+                    &mut et,
+                    &mut ek,
+                    &mut ep,
                 );
             }
             let c = et / bohr;
-            println!("  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
-                     l, (l as f64) / a0, et, bohr, c);
+            println!(
+                "  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
+                l,
+                (l as f64) / a0,
+                et,
+                bohr,
+                c
+            );
             assert!(et < 0.0, "OBC L-scan: must be bound at L={l}");
         }
     }
@@ -399,7 +552,7 @@ mod tests {
     #[cfg(any(feature = "cuda", feature = "rocm"))]
     fn bohr_obc_lscan_a02() {
         let alpha = 0.20_f64;
-        let a0 = 1.0 / alpha;   // Bohr radius = 5 lattice sites
+        let a0 = 1.0 / alpha; // Bohr radius = 5 lattice sites
         let backend = detect_backend();
         let bohr = -alpha * alpha / 2.0;
 
@@ -407,16 +560,20 @@ mod tests {
         // τ = 500 gives e^{-ΔEτ} = e^{-4} ≈ 2% excited-state contamination.
         let configs: &[(usize, usize, usize, f64)] = &[
             //   L    n_sor    n_iter   dtau
-            (  81,    200,  10_000, 0.05),  // L/a₀=16.2
-            ( 121,    300,  10_000, 0.05),  // L/a₀=24.2
-            ( 161,    400,  10_000, 0.05),  // L/a₀=32.2
-            ( 241,    600,  10_000, 0.05),  // L/a₀=48.2
+            (81, 200, 10_000, 0.05),  // L/a₀=16.2
+            (121, 300, 10_000, 0.05), // L/a₀=24.2
+            (161, 400, 10_000, 0.05), // L/a₀=32.2
+            (241, 600, 10_000, 0.05), // L/a₀=48.2
         ];
         println!("\n  GUTOE OBC L-scan α=0.2 (a₀=5) — {backend:?}");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "L", "L/a₀", "E_total", "−α²/2", "C");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "─", "─", "─", "─", "─");
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "L", "L/a₀", "E_total", "−α²/2", "C"
+        );
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "─", "─", "─", "─", "─"
+        );
         let mut results: Vec<(usize, f64)> = Vec::new();
         for &(l, n_sor, n_iter, dtau) in configs {
             let n = l * l * l;
@@ -425,15 +582,27 @@ mod tests {
             unsafe {
                 run_hydrogen_obc(
                     alpha,
-                    l as i32, l as i32, l as i32,
-                    n_sor as i32, n_iter as i32, 10_i32,
+                    l as i32,
+                    l as i32,
+                    l as i32,
+                    n_sor as i32,
+                    n_iter as i32,
+                    10_i32,
                     dtau,
-                    &mut et, &mut ek, &mut ep,
+                    &mut et,
+                    &mut ek,
+                    &mut ep,
                 );
             }
             let c = et / bohr;
-            println!("  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
-                     l, (l as f64) / a0, et, bohr, c);
+            println!(
+                "  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
+                l,
+                (l as f64) / a0,
+                et,
+                bohr,
+                c
+            );
             assert!(et < 0.0, "OBC L-scan α=0.2: must be bound at L={l}");
             results.push((l, c));
         }
@@ -441,9 +610,9 @@ mod tests {
         // From last two points: B = (C2-C1)/( 1/L1 - 1/L2 ), C_∞ = C2 + B/L2
         println!("\n  Richardson pair fits:");
         for i in 1..results.len() {
-            let (l1, c1) = results[i-1];
+            let (l1, c1) = results[i - 1];
             let (l2, c2) = results[i];
-            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let b = (c2 - c1) / (1.0 / l1 as f64 - 1.0 / l2 as f64);
             let c_inf = c2 + b / l2 as f64;
             println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
         }
@@ -464,15 +633,19 @@ mod tests {
         // τ=2500 → e^{-2.5} ≈ 8%.  τ=5000 → e^{-5} ≈ 0.7%.
         let configs: &[(usize, usize, usize, f64)] = &[
             //   L    n_sor    n_iter   dtau
-            ( 231,    600,  70_000, 0.05),  // L/a₀=16.2, τ=3500
-            ( 341,    900,  70_000, 0.05),  // L/a₀=23.9
-            ( 461,   1200,  70_000, 0.05),  // L/a₀=32.3
+            (231, 600, 70_000, 0.05),  // L/a₀=16.2, τ=3500
+            (341, 900, 70_000, 0.05),  // L/a₀=23.9
+            (461, 1200, 70_000, 0.05), // L/a₀=32.3
         ];
         println!("\n  GUTOE OBC L-scan α=0.07 (a₀=14.3) — {backend:?}");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "L", "L/a₀", "E_total", "−α²/2", "C");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "─", "─", "─", "─", "─");
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "L", "L/a₀", "E_total", "−α²/2", "C"
+        );
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "─", "─", "─", "─", "─"
+        );
         let mut results: Vec<(usize, f64)> = Vec::new();
         for &(l, n_sor, n_iter, dtau) in configs {
             let n = l * l * l;
@@ -481,23 +654,35 @@ mod tests {
             unsafe {
                 run_hydrogen_obc(
                     alpha,
-                    l as i32, l as i32, l as i32,
-                    n_sor as i32, n_iter as i32, 10_i32,
+                    l as i32,
+                    l as i32,
+                    l as i32,
+                    n_sor as i32,
+                    n_iter as i32,
+                    10_i32,
                     dtau,
-                    &mut et, &mut ek, &mut ep,
+                    &mut et,
+                    &mut ek,
+                    &mut ep,
                 );
             }
             let c = et / bohr;
-            println!("  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
-                     l, (l as f64) / a0, et, bohr, c);
+            println!(
+                "  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
+                l,
+                (l as f64) / a0,
+                et,
+                bohr,
+                c
+            );
             assert!(et < 0.0, "OBC L-scan α=0.07: must be bound at L={l}");
             results.push((l, c));
         }
         println!("\n  Richardson pair fits:");
         for i in 1..results.len() {
-            let (l1, c1) = results[i-1];
+            let (l1, c1) = results[i - 1];
             let (l2, c2) = results[i];
-            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let b = (c2 - c1) / (1.0 / l1 as f64 - 1.0 / l2 as f64);
             let c_inf = c2 + b / l2 as f64;
             println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
         }
@@ -518,15 +703,19 @@ mod tests {
         // τ=6700 → e^{-3.35} ≈ 3.5%.
         let configs: &[(usize, usize, usize, f64)] = &[
             //   L    n_sor     n_iter   dtau
-            ( 321,   1000,  134_000, 0.05),  // L/a₀=16.1, τ=6700
-            ( 481,   1500,  134_000, 0.05),  // L/a₀=24.1
-            ( 641,   2000,  134_000, 0.05),  // L/a₀=32.1
+            (321, 1000, 134_000, 0.05), // L/a₀=16.1, τ=6700
+            (481, 1500, 134_000, 0.05), // L/a₀=24.1
+            (641, 2000, 134_000, 0.05), // L/a₀=32.1
         ];
         println!("\n  GUTOE OBC L-scan α=0.05 (a₀=20) — {backend:?}");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "L", "L/a₀", "E_total", "−α²/2", "C");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "─", "─", "─", "─", "─");
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "L", "L/a₀", "E_total", "−α²/2", "C"
+        );
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "─", "─", "─", "─", "─"
+        );
         let mut results: Vec<(usize, f64)> = Vec::new();
         for &(l, n_sor, n_iter, dtau) in configs {
             let n = l * l * l;
@@ -535,23 +724,35 @@ mod tests {
             unsafe {
                 run_hydrogen_obc(
                     alpha,
-                    l as i32, l as i32, l as i32,
-                    n_sor as i32, n_iter as i32, 10_i32,
+                    l as i32,
+                    l as i32,
+                    l as i32,
+                    n_sor as i32,
+                    n_iter as i32,
+                    10_i32,
                     dtau,
-                    &mut et, &mut ek, &mut ep,
+                    &mut et,
+                    &mut ek,
+                    &mut ep,
                 );
             }
             let c = et / bohr;
-            println!("  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
-                     l, (l as f64) / a0, et, bohr, c);
+            println!(
+                "  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
+                l,
+                (l as f64) / a0,
+                et,
+                bohr,
+                c
+            );
             assert!(et < 0.0, "OBC L-scan α=0.05: must be bound at L={l}");
             results.push((l, c));
         }
         println!("\n  Richardson pair fits:");
         for i in 1..results.len() {
-            let (l1, c1) = results[i-1];
+            let (l1, c1) = results[i - 1];
             let (l2, c2) = results[i];
-            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let b = (c2 - c1) / (1.0 / l1 as f64 - 1.0 / l2 as f64);
             let c_inf = c2 + b / l2 as f64;
             println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
         }
@@ -572,16 +773,20 @@ mod tests {
         // ΔE ≈ 3α²C/8 ≈ 0.018.  τ=500 → e^{-9} ≈ 0.01%.  Very converged.
         let configs: &[(usize, usize, usize, f64)] = &[
             //   L    n_sor    n_iter   dtau
-            (  55,    150,  10_000, 0.05),  // L/a₀=16.5
-            (  81,    200,  10_000, 0.05),  // L/a₀=24.3
-            ( 121,    300,  10_000, 0.05),  // L/a₀=36.3
-            ( 161,    400,  10_000, 0.05),  // L/a₀=48.3
+            (55, 150, 10_000, 0.05),  // L/a₀=16.5
+            (81, 200, 10_000, 0.05),  // L/a₀=24.3
+            (121, 300, 10_000, 0.05), // L/a₀=36.3
+            (161, 400, 10_000, 0.05), // L/a₀=48.3
         ];
         println!("\n  GUTOE OBC L-scan α=0.3 (a₀=3.3) — {backend:?}");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "L", "L/a₀", "E_total", "−α²/2", "C");
-        println!("  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
-                 "─", "─", "─", "─", "─");
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "L", "L/a₀", "E_total", "−α²/2", "C"
+        );
+        println!(
+            "  {:>6}  {:>8}  {:>10}  {:>10}  {:>8}",
+            "─", "─", "─", "─", "─"
+        );
         let mut results: Vec<(usize, f64)> = Vec::new();
         for &(l, n_sor, n_iter, dtau) in configs {
             let n = l * l * l;
@@ -590,23 +795,35 @@ mod tests {
             unsafe {
                 run_hydrogen_obc(
                     alpha,
-                    l as i32, l as i32, l as i32,
-                    n_sor as i32, n_iter as i32, 10_i32,
+                    l as i32,
+                    l as i32,
+                    l as i32,
+                    n_sor as i32,
+                    n_iter as i32,
+                    10_i32,
                     dtau,
-                    &mut et, &mut ek, &mut ep,
+                    &mut et,
+                    &mut ek,
+                    &mut ep,
                 );
             }
             let c = et / bohr;
-            println!("  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
-                     l, (l as f64) / a0, et, bohr, c);
+            println!(
+                "  {:>6}  {:>8.1}  {:>10.6}  {:>10.6}  {:>8.4}",
+                l,
+                (l as f64) / a0,
+                et,
+                bohr,
+                c
+            );
             assert!(et < 0.0, "OBC L-scan α=0.3: must be bound at L={l}");
             results.push((l, c));
         }
         println!("\n  Richardson pair fits:");
         for i in 1..results.len() {
-            let (l1, c1) = results[i-1];
+            let (l1, c1) = results[i - 1];
             let (l2, c2) = results[i];
-            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let b = (c2 - c1) / (1.0 / l1 as f64 - 1.0 / l2 as f64);
             let c_inf = c2 + b / l2 as f64;
             println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
         }
@@ -630,17 +847,19 @@ mod tests {
 
         let configs: &[(usize, usize, usize, f64)] = &[
             //   L    n_sor    n_iter   dtau
-            ( 161,    500,  34_000, 0.05),
-            ( 241,    700,  34_000, 0.05),
-            ( 321,   1000,  34_000, 0.05),
+            (161, 500, 34_000, 0.05),
+            (241, 700, 34_000, 0.05),
+            (321, 1000, 34_000, 0.05),
         ];
 
         println!("\n  ═══ GUTOE Boundary Diagnostics α={alpha} (a₀={a0}) — {backend:?} ═══");
 
         // ── Part 1: OBC with boundary |ψ|² ──
         println!("\n  ── OBC (grounded walls: ψ=0, φ=α/r) ──");
-        println!("  {:>6}  {:>8}  {:>8}  {:>12}  {:>8}",
-                 "L", "C_raw", "C_corr", "bnd_|ψ|²", "2/(αL)");
+        println!(
+            "  {:>6}  {:>8}  {:>8}  {:>12}  {:>8}",
+            "L", "C_raw", "C_corr", "bnd_|ψ|²", "2/(αL)"
+        );
         let mut obc_results: Vec<(usize, f64)> = Vec::new();
         for &(l, n_sor, n_iter, dtau) in configs {
             let (mut et, mut ek, mut ep) = (0.0_f64, 0.0_f64, 0.0_f64);
@@ -648,25 +867,33 @@ mod tests {
             unsafe {
                 run_hydrogen_obc(
                     alpha,
-                    l as i32, l as i32, l as i32,
-                    n_sor as i32, n_iter as i32, 10_i32,
+                    l as i32,
+                    l as i32,
+                    l as i32,
+                    n_sor as i32,
+                    n_iter as i32,
+                    10_i32,
                     dtau,
-                    &mut et, &mut ek, &mut ep,
+                    &mut et,
+                    &mut ek,
+                    &mut ep,
                 );
             }
             let c_raw = et / bohr;
             let correction = 2.0 / (alpha * l as f64);
             let c_corr = c_raw + correction;
             // boundary |ψ|² is printed by C code; we just print the rest
-            println!("  {:>6}  {:>8.4}  {:>8.4}  {:>12}  {:>8.4}",
-                     l, c_raw, c_corr, "(see above)", correction);
+            println!(
+                "  {:>6}  {:>8.4}  {:>8.4}  {:>12}  {:>8.4}",
+                l, c_raw, c_corr, "(see above)", correction
+            );
             obc_results.push((l, c_raw));
         }
         println!("\n  OBC Richardson pair fits:");
         for i in 1..obc_results.len() {
-            let (l1, c1) = obc_results[i-1];
+            let (l1, c1) = obc_results[i - 1];
             let (l2, c2) = obc_results[i];
-            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let b = (c2 - c1) / (1.0 / l1 as f64 - 1.0 / l2 as f64);
             let c_inf = c2 + b / l2 as f64;
             println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
         }
@@ -683,10 +910,16 @@ mod tests {
             unsafe {
                 run_hydrogen_pbc(
                     alpha,
-                    l as i32, l as i32, l as i32,
-                    n_sor_pbc as i32, n_iter as i32, 10_i32,
+                    l as i32,
+                    l as i32,
+                    l as i32,
+                    n_sor_pbc as i32,
+                    n_iter as i32,
+                    10_i32,
                     dtau,
-                    &mut et, &mut ek, &mut ep,
+                    &mut et,
+                    &mut ek,
+                    &mut ep,
                 );
             }
             let c_pbc = et / bohr;
@@ -695,9 +928,9 @@ mod tests {
         }
         println!("\n  PBC Richardson pair fits:");
         for i in 1..pbc_results.len() {
-            let (l1, c1) = pbc_results[i-1];
+            let (l1, c1) = pbc_results[i - 1];
             let (l2, c2) = pbc_results[i];
-            let b = (c2 - c1) / (1.0/l1 as f64 - 1.0/l2 as f64);
+            let b = (c2 - c1) / (1.0 / l1 as f64 - 1.0 / l2 as f64);
             let c_inf = c2 + b / l2 as f64;
             println!("    ({l1},{l2}): B={b:.1}, C_∞={c_inf:.4}");
         }

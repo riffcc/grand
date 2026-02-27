@@ -5,9 +5,9 @@
  * coefficients used by the Rust physics stack, then writes a CSV report.
  */
 
+use gutoe_core::constants as core_constants;
 use gutoe_physics::constants::{ALPHA, ALPHA_LEADING_ORDER, LAMBDA_QG};
 use gutoe_physics::dynamics_map::StandardModelDynamicsMap;
-use gutoe_core::constants as core_constants;
 use std::fs::{self, File};
 use std::io::Write;
 

@@ -35,9 +35,9 @@ use std::fmt;
 /// For the hex prism: we have (q, r, z) where q+r+s = 0 in the plane
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Hex3D {
-    pub q: i32,  // Hex axis 1
-    pub r: i32,  // Hex axis 2
-    pub z: i32,  // Vertical axis
+    pub q: i32, // Hex axis 1
+    pub r: i32, // Hex axis 2
+    pub z: i32, // Vertical axis
 }
 
 impl Hex3D {
@@ -131,10 +131,10 @@ fn hex_neighbors_2d(q: i32, r: i32) -> [(i32, i32); 6] {
     [
         (q + 1, r),     // East
         (q + 1, r - 1), // Southeast
-        (q, r - 1),    // Southwest
-        (q - 1, r),    // West
+        (q, r - 1),     // Southwest
+        (q - 1, r),     // West
         (q - 1, r + 1), // Northwest
-        (q, r + 1),    // Northeast
+        (q, r + 1),     // Northeast
     ]
 }
 
@@ -234,19 +234,12 @@ impl HexLattice3D {
 
     /// Get layer at z
     pub fn layer(&self, z: i32) -> Vec<&Hex3D> {
-        self.nodes
-            .keys()
-            .filter(|c| c.z == z)
-            .collect()
+        self.nodes.keys().filter(|c| c.z == z).collect()
     }
 }
 
 /// Propagation simulation through 3D lattice
-pub fn propagate_signal(
-    lattice: &HexLattice3D,
-    start: &Hex3D,
-    steps: usize,
-) -> Vec<f64> {
+pub fn propagate_signal(lattice: &HexLattice3D, start: &Hex3D, steps: usize) -> Vec<f64> {
     let mut amplitudes = Vec::with_capacity(steps);
     let mut current = *start;
 

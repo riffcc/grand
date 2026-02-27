@@ -9,7 +9,8 @@ fn main() {
         .unwrap_or(50_000);
     let stars = synth_population(n, 2026);
 
-    let mut csv = String::from("id,mass,age_gyr,metallicity,temperature_k,luminosity_lsun,log_teff,log_l\n");
+    let mut csv =
+        String::from("id,mass,age_gyr,metallicity,temperature_k,luminosity_lsun,log_teff,log_l\n");
     for s in &stars {
         let t_eff = effective_temp_proxy(s.mass_solar, s.age_gyr, s.metallicity);
         let l = luminosity_proxy(s.mass_solar, s.age_gyr);

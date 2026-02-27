@@ -68,9 +68,7 @@ pub fn b_critical(r_s: f64) -> f64 {
 fn orbit_accel(r: f64, b: f64, r_s: f64, r_c: f64) -> f64 {
     let re2 = r * r + r_c * r_c;
     let re3 = re2 * re2.sqrt();
-    r * (2.0 * r * r + r_c * r_c) / (b * b)
-        - r
-        + r_s * r * (r * r + 2.0 * r_c * r_c) / (2.0 * re3)
+    r * (2.0 * r * r + r_c * r_c) / (b * b) - r + r_s * r * (r * r + 2.0 * r_c * r_c) / (2.0 * re3)
 }
 
 /// (dr/dφ)² = r²·r_eff²·(1/b² − V) where V = (1 − r_s/r_eff)/r_eff².
@@ -185,7 +183,11 @@ pub fn trace_photon(
 
     // Initial radial velocity: ingoing (p < 0), magnitude from orbit equation
     let vr0_sq = orbit_vr_sq(r_start, b, r_s, r_c);
-    let p_start = if vr0_sq > 0.0 { -vr0_sq.sqrt() } else { -r_start * r_start / b };
+    let p_start = if vr0_sq > 0.0 {
+        -vr0_sq.sqrt()
+    } else {
+        -r_start * r_start / b
+    };
 
     // Capture boundary: areal radius r_eff = sqrt(r² + r_c²) drops below the horizon.
     // The event horizon is at areal radius r_s (not the coordinate radius r_horizon).
@@ -211,7 +213,11 @@ pub fn trace_photon(
         // stays negative (ingoing) → correct capture. At the turning point for b > b_crit,
         // orbit_vr_sq → 0 → p → 0, RK4 sign flips to positive → turned fires correctly.
         let vr2_new = orbit_vr_sq(r_new, b, r_s, r_c).max(0.0);
-        let p_new = if p_rk4 >= 0.0 { vr2_new.sqrt() } else { -vr2_new.sqrt() };
+        let p_new = if p_rk4 >= 0.0 {
+            vr2_new.sqrt()
+        } else {
+            -vr2_new.sqrt()
+        };
         let phi_new = phi + dphi;
 
         // Areal radius at the new position
@@ -240,7 +246,11 @@ pub fn trace_photon(
             let re_cur = (r * r + r_c * r_c).sqrt();
             let cur_in_disk = re_cur >= disk_inner_re && re_cur <= disk_outer_re;
             if !in_disk_eq && cur_in_disk && p < 0.0 {
-                return TraceResult::DiskHit { r_eff: re_cur, phi_orb: phi, n_cross: 1 };
+                return TraceResult::DiskHit {
+                    r_eff: re_cur,
+                    phi_orb: phi,
+                    n_cross: 1,
+                };
             }
             if !cur_in_disk {
                 in_disk_eq = false;
@@ -315,32 +325,18 @@ fn kerr_candidate_activity(c: KerrCandidate) -> f64 {
 /// sum of the two admissible Kerr polar-branch activities, normalized by `2*max_lambda`.
 pub fn trace_photon_kerr_activity(
     kerr: &KerrMetric,
-    disk_inner_re: f64,
-    disk_outer_re: f64,
+    _disk_inner_re: f64,
+    _disk_outer_re: f64,
     bx: f64,
     by: f64,
     inclination_deg: f64,
     max_lambda: f64,
     dlambda: f64,
 ) -> f64 {
-    let up = trace_photon_kerr_oracle_activity(
-        kerr,
-        bx,
-        by,
-        inclination_deg,
-        max_lambda,
-        dlambda,
-        1.0,
-    );
-    let down = trace_photon_kerr_oracle_activity(
-        kerr,
-        bx,
-        by,
-        inclination_deg,
-        max_lambda,
-        dlambda,
-        -1.0,
-    );
+    let up =
+        trace_photon_kerr_oracle_activity(kerr, bx, by, inclination_deg, max_lambda, dlambda, 1.0);
+    let down =
+        trace_photon_kerr_oracle_activity(kerr, bx, by, inclination_deg, max_lambda, dlambda, -1.0);
     let raw = kerr_candidate_activity(up) + kerr_candidate_activity(down);
     (raw / (2.0 * max_lambda.max(1e-9))).clamp(0.0, 1.0)
 }
@@ -401,8 +397,10 @@ fn trace_photon_kerr_oracle_activity(
             (xi / sin2 - a + a * p / delta) / sigma
         };
 
-        let activity_new =
-            activity + (dphi * dlambda).abs() + 0.15 * (dth * dlambda).abs() + 0.02 * (dr * dlambda / r_s.max(1e-6)).abs();
+        let activity_new = activity
+            + (dphi * dlambda).abs()
+            + 0.15 * (dth * dlambda).abs()
+            + 0.02 * (dr * dlambda / r_s.max(1e-6)).abs();
         let phase_new = phase_accum + kerr_phase_increment(r, theta, dr, dth, dphi, dlambda, r_s);
 
         let r_new = r + dlambda * dr;
@@ -525,7 +523,15 @@ struct KerrCandidate {
     phase_accum: f64,
 }
 
-fn kerr_phase_increment(r: f64, theta: f64, dr: f64, dth: f64, dphi: f64, dlambda: f64, r_s: f64) -> f64 {
+fn kerr_phase_increment(
+    r: f64,
+    theta: f64,
+    dr: f64,
+    dth: f64,
+    dphi: f64,
+    dlambda: f64,
+    r_s: f64,
+) -> f64 {
     let ds_r = dr * dlambda;
     let ds_th = r * dth * dlambda;
     let ds_phi = r * theta.sin().abs() * dphi * dlambda;
@@ -1067,7 +1073,7 @@ pub fn trace_photon_interior(
 ) -> TraceResult {
     let r_s = metric.r_s;
     let r_c = metric.r_core();
-    let b   = (bx * bx + by * by).sqrt();
+    let b = (bx * bx + by * by).sqrt();
 
     // Pure-radial photon: always escapes
     if b < 1e-12 {
@@ -1075,26 +1081,24 @@ pub fn trace_photon_interior(
     }
 
     // Inside the horizon V < 0 → orbit_vr_sq > 0 always
-    let vr0_sq  = orbit_vr_sq(r_cam, b, r_s, r_c).max(0.0);
-    let p_start = vr0_sq.sqrt();   // outward (positive)
+    let vr0_sq = orbit_vr_sq(r_cam, b, r_s, r_c).max(0.0);
+    let p_start = vr0_sq.sqrt(); // outward (positive)
 
     // Camera areal radius: capture returned photons once back below this level
-    let re_cam  = (r_cam * r_cam + r_c * r_c).sqrt();
-    let re_cap  = re_cam * 1.05;
+    let re_cam = (r_cam * r_cam + r_c * r_c).sqrt();
+    let re_cap = re_cam * 1.05;
 
     // Escape once past the outer disk / strong-gravity region
-    let r_escape = (3.0 * b)
-        .max(disk_outer_re * 1.5)
-        .max(20.0 * r_s);
+    let r_escape = (3.0 * b).max(disk_outer_re * 1.5).max(20.0 * r_s);
 
-    let sin_i        = by / b;
+    let sin_i = by / b;
     let is_equatorial = sin_i.abs() < 1e-6;
 
-    let mut r   = r_cam;
-    let mut p   = p_start;
+    let mut r = r_cam;
+    let mut p = p_start;
     let mut phi = 0.0_f64;
     let mut n_cross = 0_u32;
-    let mut turned  = false;
+    let mut turned = false;
 
     let max_steps = (max_phi / dphi).ceil() as usize + 1;
 
@@ -1102,9 +1106,13 @@ pub fn trace_photon_interior(
         let (r_new, p_rk4) = rk4_step(r, p, b, r_s, r_c, dphi);
 
         let vr2_new = orbit_vr_sq(r_new, b, r_s, r_c).max(0.0);
-        let p_new   = if p_rk4 >= 0.0 { vr2_new.sqrt() } else { -vr2_new.sqrt() };
+        let p_new = if p_rk4 >= 0.0 {
+            vr2_new.sqrt()
+        } else {
+            -vr2_new.sqrt()
+        };
         let phi_new = phi + dphi;
-        let re_new  = (r_new * r_new + r_c * r_c).sqrt();
+        let re_new = (r_new * r_new + r_c * r_c).sqrt();
 
         // Turning point: radial motion reversed from outward to inward
         if !turned && p > 0.0 && p_new <= 0.0 {
@@ -1125,12 +1133,16 @@ pub fn trace_photon_interior(
         if is_equatorial {
             let re_cur = (r * r + r_c * r_c).sqrt();
             if !turned && re_cur >= disk_inner_re && re_cur <= disk_outer_re && p > 0.0 {
-                return TraceResult::DiskHit { r_eff: re_cur, phi_orb: phi, n_cross: 1 };
+                return TraceResult::DiskHit {
+                    r_eff: re_cur,
+                    phi_orb: phi,
+                    n_cross: 1,
+                };
             }
         } else {
             let target = (n_cross as f64 + 1.0) * PI;
             if phi < target && phi_new >= target {
-                let t       = (target - phi) / dphi;
+                let t = (target - phi) / dphi;
                 let r_cross = r + t * (r_new - r);
                 let re_cross = (r_cross * r_cross + r_c * r_c).sqrt();
                 n_cross += 1;
@@ -1144,8 +1156,8 @@ pub fn trace_photon_interior(
             }
         }
 
-        r   = r_new;
-        p   = p_new;
+        r = r_new;
+        p = p_new;
         phi = phi_new;
     }
 
@@ -1178,7 +1190,11 @@ pub fn trace_photon_interior_core(
 
     // Radial center pixel: direct plunge.
     if b < 1e-12 {
-        return TraceResult::DiskHit { r_eff: r_c, phi_orb: 0.0, n_cross: 1 };
+        return TraceResult::DiskHit {
+            r_eff: r_c,
+            phi_orb: 0.0,
+            n_cross: 1,
+        };
     }
 
     // Start at camera radius with inward radial momentum.
@@ -1196,12 +1212,20 @@ pub fn trace_photon_interior_core(
     for _step in 0..max_steps {
         let (r_new, p_rk4) = rk4_step(r, p, b, r_s, r_c, dphi);
         let vr2_new = orbit_vr_sq(r_new, b, r_s, r_c).max(0.0);
-        let p_new = if p_rk4 >= 0.0 { vr2_new.sqrt() } else { -vr2_new.sqrt() };
+        let p_new = if p_rk4 >= 0.0 {
+            vr2_new.sqrt()
+        } else {
+            -vr2_new.sqrt()
+        };
         let phi_new = phi + dphi;
         let re_new = (r_new * r_new + r_c * r_c).sqrt();
 
         if re_new <= re_core_cap || r_new <= r_c * 0.01 {
-            return TraceResult::DiskHit { r_eff: re_new, phi_orb: phi_new, n_cross: 1 };
+            return TraceResult::DiskHit {
+                r_eff: re_new,
+                phi_orb: phi_new,
+                n_cross: 1,
+            };
         }
 
         // Defensive escape classification for numerical edge-cases.
@@ -1214,7 +1238,11 @@ pub fn trace_photon_interior_core(
         phi = phi_new;
     }
 
-    TraceResult::DiskHit { r_eff: re_core_cap, phi_orb: phi, n_cross: 1 }
+    TraceResult::DiskHit {
+        r_eff: re_core_cap,
+        phi_orb: phi,
+        n_cross: 1,
+    }
 }
 
 // ── Render config ─────────────────────────────────────────────────────────────
@@ -1365,9 +1393,7 @@ pub fn render(
 
             pixels[iy * cfg.width + ix] = match result {
                 TraceResult::Captured => shadow_color(),
-                TraceResult::DiskHit { r_eff, n_cross, .. } => {
-                    disk_color(r_eff, r_isco, n_cross)
-                }
+                TraceResult::DiskHit { r_eff, n_cross, .. } => disk_color(r_eff, r_isco, n_cross),
                 TraceResult::Escaped { .. } => background_color(),
             };
         }
@@ -1514,7 +1540,11 @@ mod tests {
 
         // No disk (inner > outer): test pure capture/escape, no disk interception.
         let below = trace_photon(&m, 1.0, 0.0, 0.995 * b_crit, 0.0, 40.0 * PI, 0.005);
-        assert_eq!(below, TraceResult::Captured, "b = 0.995 b_crit must be captured");
+        assert_eq!(
+            below,
+            TraceResult::Captured,
+            "b = 0.995 b_crit must be captured"
+        );
 
         let above = trace_photon(&m, 1.0, 0.0, 1.1 * b_crit, 0.0, 40.0 * PI, 0.005);
         match above {
@@ -1592,7 +1622,11 @@ mod tests {
         let pixels = render(&m, 3.0, 10.0, &cfg);
         // Closest-to-centre pixel: (50, 50). b ≈ 0.24 r_s << b_crit ≈ 2.6 r_s → shadow.
         let px = pixels[50 * 100 + 50];
-        assert_eq!(px, [0, 0, 0], "center pixel must be black (shadow), got {px:?}");
+        assert_eq!(
+            px,
+            [0, 0, 0],
+            "center pixel must be black (shadow), got {px:?}"
+        );
     }
 
     #[test]
@@ -1651,10 +1685,7 @@ mod tests {
         let pixels = vec![[255u8, 0, 0]; 4]; // 2×2 all-red image
         let ppm = write_ppm(&pixels, 2, 2);
         // Check header prefix
-        assert!(
-            ppm.starts_with(b"P6\n"),
-            "PPM must start with 'P6\\n'"
-        );
+        assert!(ppm.starts_with(b"P6\n"), "PPM must start with 'P6\\n'");
         // Total size: "P6\n2 2\n255\n" = 11 bytes + 4 pixels × 3 = 23 bytes
         let expected_len = b"P6\n2 2\n255\n".len() + 4 * 3;
         assert_eq!(ppm.len(), expected_len, "PPM byte count mismatch");

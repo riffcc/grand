@@ -47,12 +47,12 @@ use std::io::Write;
 
 // ── Physics parameters ────────────────────────────────────────────────────────
 
-const V_VOID: f64 = 0.1;      // void velocity (v << c)
-const V_FULL: f64 = 1.0;      // full velocity (v = c)
-const KAPPA_SIGMA: f64 = 80.0;// horizon width in ℓ_P (controls T_H)
-const N_ODE: usize = 4000;    // ODE grid points
-const X_LEFT: f64 = -3000.0;  // left boundary (ℓ_P)
-const X_RIGHT: f64 = 3000.0;  // right boundary (ℓ_P)
+const V_VOID: f64 = 0.1; // void velocity (v << c)
+const V_FULL: f64 = 1.0; // full velocity (v = c)
+const KAPPA_SIGMA: f64 = 80.0; // horizon width in ℓ_P (controls T_H)
+const N_ODE: usize = 4000; // ODE grid points
+const X_LEFT: f64 = -3000.0; // left boundary (ℓ_P)
+const X_RIGHT: f64 = 3000.0; // right boundary (ℓ_P)
 
 // Surface gravity: κ = (V_FULL - V_VOID) / (2 × SIGMA)
 const KAPPA: f64 = (V_FULL - V_VOID) / (2.0 * KAPPA_SIGMA);
@@ -68,7 +68,11 @@ fn v_profile(x: f64) -> f64 {
 /// ω²(k) = v²k² − λ_QG k⁴. Returns Some(ω) if propagating, None if evanescent.
 fn omega(k: f64, v: f64) -> Option<f64> {
     let w2 = v * v * k * k - LAMBDA_QG * k.powi(4);
-    if w2 > 0.0 { Some(w2.sqrt()) } else { None }
+    if w2 > 0.0 {
+        Some(w2.sqrt())
+    } else {
+        None
+    }
 }
 
 /// Find propagating wavenumbers at frequency ω and velocity v.
@@ -82,12 +86,18 @@ fn propagating_wavenumbers(omega_val: f64, v: f64) -> Vec<f64> {
     let b = -v * v;
     let c = omega_val * omega_val;
     let disc = b * b - 4.0 * a * c;
-    if disc < 0.0 { return vec![]; }
+    if disc < 0.0 {
+        return vec![];
+    }
     let u1 = (-b - disc.sqrt()) / (2.0 * a);
     let u2 = (-b + disc.sqrt()) / (2.0 * a);
     let mut ks = vec![];
-    if u1 > 0.0 { ks.push(u1.sqrt()); }
-    if u2 > 0.0 { ks.push(u2.sqrt()); }
+    if u1 > 0.0 {
+        ks.push(u1.sqrt());
+    }
+    if u2 > 0.0 {
+        ks.push(u2.sqrt());
+    }
     ks
 }
 
@@ -160,10 +170,12 @@ fn integrate(x_start: f64, y_init: &State, x_end: f64, omega_val: f64) -> State 
 /// Returns (|β|², |α|²) where n_Hawking = |β|² and |α|² − |β|² = 1 (unitarity).
 fn compute_bogoliubov(omega_val: f64) -> Option<(f64, f64)> {
     // Find propagating k on each side
-    let ks_left  = propagating_wavenumbers(omega_val, V_VOID);
+    let ks_left = propagating_wavenumbers(omega_val, V_VOID);
     let ks_right = propagating_wavenumbers(omega_val, V_FULL);
 
-    if ks_left.is_empty() || ks_right.is_empty() { return None; }
+    if ks_left.is_empty() || ks_right.is_empty() {
+        return None;
+    }
 
     // Use the small (sub-cutoff) wavenumber on each side
     let k_l = ks_left[0];
@@ -175,8 +187,8 @@ fn compute_bogoliubov(omega_val: f64) -> Option<(f64, f64)> {
     // Initial state at x_right: φ = e^{-ik_R x_R}, normalized
     let phase_r = -k_r * X_RIGHT;
     let y_right: State = [
-        phase_r.cos(),      // Re(φ)
-        k_r * phase_r.sin(),  // φ' = -(-ik_r) e^{-ik_r x} re-part = k_r sin
+        phase_r.cos(),       // Re(φ)
+        k_r * phase_r.sin(), // φ' = -(-ik_r) e^{-ik_r x} re-part = k_r sin
         -(k_r * k_r) * phase_r.cos(),
         (k_r.powi(3)) * phase_r.sin(),
     ];
@@ -189,14 +201,14 @@ fn compute_bogoliubov(omega_val: f64) -> Option<(f64, f64)> {
     // Extract coefficients A (outgoing, +k) and B (outgoing, -k):
     let phase_l = k_l * X_LEFT;
     // From the 4 ODE values at x_left:
-    let phi     = y_left[0];
-    let phi_p   = y_left[1]; // φ'
-    // A + B = φ,  ik_l(A - B) = φ'
-    // A = (φ + φ'/(ik_l)) / 2 = (φ - iφ'/k_l) / 2 in complex notation
-    // But we're working in real arithmetic. Let's use:
-    // phi = A_re cos(k_l x) - A_im sin(k_l x) + B_re cos(k_l x) + B_im sin(k_l x)
-    // φ' = (B_im + A_im) k_l cos(k_l x) + (A_re - B_re) k_l sin(k_l x) ... wait, getting messy.
-    // Simpler: use Wronskian matching.
+    let phi = y_left[0];
+    let phi_p = y_left[1]; // φ'
+                           // A + B = φ,  ik_l(A - B) = φ'
+                           // A = (φ + φ'/(ik_l)) / 2 = (φ - iφ'/k_l) / 2 in complex notation
+                           // But we're working in real arithmetic. Let's use:
+                           // phi = A_re cos(k_l x) - A_im sin(k_l x) + B_re cos(k_l x) + B_im sin(k_l x)
+                           // φ' = (B_im + A_im) k_l cos(k_l x) + (A_re - B_re) k_l sin(k_l x) ... wait, getting messy.
+                           // Simpler: use Wronskian matching.
 
     // For the purely real initial condition on the right, the solution is real.
     // At x_left, the asymptotic form is:
@@ -208,7 +220,7 @@ fn compute_bogoliubov(omega_val: f64) -> Option<(f64, f64)> {
     // This extracts the amplitude of the e^{-ik_l x} (outgoing left) component.
 
     let amp_out = (phi_p * phase_l.sin() + phi * k_l * phase_l.cos()).powi(2)
-                + (phi_p * phase_l.cos() - phi * k_l * phase_l.sin()).powi(2);
+        + (phi_p * phase_l.cos() - phi * k_l * phase_l.sin()).powi(2);
 
     // Transmission coefficient: ratio of outgoing left power to incoming right power
     // Both normalized to unit amplitude, with group velocities
@@ -236,7 +248,9 @@ fn compute_bogoliubov(omega_val: f64) -> Option<(f64, f64)> {
 // ── Planck distribution fit ───────────────────────────────────────────────────
 
 fn planck(omega_val: f64, temp: f64) -> f64 {
-    if temp < 1e-10 || omega_val < 1e-10 { return 0.0; }
+    if temp < 1e-10 || omega_val < 1e-10 {
+        return 0.0;
+    }
     1.0 / ((omega_val / temp).exp() - 1.0)
 }
 
@@ -247,9 +261,13 @@ fn fit_temperature_to_spectrum(spectrum: &[(f64, f64)]) -> f64 {
         let mut chi = 0.0;
         let mut cnt = 0;
         for &(w, n) in spectrum.iter() {
-            if n < 1e-10 { continue; }
+            if n < 1e-10 {
+                continue;
+            }
             let p = planck(w, t);
-            if p < 1e-10 { continue; }
+            if p < 1e-10 {
+                continue;
+            }
             chi += (n.ln() - p.ln()).powi(2);
             cnt += 1;
         }
@@ -269,10 +287,14 @@ fn main() {
     writeln!(o, "GUTOE ANALOG BLACK HOLE: BOGOLIUBOV SCATTERING").unwrap();
     writeln!(o, "================================================").unwrap();
     writeln!(o, "λ_QG = {LAMBDA_QG:.8}  (= 1/12)").unwrap();
-    writeln!(o, "k_c_void = {:.4}  k_c_full = {:.4}  k_max = {:.4}",
+    writeln!(
+        o,
+        "k_c_void = {:.4}  k_c_full = {:.4}  k_max = {:.4}",
         V_VOID * (12.0f64).sqrt(),
         V_FULL * (12.0f64).sqrt(),
-        PI).unwrap();
+        PI
+    )
+    .unwrap();
     writeln!(o, "Horizon σ = {KAPPA_SIGMA:.1} ℓ_P,  κ = {KAPPA:.6}").unwrap();
     let t_hawking = KAPPA / (2.0 * PI);
     writeln!(o, "Standard Hawking T_H = κ/2π = {t_hawking:.8}").unwrap();
@@ -280,7 +302,12 @@ fn main() {
 
     // Verify asymptotic wavenumbers
     writeln!(o, "Asymptotic wavenumbers:").unwrap();
-    writeln!(o, "  {:>10}  {:>12}  {:>12}  {:>10}", "omega", "k_L (void)", "k_R (full)", "k_c_void").unwrap();
+    writeln!(
+        o,
+        "  {:>10}  {:>12}  {:>12}  {:>10}",
+        "omega", "k_L (void)", "k_R (full)", "k_c_void"
+    )
+    .unwrap();
     for exp in [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0] {
         let w = (10.0f64).powf(exp) * t_hawking;
         let ks_l = propagating_wavenumbers(w, V_VOID);
@@ -293,7 +320,12 @@ fn main() {
     writeln!(o).unwrap();
 
     // Compute spectrum at multiple frequencies
-    writeln!(o, "Computing Bogoliubov scattering at {N_FREQ} frequencies...", N_FREQ = 30).unwrap();
+    writeln!(
+        o,
+        "Computing Bogoliubov scattering at {N_FREQ} frequencies...",
+        N_FREQ = 30
+    )
+    .unwrap();
     o.flush().unwrap();
 
     let mut spectrum_gutoe: Vec<(f64, f64)> = vec![];
@@ -321,12 +353,22 @@ fn main() {
     // Show results
     writeln!(o, "ω/T_H  |  ω  |  n_standard  |  T²(GUTOE)  |  ratio").unwrap();
     writeln!(o, "{}", "-".repeat(65)).unwrap();
-    for (iw, (&(w, n_guto), &(_, n_std))) in
-        spectrum_gutoe.iter().zip(spectrum_standard.iter()).enumerate()
+    for (iw, (&(w, n_guto), &(_, n_std))) in spectrum_gutoe
+        .iter()
+        .zip(spectrum_standard.iter())
+        .enumerate()
     {
         let ratio = if n_std > 1e-20 { n_guto / n_std } else { 0.0 };
-        writeln!(o, "  {:.3}  |  {:.4e}  |  {:.4e}  |  {:.4e}  |  {:.4}",
-            w / t_hawking, w, n_std, n_guto, ratio).unwrap();
+        writeln!(
+            o,
+            "  {:.3}  |  {:.4e}  |  {:.4e}  |  {:.4e}  |  {:.4}",
+            w / t_hawking,
+            w,
+            n_std,
+            n_guto,
+            ratio
+        )
+        .unwrap();
         let _ = iw;
     }
     writeln!(o).unwrap();
@@ -335,18 +377,43 @@ fn main() {
     writeln!(o, "CORLEY-JACOBSON PREDICTION (1996):").unwrap();
     writeln!(o, "For subluminal dispersion (GUTOE k⁴ correction):").unwrap();
     writeln!(o, "  The Hawking spectrum is thermally robust.").unwrap();
-    writeln!(o, "  T_eff ≈ T_H (standard) with correction ~ (T_H/T_Planck)².").unwrap();
-    writeln!(o, "  (T_H/T_Planck)² = ({t_hawking:.5} / 1.0)² = {:.2e}",
-        t_hawking * t_hawking).unwrap();
-    writeln!(o, "  Expected correction: {:.2}%", t_hawking * t_hawking * 100.0).unwrap();
+    writeln!(
+        o,
+        "  T_eff ≈ T_H (standard) with correction ~ (T_H/T_Planck)²."
+    )
+    .unwrap();
+    writeln!(
+        o,
+        "  (T_H/T_Planck)² = ({t_hawking:.5} / 1.0)² = {:.2e}",
+        t_hawking * t_hawking
+    )
+    .unwrap();
+    writeln!(
+        o,
+        "  Expected correction: {:.2}%",
+        t_hawking * t_hawking * 100.0
+    )
+    .unwrap();
     writeln!(o).unwrap();
-    writeln!(o, "  BUT: GUTOE also has a high-frequency CUTOFF at ω_max = √3/2.").unwrap();
-    writeln!(o, "  k_c_void = {:.4}  →  ω_cutoff at void = {:.4e}",
+    writeln!(
+        o,
+        "  BUT: GUTOE also has a high-frequency CUTOFF at ω_max = √3/2."
+    )
+    .unwrap();
+    writeln!(
+        o,
+        "  k_c_void = {:.4}  →  ω_cutoff at void = {:.4e}",
         V_VOID * (12.0f64).sqrt(),
-        omega(V_VOID * (12.0f64).sqrt(), V_VOID).unwrap_or(0.0)).unwrap();
+        omega(V_VOID * (12.0f64).sqrt(), V_VOID).unwrap_or(0.0)
+    )
+    .unwrap();
     let w_cutoff = omega(V_VOID * (12.0f64).sqrt(), V_VOID).unwrap_or(0.0);
     let n_at_cutoff = planck(w_cutoff, t_hawking);
-    writeln!(o, "  Planck n(ω_cutoff) = {n_at_cutoff:.3e}  [negligible above this → cutoff invisible]").unwrap();
+    writeln!(
+        o,
+        "  Planck n(ω_cutoff) = {n_at_cutoff:.3e}  [negligible above this → cutoff invisible]"
+    )
+    .unwrap();
     writeln!(o).unwrap();
 
     // CSV for external plotting

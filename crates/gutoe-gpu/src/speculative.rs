@@ -41,7 +41,10 @@ const fn build_mul_table() -> [[(u8, bool); 16]; 16] {
             let mut aa = a >> 1;
             while aa != 0 {
                 let mut x = aa & b;
-                while x != 0 { swaps += 1; x &= x - 1; }
+                while x != 0 {
+                    swaps += 1;
+                    x &= x - 1;
+                }
                 aa >>= 1;
             }
             let mut neg = swaps & 1 != 0;
@@ -50,7 +53,9 @@ const fn build_mul_table() -> [[(u8, bool); 16]; 16] {
             let common = a & b;
             let mut i: u8 = 0;
             while i < 4 {
-                if common & (1 << i) != 0 && i > 0 { neg = !neg; }
+                if common & (1 << i) != 0 && i > 0 {
+                    neg = !neg;
+                }
                 i += 1;
             }
 
@@ -65,7 +70,9 @@ const fn build_mul_table() -> [[(u8, bool); 16]; 16] {
 const MUL_TABLE: [[(u8, bool); 16]; 16] = build_mul_table();
 
 impl Mv {
-    pub fn zero() -> Self { Mv([0; 16]) }
+    pub fn zero() -> Self {
+        Mv([0; 16])
+    }
 
     pub fn identity() -> Self {
         let mut v = [0u64; 16];
@@ -85,10 +92,14 @@ impl Mv {
         let mut result = [0u64; 16];
         for a in 0..16 {
             let sa = self.0[a];
-            if sa == 0 { continue; }
+            if sa == 0 {
+                continue;
+            }
             for b in 0..16 {
                 let ob = other.0[b];
-                if ob == 0 { continue; }
+                if ob == 0 {
+                    continue;
+                }
                 let (idx, neg) = MUL_TABLE[a][b];
                 let prod = sa.wrapping_mul(ob);
                 if neg {
@@ -151,7 +162,9 @@ impl ResponseMatrix {
         let mut result = [0u64; 16];
         for i in 0..16 {
             let xi = x.0[i];
-            if xi == 0 { continue; }
+            if xi == 0 {
+                continue;
+            }
             for j in 0..16 {
                 result[j] = result[j].wrapping_add(xi.wrapping_mul(self.cols[i][j]));
             }
@@ -165,40 +178,37 @@ impl ResponseMatrix {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const K256: [u32; 64] = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
-    0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
-    0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-    0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
-    0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
-    0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
 const H256_INIT: [u32; 8] = [
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
 fn sha256_compress(state: &mut [u32; 8], block: &[u8; 64]) {
     let mut w = [0u32; 64];
     for i in 0..16 {
         w[i] = u32::from_be_bytes([
-            block[4 * i], block[4 * i + 1], block[4 * i + 2], block[4 * i + 3],
+            block[4 * i],
+            block[4 * i + 1],
+            block[4 * i + 2],
+            block[4 * i + 3],
         ]);
     }
     for i in 16..64 {
         let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
         let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-        w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
+        w[i] = w[i - 16]
+            .wrapping_add(s0)
+            .wrapping_add(w[i - 7])
+            .wrapping_add(s1);
     }
 
     let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = *state;
@@ -206,14 +216,21 @@ fn sha256_compress(state: &mut [u32; 8], block: &[u8; 64]) {
     for i in 0..64 {
         let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
         let ch = (e & f) ^ (!e & g);
-        let temp1 = h.wrapping_add(s1).wrapping_add(ch)
-            .wrapping_add(K256[i]).wrapping_add(w[i]);
+        let temp1 = h
+            .wrapping_add(s1)
+            .wrapping_add(ch)
+            .wrapping_add(K256[i])
+            .wrapping_add(w[i]);
         let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
         let maj = (a & b) ^ (a & c) ^ (b & c);
         let temp2 = s0.wrapping_add(maj);
-        h = g; g = f; f = e;
+        h = g;
+        g = f;
+        f = e;
         e = d.wrapping_add(temp1);
-        d = c; c = b; b = a;
+        d = c;
+        c = b;
+        b = a;
         a = temp1.wrapping_add(temp2);
     }
 
@@ -283,20 +300,26 @@ pub fn run_speculation_benchmark() {
     }
     let sha_time = t0.elapsed();
     println!("  SHA-256 double hash ({n_sha} iterations):");
-    println!("    Time: {:.2}ms ({:.1} ns/hash)",
-             sha_time.as_secs_f64() * 1e3,
-             sha_time.as_secs_f64() * 1e9 / n_sha as f64);
+    println!(
+        "    Time: {:.2}ms ({:.1} ns/hash)",
+        sha_time.as_secs_f64() * 1e3,
+        sha_time.as_secs_f64() * 1e9 / n_sha as f64
+    );
     println!("    Can speculate? NO — 64 rounds × 8 additions with carries");
     println!("    State space: 2^256 — cannot precompute response matrix");
-    println!("    Result: {:02x}{:02x}{:02x}{:02x}...\n",
-             sha_result[0], sha_result[1], sha_result[2], sha_result[3]);
+    println!(
+        "    Result: {:02x}{:02x}{:02x}{:02x}...\n",
+        sha_result[0], sha_result[1], sha_result[2], sha_result[3]
+    );
 
     // ── Clifford: measure single-mul cost first ──────────────────────────
     let n_cal = 100_000;
     let a = Mv::from_seed(42);
     let mut b = Mv::from_seed(137);
     let t0 = Instant::now();
-    for _ in 0..n_cal { b = a.mul(&b); }
+    for _ in 0..n_cal {
+        b = a.mul(&b);
+    }
     let mul_time = t0.elapsed();
     let ns_per_mul = mul_time.as_secs_f64() * 1e9 / n_cal as f64;
     println!("  Cl(1,3) single multiplication: {:.0} ns", ns_per_mul);
@@ -338,19 +361,27 @@ pub fn run_speculation_benchmark() {
 
     println!("  ── Chain of {chain_len} Clifford multiplications ──");
     println!("  Sequential:");
-    println!("    Time: {:.2}ms  ({seq_muls} multiplications)",
-             seq_time.as_secs_f64() * 1e3);
+    println!(
+        "    Time: {:.2}ms  ({seq_muls} multiplications)",
+        seq_time.as_secs_f64() * 1e3
+    );
     println!("  Speculative (2 threads):");
-    println!("    Time: {:.2}ms  (depth: {spec_depth} muls on critical path)",
-             spec_time.as_secs_f64() * 1e3);
+    println!(
+        "    Time: {:.2}ms  (depth: {spec_depth} muls on critical path)",
+        spec_time.as_secs_f64() * 1e3
+    );
     println!("    Thread 1: inner chain ({chain_len} muls)");
     println!("    Thread 2: left ({half}) + right ({half}) + response matrix (16×2) = {thread2_muls} muls");
     println!("    Zip: 256 multiply-adds when inner resolves");
     println!("    Measured speedup: {speedup:.2}×");
-    println!("    Theoretical (2 threads): {:.2}× (depth {seq_muls} → {spec_depth})",
-             seq_muls as f64 / spec_depth as f64);
-    println!("    Theoretical (∞ threads): {:.2}× (response cols parallelized)",
-             seq_muls as f64 / (std::cmp::max(chain_len, half + half + 2) + 1) as f64);
+    println!(
+        "    Theoretical (2 threads): {:.2}× (depth {seq_muls} → {spec_depth})",
+        seq_muls as f64 / spec_depth as f64
+    );
+    println!(
+        "    Theoretical (∞ threads): {:.2}× (response cols parallelized)",
+        seq_muls as f64 / (std::cmp::max(chain_len, half + half + 2) + 1) as f64
+    );
     println!("    Exact match: {}", if matches { "YES" } else { "BUG!" });
 
     // ── Batch: amortize thread overhead ──────────────────────────────────
@@ -384,12 +415,16 @@ pub fn run_speculation_benchmark() {
     let batch_speedup = batch_seq.as_secs_f64() / batch_spec.as_secs_f64();
 
     println!("\n  Batch ({n_batch}× chain-{batch_chain}):");
-    println!("    Sequential: {:.2}ms ({:.1} µs/hash)",
-             batch_seq.as_secs_f64() * 1e3,
-             batch_seq.as_secs_f64() * 1e6 / n_batch as f64);
-    println!("    Speculative: {:.2}ms ({:.1} µs/hash)",
-             batch_spec.as_secs_f64() * 1e3,
-             batch_spec.as_secs_f64() * 1e6 / n_batch as f64);
+    println!(
+        "    Sequential: {:.2}ms ({:.1} µs/hash)",
+        batch_seq.as_secs_f64() * 1e3,
+        batch_seq.as_secs_f64() * 1e6 / n_batch as f64
+    );
+    println!(
+        "    Speculative: {:.2}ms ({:.1} µs/hash)",
+        batch_spec.as_secs_f64() * 1e3,
+        batch_spec.as_secs_f64() * 1e6 / n_batch as f64
+    );
     println!("    Speedup: {batch_speedup:.2}×");
 
     // ── Massive chain: thread overhead becomes negligible ────────────────
@@ -418,14 +453,26 @@ pub fn run_speculation_benchmark() {
     let mega_match = result_m_seq.0 == result_m_spec.0;
 
     println!("\n  ── MEGA chain ({mega} muls — thread overhead negligible) ──");
-    println!("    Sequential: {:.2}ms ({} muls)",
-             mega_seq.as_secs_f64() * 1e3, mega + mega_half + mega_half + 2);
-    println!("    Speculative: {:.2}ms (depth: {} muls)",
-             mega_spec.as_secs_f64() * 1e3, mega_half + mega_half + 32 + 1);
-    println!("    Speedup: {mega_speedup:.2}×  {}", if mega_match { "(exact match)" } else { "BUG!" });
-    println!("    Thread overhead: ~{:.0}µs vs {:.0}µs work = {:.1}%",
-             10.0, mega_seq.as_secs_f64() * 1e6,
-             10.0 / (mega_seq.as_secs_f64() * 1e6) * 100.0);
+    println!(
+        "    Sequential: {:.2}ms ({} muls)",
+        mega_seq.as_secs_f64() * 1e3,
+        mega + mega_half + mega_half + 2
+    );
+    println!(
+        "    Speculative: {:.2}ms (depth: {} muls)",
+        mega_spec.as_secs_f64() * 1e3,
+        mega_half + mega_half + 32 + 1
+    );
+    println!(
+        "    Speedup: {mega_speedup:.2}×  {}",
+        if mega_match { "(exact match)" } else { "BUG!" }
+    );
+    println!(
+        "    Thread overhead: ~{:.0}µs vs {:.0}µs work = {:.1}%",
+        10.0,
+        mega_seq.as_secs_f64() * 1e6,
+        10.0 / (mega_seq.as_secs_f64() * 1e6) * 100.0
+    );
 
     // ── Response matrix size comparison ──────────────────────────────────
     println!("\n  ── Why This Works for Cl(1,3) and Not SHA-256 ──");
@@ -479,7 +526,9 @@ mod tests {
         let e1 = Mv::basis(1);
         let e1_sq = e1.mul(&e1);
         assert_eq!(e1_sq.0[0], 1, "e₁² should be +1 (scalar)");
-        for i in 1..16 { assert_eq!(e1_sq.0[i], 0, "e₁² non-scalar should be 0"); }
+        for i in 1..16 {
+            assert_eq!(e1_sq.0[i], 0, "e₁² non-scalar should be 0");
+        }
 
         // e₂ × e₂ = -1 (metric, wrapping)
         let e2 = Mv::basis(2);
@@ -528,8 +577,10 @@ mod tests {
             let x = Mv::from_seed(seed);
             let direct = left.mul(&x).mul(&right);
             let speculative = response.apply(&x);
-            assert_eq!(direct.0, speculative.0,
-                "response matrix must be exact for seed {seed}");
+            assert_eq!(
+                direct.0, speculative.0,
+                "response matrix must be exact for seed {seed}"
+            );
         }
     }
 

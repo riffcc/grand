@@ -11,7 +11,7 @@ use crate::constants::{
     lambda_micro_finite_mode_rescale, ALPHA_LEADING_ORDER, DARK_TO_VISIBLE_COUNT_RATIO, LAMBDA_QG,
 };
 use gutoe_em::{
-    ckm_from_clifford, ckm_from_textures, cp_violation_witness, CP_PHASE_TOL_DEG, CKM_CP_J_MIN,
+    ckm_from_clifford, ckm_from_textures, cp_violation_witness, CKM_CP_J_MIN, CP_PHASE_TOL_DEG,
 };
 
 /// Planck-era baryon-to-photon ratio target.
@@ -114,8 +114,7 @@ pub fn evaluate_baryogenesis_gate(windows: BaryogenesisWindows) -> BaryogenesisS
     let eta_predicted = eta_baryon_from_jarlskog(ckm_texture.jarlskog);
     let eta_rel_error = (eta_predicted - ETA_B_OBSERVED).abs() / ETA_B_OBSERVED;
 
-    let cp_violation_ok =
-        cp_violation_witness(ckm_texture, CKM_CP_J_MIN, CP_PHASE_TOL_DEG).is_ok();
+    let cp_violation_ok = cp_violation_witness(ckm_texture, CKM_CP_J_MIN, CP_PHASE_TOL_DEG).is_ok();
     let baryon_violation_channel_ok = baryon_violation_channel_structural();
     let nonequilibrium_ok = nonequilibrium_structural();
     let eta_window_ok = eta_rel_error <= windows.eta_rel_error_max;

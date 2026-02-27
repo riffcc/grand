@@ -129,7 +129,10 @@ mod tests {
         let arc2 = Arc::new(LatticeState::new(vec![7; 50]));
 
         let result = store.insert_arc(arc2);
-        assert!(Arc::ptr_eq(&arc1, &result), "insert_arc must dedup against existing");
+        assert!(
+            Arc::ptr_eq(&arc1, &result),
+            "insert_arc must dedup against existing"
+        );
     }
 
     #[test]

@@ -90,7 +90,12 @@ mod tests {
 
     #[test]
     fn faraday_rotation_preserves_linear_polarization_norm() {
-        let s = Stokes { i: 1.0, q: 0.3, u: -0.4, v: 0.02 };
+        let s = Stokes {
+            i: 1.0,
+            q: 0.3,
+            u: -0.4,
+            v: 0.02,
+        };
         let p0 = (s.q * s.q + s.u * s.u).sqrt();
         let r = faraday_rotate(s, 0.37);
         let p1 = (r.q * r.q + r.u * r.u).sqrt();

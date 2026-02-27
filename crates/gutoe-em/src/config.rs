@@ -3,7 +3,7 @@
 
 pub const VOID: u8 = 0;
 pub const LEPTON_SEED: u8 = 2; // γ⁰ — grade-1, mi=0b0001
-pub const QUARK_SEED: u8 = 3;  // γ¹ — grade-1, mi=0b0010
+pub const QUARK_SEED: u8 = 3; // γ¹ — grade-1, mi=0b0010
 
 pub const UP_CHARGE: f64 = 2.0 / 3.0;
 pub const DOWN_CHARGE: f64 = -1.0 / 3.0;

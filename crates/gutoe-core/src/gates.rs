@@ -36,10 +36,30 @@ impl TripartiteNot {
     pub fn matrix() -> [[Complex64; 4]; 4] {
         // Transformation matrix in order: VOID, COSINE, SINE, TANGENT
         [
-            [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0)],
-            [Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
-            [Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)],
-            [Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0)],
+            [
+                Complex64::new(1.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+            ],
+            [
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(1.0, 0.0),
+                Complex64::new(0.0, 0.0),
+            ],
+            [
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(1.0, 0.0),
+            ],
+            [
+                Complex64::new(0.0, 0.0),
+                Complex64::new(1.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+            ],
         ]
     }
 }
@@ -117,9 +137,10 @@ impl VeracityGate {
             (TriState::COSINE, TriState::COSINE)
             | (TriState::SINE, TriState::SINE)
             | (TriState::TANGENT, TriState::TANGENT) => 1.0,
-            (TriState::COSINE, TriState::SINE)
-            | (TriState::SINE, TriState::COSINE) => 3.0_f64.sqrt() / 2.0,
-            _ => 0.5,  // TANGENT-SINE, TANGENT-COSINE
+            (TriState::COSINE, TriState::SINE) | (TriState::SINE, TriState::COSINE) => {
+                3.0_f64.sqrt() / 2.0
+            }
+            _ => 0.5, // TANGENT-SINE, TANGENT-COSINE
         }
     }
 }
@@ -146,10 +167,10 @@ mod tests {
 
     #[test]
     fn tripartite_not_cycles_correctly() {
-        assert_eq!(TripartiteNot::apply(TriState::SINE),      TriState::COSINE);
-        assert_eq!(TripartiteNot::apply(TriState::COSINE),    TriState::TANGENT);
+        assert_eq!(TripartiteNot::apply(TriState::SINE), TriState::COSINE);
+        assert_eq!(TripartiteNot::apply(TriState::COSINE), TriState::TANGENT);
         assert_eq!(TripartiteNot::apply(TriState::TANGENT), TriState::SINE);
-        assert_eq!(TripartiteNot::apply(TriState::VOID),      TriState::VOID);
+        assert_eq!(TripartiteNot::apply(TriState::VOID), TriState::VOID);
     }
 
     // ── TripartiteNot: Z₃ structure, NOT Z₂ (not self-inverse) ──────────────
@@ -169,7 +190,10 @@ mod tests {
         // Applying the gate 3 times must return the original state.
         for s in [TriState::SINE, TriState::COSINE, TriState::TANGENT] {
             let thrice = TripartiteNot::apply(TripartiteNot::apply(TripartiteNot::apply(s)));
-            assert_eq!(thrice, s, "TripartiteNot³({s:?}) ≠ {s:?} — gate does not have order 3");
+            assert_eq!(
+                thrice, s,
+                "TripartiteNot³({s:?}) ≠ {s:?} — gate does not have order 3"
+            );
         }
     }
 
@@ -182,8 +206,11 @@ mod tests {
             TriState::SINE,
             CTripartiteNot::apply(TriState::SINE, TriState::COSINE),
         );
-        assert_ne!(twice, TriState::COSINE,
-            "CTripartiteNot² = identity on COSINE — requires Z₂, but cycle has order 3");
+        assert_ne!(
+            twice,
+            TriState::COSINE,
+            "CTripartiteNot² = identity on COSINE — requires Z₂, but cycle has order 3"
+        );
     }
 
     #[test]
@@ -192,8 +219,10 @@ mod tests {
             let t1 = CTripartiteNot::apply(TriState::SINE, target);
             let t2 = CTripartiteNot::apply(TriState::SINE, t1);
             let t3 = CTripartiteNot::apply(TriState::SINE, t2);
-            assert_eq!(t3, target,
-                "CTripartiteNot³({target:?}) ≠ {target:?} with SINE control — should have order 3");
+            assert_eq!(
+                t3, target,
+                "CTripartiteNot³({target:?}) ≠ {target:?} with SINE control — should have order 3"
+            );
         }
     }
 
@@ -201,8 +230,11 @@ mod tests {
     fn c_tripartite_not_is_identity_when_control_not_sine() {
         for control in [TriState::COSINE, TriState::TANGENT, TriState::VOID] {
             for target in [TriState::SINE, TriState::COSINE, TriState::TANGENT] {
-                assert_eq!(CTripartiteNot::apply(control, target), target,
-                    "CTripartiteNot({control:?}, {target:?}) fired without SINE control");
+                assert_eq!(
+                    CTripartiteNot::apply(control, target),
+                    target,
+                    "CTripartiteNot({control:?}, {target:?}) fired without SINE control"
+                );
             }
         }
     }
@@ -211,8 +243,14 @@ mod tests {
 
     #[test]
     fn toffoli3_cycles_correctly_with_both_controls_sine() {
-        assert_eq!(Toffoli3::apply(TriState::SINE, TriState::SINE, TriState::COSINE), TriState::TANGENT);
-        assert_eq!(Toffoli3::apply(TriState::SINE, TriState::COSINE, TriState::COSINE), TriState::COSINE);
+        assert_eq!(
+            Toffoli3::apply(TriState::SINE, TriState::SINE, TriState::COSINE),
+            TriState::TANGENT
+        );
+        assert_eq!(
+            Toffoli3::apply(TriState::SINE, TriState::COSINE, TriState::COSINE),
+            TriState::COSINE
+        );
     }
 
     #[test]
@@ -222,8 +260,11 @@ mod tests {
             TriState::SINE,
             Toffoli3::apply(TriState::SINE, TriState::SINE, TriState::COSINE),
         );
-        assert_ne!(twice, TriState::COSINE,
-            "Toffoli3² = identity on COSINE — requires Z₂, but cycle has order 3");
+        assert_ne!(
+            twice,
+            TriState::COSINE,
+            "Toffoli3² = identity on COSINE — requires Z₂, but cycle has order 3"
+        );
     }
 
     #[test]
@@ -232,8 +273,10 @@ mod tests {
             let t1 = Toffoli3::apply(TriState::SINE, TriState::SINE, target);
             let t2 = Toffoli3::apply(TriState::SINE, TriState::SINE, t1);
             let t3 = Toffoli3::apply(TriState::SINE, TriState::SINE, t2);
-            assert_eq!(t3, target,
-                "Toffoli3³({target:?}) ≠ {target:?} — should have order 3");
+            assert_eq!(
+                t3, target,
+                "Toffoli3³({target:?}) ≠ {target:?} — should have order 3"
+            );
         }
     }
 
@@ -245,12 +288,22 @@ mod tests {
     #[test]
     fn hadamard_is_not_injective() {
         let h_cosine = TripartiteHadamard::apply(TriState::COSINE);
-        let h_sine   = TripartiteHadamard::apply(TriState::SINE);
-        assert_eq!(h_cosine, TriState::TANGENT, "Hadamard(COSINE) should give TANGENT");
-        assert_eq!(h_sine,   TriState::TANGENT, "Hadamard(SINE) should give TANGENT");
+        let h_sine = TripartiteHadamard::apply(TriState::SINE);
+        assert_eq!(
+            h_cosine,
+            TriState::TANGENT,
+            "Hadamard(COSINE) should give TANGENT"
+        );
+        assert_eq!(
+            h_sine,
+            TriState::TANGENT,
+            "Hadamard(SINE) should give TANGENT"
+        );
         // Same output for two distinct inputs → not injective, not invertible, not unitary.
-        assert_eq!(h_cosine, h_sine,
-            "Hadamard maps COSINE and SINE to different states — expected both to TANGENT");
+        assert_eq!(
+            h_cosine, h_sine,
+            "Hadamard maps COSINE and SINE to different states — expected both to TANGENT"
+        );
     }
 
     #[test]
@@ -258,8 +311,11 @@ mod tests {
         // Real Hadamard: H² = I.
         // TripartiteHadamard: COSINE → TANGENT → TANGENT (stuck; never returns to COSINE).
         let twice = TripartiteHadamard::apply(TripartiteHadamard::apply(TriState::COSINE));
-        assert_ne!(twice, TriState::COSINE,
-            "TripartiteHadamard² = identity on COSINE — cannot be true if not injective");
+        assert_ne!(
+            twice,
+            TriState::COSINE,
+            "TripartiteHadamard² = identity on COSINE — cannot be true if not injective"
+        );
     }
 
     // ── VeracityGate vs quantum fidelity ─────────────────────────────────────
@@ -271,8 +327,10 @@ mod tests {
     fn veracity_tangent_self_is_1() {
         // TANGENT with itself = full coherence, same as any non-VOID state.
         let v = VeracityGate::measure(TriState::TANGENT, TriState::TANGENT);
-        assert!((v - 1.0).abs() < 1e-12,
-            "veracity(TANGENT, TANGENT) = {v:.4}, expected 1.0");
+        assert!(
+            (v - 1.0).abs() < 1e-12,
+            "veracity(TANGENT, TANGENT) = {v:.4}, expected 1.0"
+        );
     }
 
     // ── Real Python CNOT vs Rust port ─────────────────────────────────────────
@@ -283,9 +341,9 @@ mod tests {
     fn real_cnot(control: TriState, target: TriState) -> TriState {
         if control == TriState::SINE {
             match target {
-                TriState::SINE      => TriState::COSINE,
-                TriState::COSINE    => TriState::SINE,
-                other               => other,
+                TriState::SINE => TriState::COSINE,
+                TriState::COSINE => TriState::SINE,
+                other => other,
             }
         } else {
             target
@@ -295,10 +353,17 @@ mod tests {
     #[test]
     fn real_python_cnot_is_self_inverse() {
         // Python CNOT is a clean Z₂ involution — two applications = identity.
-        for target in [TriState::SINE, TriState::COSINE, TriState::TANGENT, TriState::VOID] {
+        for target in [
+            TriState::SINE,
+            TriState::COSINE,
+            TriState::TANGENT,
+            TriState::VOID,
+        ] {
             let twice = real_cnot(TriState::SINE, real_cnot(TriState::SINE, target));
-            assert_eq!(twice, target,
-                "real_cnot²({target:?}) = {twice:?} ≠ {target:?} — should be self-inverse");
+            assert_eq!(
+                twice, target,
+                "real_cnot²({target:?}) = {twice:?} ≠ {target:?} — should be self-inverse"
+            );
         }
     }
 
@@ -312,10 +377,16 @@ mod tests {
         );
         let real_twice = real_cnot(TriState::SINE, real_cnot(TriState::SINE, TriState::COSINE));
 
-        assert_ne!(rust_twice, TriState::COSINE,
-            "Rust CTripartiteNot² = identity on COSINE — that's Z₂ behavior, but cycle is Z₃");
-        assert_eq!(real_twice, TriState::COSINE,
-            "Python real_cnot² ≠ identity on COSINE — should be self-inverse Z₂ swap");
+        assert_ne!(
+            rust_twice,
+            TriState::COSINE,
+            "Rust CTripartiteNot² = identity on COSINE — that's Z₂ behavior, but cycle is Z₃"
+        );
+        assert_eq!(
+            real_twice,
+            TriState::COSINE,
+            "Python real_cnot² ≠ identity on COSINE — should be self-inverse Z₂ swap"
+        );
     }
 
     #[test]
@@ -324,12 +395,20 @@ mod tests {
         // Python: COSINE swapped to SINE
         let rust_result = CTripartiteNot::apply(TriState::SINE, TriState::COSINE);
         let real_result = real_cnot(TriState::SINE, TriState::COSINE);
-        assert_eq!(rust_result, TriState::TANGENT,
-            "Rust CTripartiteNot(SINE, COSINE) should be TANGENT (cycle)");
-        assert_eq!(real_result, TriState::SINE,
-            "Python real_cnot(SINE, COSINE) should be SINE (swap)");
-        assert_ne!(rust_result, real_result,
-            "Rust port and Python cnot should disagree on (SINE, COSINE)");
+        assert_eq!(
+            rust_result,
+            TriState::TANGENT,
+            "Rust CTripartiteNot(SINE, COSINE) should be TANGENT (cycle)"
+        );
+        assert_eq!(
+            real_result,
+            TriState::SINE,
+            "Python real_cnot(SINE, COSINE) should be SINE (swap)"
+        );
+        assert_ne!(
+            rust_result, real_result,
+            "Rust port and Python cnot should disagree on (SINE, COSINE)"
+        );
     }
 
     #[test]
@@ -346,10 +425,14 @@ mod tests {
 
         assert!((amplitude_fidelity - 0.0).abs() < 1e-12,
             "amplitude fidelity of SINE vs COSINE should be 0.0 (orthogonal), got {amplitude_fidelity:.6}");
-        assert!((veracity - 3.0_f64.sqrt() / 2.0).abs() < 1e-12,
-            "veracity(SINE, COSINE) should be √3/2, got {veracity:.6}");
-        assert!(veracity > 0.8,
+        assert!(
+            (veracity - 3.0_f64.sqrt() / 2.0).abs() < 1e-12,
+            "veracity(SINE, COSINE) should be √3/2, got {veracity:.6}"
+        );
+        assert!(
+            veracity > 0.8,
             "veracity ({veracity:.4}) ≈ amplitude fidelity ({amplitude_fidelity:.4}): \
-             they should differ significantly — veracity uses hex geometry, not inner product");
+             they should differ significantly — veracity uses hex geometry, not inner product"
+        );
     }
 }

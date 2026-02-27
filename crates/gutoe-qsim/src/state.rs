@@ -97,7 +97,11 @@ mod tests {
     fn hash_sensitivity() {
         let s1 = LatticeState::new(vec![0; 100]);
         let s2 = LatticeState::new(vec![1; 100]);
-        assert_ne!(s1.hash(), s2.hash(), "different sites must produce different hash");
+        assert_ne!(
+            s1.hash(),
+            s2.hash(),
+            "different sites must produce different hash"
+        );
     }
 
     #[test]
@@ -115,13 +119,20 @@ mod tests {
         assert_eq!(original.sites()[50], 0, "original must be unchanged");
         assert_eq!(mutated.sites()[50], 7, "mutated must reflect change");
         assert_ne!(original.hash(), mutated.hash(), "hashes must differ");
-        assert!(!Arc::ptr_eq(original.arc(), mutated.arc()), "Arcs must differ");
+        assert!(
+            !Arc::ptr_eq(original.arc(), mutated.arc()),
+            "Arcs must differ"
+        );
     }
 
     #[test]
     fn mutate_noop_preserves_hash() {
         let original = CowLattice::new(LatticeState::new(vec![5; 100]));
         let mutated = original.mutate(|_sites| { /* no-op */ });
-        assert_eq!(original.hash(), mutated.hash(), "no-op mutate must preserve hash");
+        assert_eq!(
+            original.hash(),
+            mutated.hash(),
+            "no-op mutate must preserve hash"
+        );
     }
 }

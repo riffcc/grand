@@ -29,7 +29,8 @@ impl StandardModelDynamicsMap {
         let clifford_dim = 16_u32;
         let z3_order = 3_u32;
         let magnetic_triplet_card = 3_u32;
-        let sin2_theta_w = magnetic_triplet_card as f64 / (clifford_dim - magnetic_triplet_card) as f64; // 3/13
+        let sin2_theta_w =
+            magnetic_triplet_card as f64 / (clifford_dim - magnetic_triplet_card) as f64; // 3/13
         let cos2_theta_w = 1.0 - sin2_theta_w; // 10/13
         let mz_over_mw_sq = 1.0 / cos2_theta_w; // 13/10
         let su3_generators = z3_order * z3_order - 1; // 8

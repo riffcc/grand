@@ -101,11 +101,7 @@ impl Orchestrator {
     }
 
     /// Run a complete experiment: apply the same gate to all actors for N rounds.
-    pub fn run_uniform(
-        &mut self,
-        gate: &dyn Gate,
-        n_rounds: usize,
-    ) -> ExperimentResult {
+    pub fn run_uniform(&mut self, gate: &dyn Gate, n_rounds: usize) -> ExperimentResult {
         let all_indices: Vec<usize> = (0..self.actors.len()).collect();
 
         for _ in 0..n_rounds {
@@ -145,7 +141,7 @@ impl Orchestrator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gate::{Z3CycleGate, XorProductGate};
+    use crate::gate::{XorProductGate, Z3CycleGate};
     use gutoe_em::{LatticeConfig, VOID};
 
     #[test]
@@ -173,7 +169,10 @@ mod tests {
         );
 
         let last_metrics = orch.round_metrics().last().unwrap();
-        assert_eq!(last_metrics.new_states_created, 0, "round 2 should create 0 new states (Z3 saturated)");
+        assert_eq!(
+            last_metrics.new_states_created, 0,
+            "round 2 should create 0 new states (Z3 saturated)"
+        );
 
         // Compression: 4000 actors / 3 states ≈ 1333x
         assert!(

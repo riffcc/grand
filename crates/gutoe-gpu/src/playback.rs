@@ -1,5 +1,5 @@
-use crate::snapshot::UniverseSnapshot;
 use crate::snapshot::read_snapshot_file;
+use crate::snapshot::UniverseSnapshot;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -133,7 +133,11 @@ mod tests {
 
     #[test]
     fn seek_tick_interpolates_between_neighbors() {
-        let t = SnapshotTrack::new(vec![frame(10, 1.0, 1), frame(20, 2.0, 2), frame(30, 3.0, 3)]);
+        let t = SnapshotTrack::new(vec![
+            frame(10, 1.0, 1),
+            frame(20, 2.0, 2),
+            frame(30, 3.0, 3),
+        ]);
         let (a, b, alpha) = t.seek_tick(15).expect("seek");
         assert_eq!(a.tick, 10);
         assert_eq!(b.tick, 20);
@@ -142,7 +146,11 @@ mod tests {
 
     #[test]
     fn seek_time_interpolates_between_neighbors() {
-        let t = SnapshotTrack::new(vec![frame(10, 1.0, 1), frame(20, 2.0, 2), frame(30, 3.0, 3)]);
+        let t = SnapshotTrack::new(vec![
+            frame(10, 1.0, 1),
+            frame(20, 2.0, 2),
+            frame(30, 3.0, 3),
+        ]);
         let (a, b, alpha) = t.seek_time(2.5).expect("seek");
         assert_eq!(a.tick, 20);
         assert_eq!(b.tick, 30);

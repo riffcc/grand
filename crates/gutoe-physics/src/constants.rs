@@ -235,7 +235,7 @@ mod tests {
     #[test]
     fn test_fine_structure_constant() {
         // Verify approximate value
-        assert!((ALPHA - 1.0/137.036).abs() < 1e-4);
+        assert!((ALPHA - 1.0 / 137.036).abs() < 1e-4);
     }
 
     #[test]

@@ -101,20 +101,24 @@ pub fn parse_sparc_massmodels_csv(csv_data: &str) -> Vec<SparcMassRow> {
             parse(cols[6]),
             parse(cols[7]),
         ) {
-            (Some(radius_kpc), Some(v_obs_kms), Some(e_vobs_kms), Some(v_gas_kms), Some(v_disk_kms), Some(v_bulge_kms), Some(v_baryon_kms))
-                if radius_kpc > 0.0 && v_obs_kms > 0.0 && v_baryon_kms > 0.0 =>
-            {
-                SparcMassRow {
-                    galaxy: cols[0].trim().to_string(),
-                    radius_kpc,
-                    v_obs_kms,
-                    e_vobs_kms,
-                    v_gas_kms,
-                    v_disk_kms,
-                    v_bulge_kms,
-                    v_baryon_kms,
-                }
-            }
+            (
+                Some(radius_kpc),
+                Some(v_obs_kms),
+                Some(e_vobs_kms),
+                Some(v_gas_kms),
+                Some(v_disk_kms),
+                Some(v_bulge_kms),
+                Some(v_baryon_kms),
+            ) if radius_kpc > 0.0 && v_obs_kms > 0.0 && v_baryon_kms > 0.0 => SparcMassRow {
+                galaxy: cols[0].trim().to_string(),
+                radius_kpc,
+                v_obs_kms,
+                e_vobs_kms,
+                v_gas_kms,
+                v_disk_kms,
+                v_bulge_kms,
+                v_baryon_kms,
+            },
             _ => continue,
         };
         out.push(row);
@@ -172,7 +176,10 @@ pub fn lensing_proxy_from_speed(v_kms: f64) -> f64 {
 }
 
 /// Branch-level fit metrics over the SPARC snapshot.
-pub fn evaluate_branch_fit(branch: DarkSectorBranch, data: &[SparcMassRow]) -> DarkMatterBranchFitMetrics {
+pub fn evaluate_branch_fit(
+    branch: DarkSectorBranch,
+    data: &[SparcMassRow],
+) -> DarkMatterBranchFitMetrics {
     if data.is_empty() {
         return DarkMatterBranchFitMetrics {
             n_points: 0,
