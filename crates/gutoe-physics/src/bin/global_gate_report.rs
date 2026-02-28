@@ -131,6 +131,20 @@ fn main() {
         eprintln!("global_gate: lithium7_stellar_ci_gate failed: {e}");
         std::process::exit(2);
     }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "parameter_degeneracy_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: parameter_degeneracy_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
 
     run_or_exit(
         "baryogenesis_report[gain=0]",
@@ -181,6 +195,8 @@ fn main() {
     let neutrino = read_json("/tmp/bh_renders/neutrino_ci_gate.json").expect("neutrino json");
     let li7_stellar =
         read_json("/tmp/bh_renders/lithium7_stellar_ci_gate.json").expect("lithium7 stellar json");
+    let degeneracy = read_json("/tmp/bh_renders/parameter_degeneracy_ci_gate.json")
+        .expect("parameter degeneracy json");
     let sigma = read_json("/tmp/bh_renders/sigma8_decomposition/sigma8_decomposition_report.json")
         .expect("sigma json");
 
@@ -230,6 +246,15 @@ fn main() {
     let li7_stellar_pass = v_bool(&li7_stellar, &["overall_pass"]).unwrap();
     let li7_stellar_delta_abs = v_f64(&li7_stellar, &["best_match", "closure_delta_abs"]).unwrap();
     let li7_stellar_delta_abs_max = v_f64(&li7_stellar, &["closure_delta_abs_max"]).unwrap();
+    let degeneracy_pass = v_bool(&degeneracy, &["overall_pass"]).unwrap();
+    let degeneracy_free = v_f64(&degeneracy, &["counts", "free_parameters"]).unwrap();
+    let degeneracy_rank_tunable = v_f64(&degeneracy, &["linear_algebra", "tunable_only", "rank"]).unwrap();
+    let degeneracy_transfer_coupling_max = v_f64(
+        &degeneracy,
+        &["hidden_reencoding_checks", "tunable_to_transfer_max_abs_sensitivity"],
+    )
+    .unwrap();
+    let degeneracy_verdict = v_str(&degeneracy, &["verdict"]).unwrap();
 
     let cmb_pass = tt <= 1.30 && te <= 1.20 && ee <= 1.10;
 
@@ -245,6 +270,7 @@ fn main() {
         && chiral_pass
         && neutrino_pass
         && li7_stellar_pass
+        && degeneracy_pass
         && cmb_pass
         && sigma8_pass;
 
@@ -284,6 +310,21 @@ fn main() {
     )
     .ok();
     writeln!(txt, "li7_stellar_pass = {}", li7_stellar_pass).ok();
+    writeln!(txt, "degeneracy_verdict = {}", degeneracy_verdict).ok();
+    writeln!(txt, "degeneracy_free_parameters = {:.0}", degeneracy_free).ok();
+    writeln!(
+        txt,
+        "degeneracy_rank_tunable = {:.0}",
+        degeneracy_rank_tunable
+    )
+    .ok();
+    writeln!(
+        txt,
+        "degeneracy_transfer_coupling_max = {:.12e}",
+        degeneracy_transfer_coupling_max
+    )
+    .ok();
+    writeln!(txt, "degeneracy_pass = {}", degeneracy_pass).ok();
     writeln!(txt, "cmb_tt_red = {:.12}", tt).ok();
     writeln!(txt, "cmb_te_red = {:.12}", te).ok();
     writeln!(txt, "cmb_ee_red = {:.12}", ee).ok();
@@ -348,6 +389,13 @@ fn main() {
             "closure_delta_abs": li7_stellar_delta_abs,
             "closure_delta_abs_max": li7_stellar_delta_abs_max,
             "pass": li7_stellar_pass
+        },
+        "parameter_degeneracy_audit": {
+            "verdict": degeneracy_verdict,
+            "free_parameters": degeneracy_free,
+            "rank_tunable": degeneracy_rank_tunable,
+            "transfer_coupling_max": degeneracy_transfer_coupling_max,
+            "pass": degeneracy_pass
         },
         "cmb": {
             "tt_full_red": tt,
