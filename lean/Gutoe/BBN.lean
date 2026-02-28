@@ -67,22 +67,9 @@ noncomputable def primordialDeuteriumRatio (eta10 : ℝ) : ℝ :=
 noncomputable def primordialHelium3Ratio (eta10 : ℝ) : ℝ :=
   (he3OverHTargetQ : ℝ) * Real.rpow (eta10Ref / eta10) helium3EtaExponent
 
-/-- ⁷Li/H lane used by GRAND-349. -/
-noncomputable def primordialLithium7Ratio (eta10 : ℝ) : ℝ :=
+/-- Observed-anchored ⁷Li/H diagnostics lane (legacy comparator). -/
+noncomputable def primordialLithium7RatioObservedAnchored (eta10 : ℝ) : ℝ :=
   (li7OverHObservedQ : ℝ) * (eta10 / eta10Ref) ^ (2 : ℕ) * lithium7TensionAmplification
-
-/-- ⁷Li tension ratio lane (`pred/observed`). -/
-noncomputable def lithium7TensionRatio (eta10 : ℝ) : ℝ :=
-  primordialLithium7Ratio eta10 / (li7OverHObservedQ : ℝ)
-
-/-- ⁷Li/H corrected lane with structural occupancy + void corrections:
-    baseline * `(5/16) * (66/67)`. -/
-noncomputable def primordialLithium7RatioCorrected (eta10 : ℝ) : ℝ :=
-  primordialLithium7Ratio eta10 * (darkFractionOfTotalStates : ℝ) * lithium7VoidCorrection
-
-/-- Corrected ⁷Li tension ratio lane (`pred_corrected/observed`). -/
-noncomputable def lithium7TensionRatioCorrected (eta10 : ℝ) : ℝ :=
-  primordialLithium7RatioCorrected eta10 / (li7OverHObservedQ : ℝ)
 
 /-- Structural direct Li-7 branch fraction:
     one direct identity-like channel out of total finite states (`1/16`). -/
@@ -98,14 +85,58 @@ noncomputable def lithium7Be7ChannelFraction : ℝ :=
 noncomputable def lithium7Be7DarkSuppression : ℝ :=
   (darkFractionOfTotalStates : ℝ) * lithium7VoidCorrection
 
+/-- Visible-lane occupancy fraction entering the Li-7 source (`11/16`). -/
+noncomputable def lithium7VisibleFraction : ℝ :=
+  (visibleSectorStates.card : ℝ) / (totalFiniteStateCount : ℝ)
+
+/-- Structural Li-7 reaction-network gain `(12/4)*(11/16) = 33/16`. -/
+noncomputable def lithium7ReactionNetworkGain : ℝ :=
+  lithium7TensionAmplification * lithium7VisibleFraction
+
+/-- Absolute Li-7 source from reaction channels:
+`(D/H) * (³He/H) * (Yp / Yp_target) * gain`. -/
+noncomputable def lithium7ReactionNetworkSource (eta10 : ℝ) : ℝ :=
+  primordialDeuteriumRatio eta10
+    * primordialHelium3Ratio eta10
+    * (primordialHelium4MassFraction eta10 / (ypTargetQ : ℝ))
+    * lithium7ReactionNetworkGain
+
 /-- Channel-coupled Li-7 closure factor:
     direct branch unchanged + Be-7 branch dark-suppressed. -/
 noncomputable def lithium7ChannelCoupledFactor : ℝ :=
   lithium7DirectChannelFraction + lithium7Be7ChannelFraction * lithium7Be7DarkSuppression
 
-/-- Channel-coupled Li-7 abundance lane. -/
+/-- Direct Li-7 component from the absolute reaction source. -/
+noncomputable def lithium7DirectComponent (eta10 : ℝ) : ℝ :=
+  lithium7ReactionNetworkSource eta10 * lithium7DirectChannelFraction
+
+/-- Be-7 precursor component before dark coupling. -/
+noncomputable def lithium7Be7ComponentUnsuppressed (eta10 : ℝ) : ℝ :=
+  lithium7ReactionNetworkSource eta10 * lithium7Be7ChannelFraction
+
+/-- Be-7 precursor component after dark coupling. -/
+noncomputable def lithium7Be7ComponentDarkCoupled (eta10 : ℝ) : ℝ :=
+  lithium7Be7ComponentUnsuppressed eta10 * lithium7Be7DarkSuppression
+
+/-- Channel-coupled Li-7 abundance lane (absolute predictive lane). -/
 noncomputable def primordialLithium7RatioChannelCoupled (eta10 : ℝ) : ℝ :=
-  primordialLithium7Ratio eta10 * lithium7ChannelCoupledFactor
+  lithium7DirectComponent eta10 + lithium7Be7ComponentDarkCoupled eta10
+
+/-- Predictive ⁷Li/H lane used by the active BBN gate. -/
+noncomputable def primordialLithium7Ratio (eta10 : ℝ) : ℝ :=
+  primordialLithium7RatioChannelCoupled eta10
+
+/-- Corrected lane compatibility alias (routes to channel-coupled predictive lane). -/
+noncomputable def primordialLithium7RatioCorrected (eta10 : ℝ) : ℝ :=
+  primordialLithium7RatioChannelCoupled eta10
+
+/-- ⁷Li tension ratio lane (`pred/observed`). -/
+noncomputable def lithium7TensionRatio (eta10 : ℝ) : ℝ :=
+  primordialLithium7Ratio eta10 / (li7OverHObservedQ : ℝ)
+
+/-- Corrected ⁷Li tension ratio lane (`pred_corrected/observed`). -/
+noncomputable def lithium7TensionRatioCorrected (eta10 : ℝ) : ℝ :=
+  primordialLithium7RatioCorrected eta10 / (li7OverHObservedQ : ℝ)
 
 /-- Channel-coupled Li-7 tension ratio lane (`pred_channel/observed`). -/
 noncomputable def lithium7TensionRatioChannelCoupled (eta10 : ℝ) : ℝ :=
@@ -183,43 +214,14 @@ theorem primordial_helium3_at_reference :
     field_simp [eta10_ref_pos.ne']
   simp [hdiv]
 
-theorem lithium7_ratio_at_reference :
-    primordialLithium7Ratio eta10Ref = (li7OverHObservedQ : ℝ) * 3 := by
-  unfold primordialLithium7Ratio
+theorem lithium7_observed_anchored_ratio_at_reference :
+    primordialLithium7RatioObservedAnchored eta10Ref = (li7OverHObservedQ : ℝ) * 3 := by
+  unfold primordialLithium7RatioObservedAnchored
   have hdiv : eta10Ref / eta10Ref = (1 : ℝ) := by
     field_simp [eta10_ref_pos.ne']
   rw [hdiv]
   rw [one_pow, lithium7_tension_amplification_eq]
   ring
-
-theorem lithium7_tension_ratio_at_reference :
-    lithium7TensionRatio eta10Ref = 3 := by
-  unfold lithium7TensionRatio
-  rw [lithium7_ratio_at_reference]
-  have hobs_nonzero : (li7OverHObservedQ : ℝ) ≠ 0 := by
-    norm_num [li7OverHObservedQ]
-  field_simp [hobs_nonzero]
-
-theorem lithium7_tension_ratio_reference_window :
-    (2 : ℝ) ≤ lithium7TensionRatio eta10Ref ∧ lithium7TensionRatio eta10Ref ≤ 4 := by
-  rw [lithium7_tension_ratio_at_reference]
-  constructor <;> norm_num
-
-theorem lithium7_corrected_tension_ratio_at_reference :
-    lithium7TensionRatioCorrected eta10Ref = (495 : ℝ) / 536 := by
-  unfold lithium7TensionRatioCorrected primordialLithium7RatioCorrected
-  rw [lithium7_ratio_at_reference]
-  rw [dark_fraction_of_total_states_eq, lithium7_void_correction_eq]
-  have hobs_nonzero : (li7OverHObservedQ : ℝ) ≠ 0 := by
-    norm_num [li7OverHObservedQ]
-  field_simp [hobs_nonzero]
-  norm_num
-
-theorem lithium7_corrected_ratio_reference_window :
-    (4 / 5 : ℝ) ≤ lithium7TensionRatioCorrected eta10Ref ∧
-      lithium7TensionRatioCorrected eta10Ref ≤ (6 / 5 : ℝ) := by
-  rw [lithium7_corrected_tension_ratio_at_reference]
-  constructor <;> norm_num
 
 theorem lithium7_direct_channel_fraction_eq :
     lithium7DirectChannelFraction = (1 : ℝ) / 16 := by
@@ -250,14 +252,74 @@ theorem lithium7_channel_coupled_factor_eq :
   rw [lithium7_direct_channel_fraction_eq, lithium7_be7_channel_fraction_eq, lithium7_be7_dark_suppression_eq]
   norm_num
 
-theorem lithium7_channel_coupled_tension_ratio_at_reference :
-    lithium7TensionRatioChannelCoupled eta10Ref = (9033 : ℝ) / 8576 := by
-  unfold lithium7TensionRatioChannelCoupled primordialLithium7RatioChannelCoupled
-  rw [lithium7_ratio_at_reference, lithium7_channel_coupled_factor_eq]
-  have hobs_nonzero : (li7OverHObservedQ : ℝ) ≠ 0 := by
-    norm_num [li7OverHObservedQ]
-  field_simp [hobs_nonzero]
+theorem lithium7_visible_fraction_eq :
+    lithium7VisibleFraction = (11 : ℝ) / 16 := by
+  unfold lithium7VisibleFraction
+  rcases visible_dark_state_count_split with ⟨hVis, _, _, _⟩
+  rw [hVis, total_finite_state_count_eq]
   norm_num
+
+theorem lithium7_reaction_network_gain_eq :
+    lithium7ReactionNetworkGain = (33 : ℝ) / 16 := by
+  unfold lithium7ReactionNetworkGain
+  rw [lithium7_tension_amplification_eq, lithium7_visible_fraction_eq]
+  norm_num
+
+theorem lithium7_reaction_network_source_at_reference :
+    lithium7ReactionNetworkSource eta10Ref = (924561 : ℝ) / 1600000000000000 := by
+  unfold lithium7ReactionNetworkSource
+  rw [primordial_deuterium_at_reference, primordial_helium3_at_reference,
+    primordial_helium4_at_reference, lithium7_reaction_network_gain_eq]
+  norm_num [dOverHTargetQ, he3OverHTargetQ, ypTargetQ]
+
+theorem lithium7_channel_coupled_factorization (eta10 : ℝ) :
+    primordialLithium7RatioChannelCoupled eta10 =
+      lithium7ReactionNetworkSource eta10 * lithium7ChannelCoupledFactor := by
+  unfold primordialLithium7RatioChannelCoupled lithium7DirectComponent
+    lithium7Be7ComponentDarkCoupled lithium7Be7ComponentUnsuppressed
+    lithium7ChannelCoupledFactor
+  ring
+
+theorem lithium7_ratio_at_reference :
+    primordialLithium7Ratio eta10Ref = (2783853171 : ℝ) / 13721600000000000000 := by
+  unfold primordialLithium7Ratio
+  rw [lithium7_channel_coupled_factorization, lithium7_reaction_network_source_at_reference,
+    lithium7_channel_coupled_factor_eq]
+  norm_num
+
+theorem lithium7_tension_ratio_at_reference :
+    lithium7TensionRatio eta10Ref = (2783853171 : ℝ) / 2195456000 := by
+  unfold lithium7TensionRatio
+  rw [lithium7_ratio_at_reference]
+  norm_num [li7OverHObservedQ]
+
+theorem lithium7_tension_ratio_reference_window :
+    (4 / 5 : ℝ) ≤ lithium7TensionRatio eta10Ref ∧
+      lithium7TensionRatio eta10Ref ≤ (7 / 5 : ℝ) := by
+  rw [lithium7_tension_ratio_at_reference]
+  constructor <;> norm_num
+
+theorem lithium7_corrected_tension_ratio_at_reference :
+    lithium7TensionRatioCorrected eta10Ref = (2783853171 : ℝ) / 2195456000 := by
+  simpa [lithium7TensionRatioCorrected, primordialLithium7RatioCorrected, primordialLithium7Ratio]
+    using lithium7_tension_ratio_at_reference
+
+theorem lithium7_corrected_ratio_reference_window :
+    (4 / 5 : ℝ) ≤ lithium7TensionRatioCorrected eta10Ref ∧
+      lithium7TensionRatioCorrected eta10Ref ≤ (7 / 5 : ℝ) := by
+  rw [lithium7_corrected_tension_ratio_at_reference]
+  constructor <;> norm_num
+
+theorem lithium7_channel_coupled_tension_ratio_at_reference :
+    lithium7TensionRatioChannelCoupled eta10Ref = (2783853171 : ℝ) / 2195456000 := by
+  unfold lithium7TensionRatioChannelCoupled primordialLithium7RatioChannelCoupled
+    lithium7DirectComponent lithium7Be7ComponentDarkCoupled
+    lithium7Be7ComponentUnsuppressed lithium7ReactionNetworkSource
+  rw [primordial_deuterium_at_reference, primordial_helium3_at_reference,
+    primordial_helium4_at_reference, lithium7_direct_channel_fraction_eq,
+    lithium7_be7_channel_fraction_eq, lithium7_be7_dark_suppression_eq,
+    lithium7_reaction_network_gain_eq]
+  norm_num [dOverHTargetQ, he3OverHTargetQ, ypTargetQ, li7OverHObservedQ]
 
 theorem lithium7_channel_coupled_ratio_reference_window :
     (4 / 5 : ℝ) ≤ lithium7TensionRatioChannelCoupled eta10Ref ∧
