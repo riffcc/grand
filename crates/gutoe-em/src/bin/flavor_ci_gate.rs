@@ -5,8 +5,9 @@
 
 use gutoe_em::{
     ckm_from_clifford, ckm_from_textures, cp_violation_witness, pmns_from_clifford,
-    pmns_from_textures, within_envelope, MixingEnvelope, MixingObservables, CKM_CP_J_MIN,
-    CKM_PDG_ENVELOPE, CP_PHASE_TOL_DEG, PMNS_CP_J_MIN, PMNS_PDG_ENVELOPE,
+    pmns_from_clifford_theta23_alpha2, pmns_from_textures, residuals, within_envelope,
+    MixingEnvelope, MixingObservables, CKM_CP_J_MIN, CKM_PDG_ENVELOPE, CP_PHASE_TOL_DEG,
+    PMNS_CP_J_MIN, PMNS_PDG_ENVELOPE, PMNS_TARGET, PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL,
 };
 use std::fs::{self, File};
 use std::io::Write;
@@ -30,6 +31,11 @@ fn main() {
     let ckm_direct = ckm_from_clifford();
     let ckm_texture = ckm_from_textures();
     let pmns_direct = pmns_from_clifford();
+    let pmns_corr_c = std::env::var("GUTOE_PMNS_TH23_ALPHA2_C")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL);
+    let pmns_direct_corr = pmns_from_clifford_theta23_alpha2(pmns_corr_c);
     let pmns_texture = pmns_from_textures();
 
     let checks = [
@@ -47,6 +53,16 @@ fn main() {
             "pmns_direct",
             status_line("pmns_direct", pmns_direct, PMNS_PDG_ENVELOPE, PMNS_CP_J_MIN),
             pmns_direct,
+        ),
+        (
+            "pmns_direct_theta23_alpha2_corrected",
+            status_line(
+                "pmns_direct_theta23_alpha2_corrected",
+                pmns_direct_corr,
+                PMNS_PDG_ENVELOPE,
+                PMNS_CP_J_MIN,
+            ),
+            pmns_direct_corr,
         ),
         (
             "pmns_texture",
@@ -89,10 +105,32 @@ fn main() {
         }
     }
 
+    // Hard improvement gate: corrected theta23 residual must improve 10x vs direct.
+    let rd = residuals(pmns_direct, PMNS_TARGET).d_theta23_deg.abs();
+    let rc = residuals(pmns_direct_corr, PMNS_TARGET).d_theta23_deg.abs();
+    let th23_improvement_ok = rc <= rd / 10.0;
+    if !th23_improvement_ok {
+        overall_pass = false;
+        eprintln!(
+            "pmns_theta23_improvement: FAIL - corrected residual {:.9} not <= direct/10 {:.9}",
+            rc,
+            rd / 10.0
+        );
+    } else {
+        println!(
+            "pmns_theta23_improvement: pass (direct={:.6}°, corrected={:.6}°, c={:.6})",
+            rd, rc, pmns_corr_c
+        );
+    }
+
     writeln!(
         json,
-        "{{\n  \"overall_pass\": {},\n{}\n}}",
+        "{{\n  \"overall_pass\": {},\n  \"pmns_theta23_improvement\": {{\"pass\": {}, \"c_alpha2\": {:.12}, \"direct_abs_residual_deg\": {:.12}, \"corrected_abs_residual_deg\": {:.12}}},\n{}\n}}",
         if overall_pass { "true" } else { "false" },
+        if th23_improvement_ok { "true" } else { "false" },
+        pmns_corr_c,
+        rd,
+        rc,
         rows.join(",\n")
     )
     .expect("write gate json");

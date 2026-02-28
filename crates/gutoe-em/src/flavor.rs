@@ -12,6 +12,7 @@
 //   grade2_dim = 6
 //   complement_dim = clifford_dim - su2_dim = 13
 
+use crate::alpha::ALPHA_INVERSE_STRUCTURAL;
 use num_complex::Complex64;
 use serde::Serialize;
 use std::f64::consts::PI;
@@ -23,6 +24,7 @@ const GRADE2_DIM: f64 = 6.0;
 const COMPLEMENT_DIM: f64 = CLIFFORD_DIM - SU2_DIM; // 13
 const AUGMENTED_DIM: f64 = CLIFFORD_DIM + 1.0; // 17
 const LATTICE_SHIFT: f64 = GRADE2_DIM + 1.0; // 7
+pub const PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL: f64 = ALPHA_INVERSE_STRUCTURAL / 4.0; // 137/4
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct MixingObservables {
@@ -379,6 +381,30 @@ pub fn pmns_from_textures() -> MixingObservables {
     observables_from_unitary(&u)
 }
 
+/// Sorted neutrino texture eigenvalues (ascending) from the Cl(1,3) PMNS texture lane.
+pub fn neutrino_texture_eigenvalues() -> [f64; 3] {
+    let (_ml, mnu) = pmns_mass_textures_from_clifford();
+    let (evals, _un) = jacobi_eigen_hermitian(mnu);
+    evals
+}
+
+/// Hierarchy prediction from the texture eigenvalue ordering.
+///
+/// Returns `"normal"` when m1 < m2 < m3 (equivalently Δm^2_31 > 0),
+/// `"degenerate"` if eigenvalues are nearly equal, else `"inverted_like"`.
+pub fn neutrino_hierarchy_prediction() -> &'static str {
+    let m = neutrino_texture_eigenvalues();
+    let eps = 1.0e-12;
+    if (m[2] - m[0]).abs() < eps {
+        return "degenerate";
+    }
+    if m[0] < m[1] && m[1] < m[2] {
+        "normal"
+    } else {
+        "inverted_like"
+    }
+}
+
 fn build_observables(s12: f64, s23: f64, s13: f64, delta_rad: f64) -> MixingObservables {
     let theta12_deg = s12.asin().to_degrees();
     let theta23_deg = s23.asin().to_degrees();
@@ -423,6 +449,35 @@ pub fn ckm_from_clifford() -> MixingObservables {
 pub fn pmns_from_clifford() -> MixingObservables {
     let s12 = (GRADE1_DIM / COMPLEMENT_DIM).sqrt();
     let s23 = (GRADE1_DIM / LATTICE_SHIFT).sqrt();
+    let s13 = 1.0 / LATTICE_SHIFT;
+    let delta = PI + (1.0 / SU2_DIM).atan();
+    build_observables(s12, s23, s13, delta)
+}
+
+/// Direct structural value used by the PMNS lane:
+///   sin²(theta23) = 4/7.
+pub fn pmns_theta23_sq_direct() -> f64 {
+    GRADE1_DIM / LATTICE_SHIFT
+}
+
+/// Corrected structural value used by the PMNS alpha² lane:
+///   sin²(theta23) = 4/7 - c_alpha2 * alpha_structural^2.
+pub fn pmns_theta23_sq_alpha2_corrected(c_alpha2: f64) -> f64 {
+    let alpha_structural = 1.0 / ALPHA_INVERSE_STRUCTURAL;
+    pmns_theta23_sq_direct() - c_alpha2 * alpha_structural * alpha_structural
+}
+
+/// PMNS observables with an optional second-order correction in the theta23 lane.
+///
+/// Correction ansatz:
+///   sin²(theta23) = 4/7 - c_alpha2 * alpha^2
+///
+/// where `alpha` is the structural electromagnetic coupling (`1/137` from Lean),
+/// and `c_alpha2` is a structural-rational coefficient candidate.
+pub fn pmns_from_clifford_theta23_alpha2(c_alpha2: f64) -> MixingObservables {
+    let s12 = (GRADE1_DIM / COMPLEMENT_DIM).sqrt();
+    let s23_sq = pmns_theta23_sq_alpha2_corrected(c_alpha2);
+    let s23 = s23_sq.clamp(0.0, 1.0).sqrt();
     let s13 = 1.0 / LATTICE_SHIFT;
     let delta = PI + (1.0 / SU2_DIM).atan();
     build_observables(s12, s23, s13, delta)
@@ -610,5 +665,31 @@ mod tests {
         let pmns = pmns_from_textures();
         cp_violation_witness(pmns, PMNS_CP_J_MIN, CP_PHASE_TOL_DEG)
             .expect("texture PMNS missing CPV witness");
+    }
+
+    #[test]
+    fn pmns_theta23_alpha2_default_coeff_matches_structural_lane() {
+        let alpha_structural = 1.0 / ALPHA_INVERSE_STRUCTURAL;
+        let expected = (GRADE1_DIM / LATTICE_SHIFT)
+            - PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL * alpha_structural * alpha_structural;
+        let got = pmns_theta23_sq_alpha2_corrected(PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL);
+        assert!(
+            (got - expected).abs() < 1e-15,
+            "structural theta23 alpha2 lane mismatch: got={got:.15e}, expected={expected:.15e}"
+        );
+    }
+
+    #[test]
+    fn pmns_theta23_alpha2_improves_over_direct_by_10x() {
+        let direct = pmns_from_clifford();
+        let corrected = pmns_from_clifford_theta23_alpha2(PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL);
+        let direct_resid = (direct.theta23_deg - PMNS_TARGET.theta23_deg).abs();
+        let corr_resid = (corrected.theta23_deg - PMNS_TARGET.theta23_deg).abs();
+        assert!(
+            corr_resid <= direct_resid / 10.0,
+            "theta23 alpha2 correction did not improve by 10x: direct={direct_resid:.9}, corrected={corr_resid:.9}"
+        );
+        within_envelope(corrected, PMNS_PDG_ENVELOPE)
+            .expect("corrected PMNS theta23 alpha2 outside PDG envelope");
     }
 }

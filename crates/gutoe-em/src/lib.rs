@@ -26,9 +26,11 @@ pub use config::{
 };
 pub use flavor::{
     ckm_from_clifford, ckm_from_textures, cp_violation_witness, pmns_from_clifford,
-    pmns_from_textures, residuals, within_envelope, CP_PHASE_TOL_DEG, CKM_CP_J_MIN,
-    PMNS_CP_J_MIN, MixingEnvelope, MixingObservables, MixingResiduals,
-    MixingTargets, CKM_PDG_ENVELOPE, CKM_TARGET, PMNS_PDG_ENVELOPE, PMNS_TARGET,
+    pmns_from_clifford_theta23_alpha2, pmns_from_textures, pmns_theta23_sq_alpha2_corrected,
+    pmns_theta23_sq_direct, residuals, within_envelope, CP_PHASE_TOL_DEG, CKM_CP_J_MIN,
+    PMNS_CP_J_MIN, PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL, MixingEnvelope, MixingObservables,
+    MixingResiduals, MixingTargets, CKM_PDG_ENVELOPE, CKM_TARGET, PMNS_PDG_ENVELOPE,
+    PMNS_TARGET, neutrino_hierarchy_prediction, neutrino_texture_eigenvalues,
 };
 pub use gauge::{
     compute_charge_density, em_force_on_lepton, jacobi_poisson, maxwell_wave_step, update_gauge,

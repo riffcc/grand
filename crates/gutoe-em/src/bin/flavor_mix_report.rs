@@ -3,8 +3,8 @@
  */
 
 use gutoe_em::{
-    ckm_from_clifford, ckm_from_textures, pmns_from_clifford, pmns_from_textures, residuals,
-    CKM_TARGET, PMNS_TARGET,
+    ckm_from_clifford, ckm_from_textures, pmns_from_clifford, pmns_from_clifford_theta23_alpha2,
+    pmns_from_textures, residuals, PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL, CKM_TARGET, PMNS_TARGET,
 };
 use std::fs::{self, File};
 use std::io::Write;
@@ -38,12 +38,27 @@ fn write_block(
 }
 
 fn main() {
+    let pmns_th23_corr_c = std::env::var("GUTOE_PMNS_TH23_ALPHA2_C")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL);
+
     let ckm = ckm_from_clifford();
     let pmns = pmns_from_clifford();
+    let pmns_corr = pmns_from_clifford_theta23_alpha2(pmns_th23_corr_c);
     let ckm_tex = ckm_from_textures();
     let pmns_tex = pmns_from_textures();
     let ckm_r = residuals(ckm, CKM_TARGET);
     let pmns_r = residuals(pmns, PMNS_TARGET);
+    let pmns_corr_r = residuals(pmns_corr, PMNS_TARGET);
+    let pmns_theta23_direct_abs = pmns_r.d_theta23_deg.abs();
+    let pmns_theta23_corr_abs = pmns_corr_r.d_theta23_deg.abs();
+    let pmns_theta23_improvement_factor = if pmns_theta23_corr_abs > 0.0 {
+        pmns_theta23_direct_abs / pmns_theta23_corr_abs
+    } else {
+        f64::INFINITY
+    };
+    let pmns_theta23_improves_10x = pmns_theta23_corr_abs <= pmns_theta23_direct_abs / 10.0;
     let ckm_tex_r = residuals(ckm_tex, CKM_TARGET);
     let pmns_tex_r = residuals(pmns_tex, PMNS_TARGET);
 
@@ -83,6 +98,31 @@ fn main() {
     );
     write_block(
         &mut txt,
+        "PMNS (direct algebraic, theta23 alpha^2 corrected)",
+        pmns_corr.theta12_deg,
+        pmns_corr.theta23_deg,
+        pmns_corr.theta13_deg,
+        pmns_corr.delta_deg,
+        pmns_corr.jarlskog,
+        pmns_corr_r.d_theta12_deg,
+        pmns_corr_r.d_theta23_deg,
+        pmns_corr_r.d_theta13_deg,
+        pmns_corr_r.d_delta_deg,
+        pmns_corr_r.d_jarlskog,
+    );
+    writeln!(txt, "[PMNS theta23 alpha^2 improvement]").expect("write section");
+    writeln!(txt, "c_alpha2 = {pmns_th23_corr_c:.12}").expect("write c");
+    writeln!(txt, "direct_abs_residual_deg = {pmns_theta23_direct_abs:.9}").expect("write rd");
+    writeln!(txt, "corrected_abs_residual_deg = {pmns_theta23_corr_abs:.9}").expect("write rc");
+    writeln!(
+        txt,
+        "improvement_factor = {pmns_theta23_improvement_factor:.6}"
+    )
+    .expect("write factor");
+    writeln!(txt, "improves_10x = {pmns_theta23_improves_10x}").expect("write bool");
+    writeln!(txt).expect("newline");
+    write_block(
+        &mut txt,
         "CKM (texture diagonalization)",
         ckm_tex.theta12_deg,
         ckm_tex.theta23_deg,
@@ -113,7 +153,7 @@ fn main() {
     let mut json = File::create(&json_path).expect("create report json");
     writeln!(
         json,
-        "{{\n  \"ckm\": {{\n    \"direct\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }},\n    \"texture\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }}\n  }},\n  \"pmns\": {{\n    \"direct\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }},\n    \"texture\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }}\n  }}\n}}",
+        "{{\n  \"ckm\": {{\n    \"direct\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }},\n    \"texture\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }}\n  }},\n  \"pmns\": {{\n    \"direct\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }},\n    \"direct_theta23_alpha2_corrected\": {{\n      \"c_alpha2\": {:.12},\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }},\n    \"theta23_alpha2_improvement\": {{\n      \"c_alpha2\": {:.12},\n      \"direct_abs_residual_deg\": {:.12},\n      \"corrected_abs_residual_deg\": {:.12},\n      \"improvement_factor\": {:.12},\n      \"improves_10x\": {}\n    }},\n    \"texture\": {{\n      \"theta12_deg\": {:.12},\n      \"theta23_deg\": {:.12},\n      \"theta13_deg\": {:.12},\n      \"delta_deg\": {:.12},\n      \"jarlskog\": {:.12e},\n      \"delta_theta12_deg\": {:.12},\n      \"delta_theta23_deg\": {:.12},\n      \"delta_theta13_deg\": {:.12},\n      \"delta_delta_deg\": {:.12},\n      \"delta_jarlskog\": {:.12e}\n    }}\n  }}\n}}",
         ckm.theta12_deg,
         ckm.theta23_deg,
         ckm.theta13_deg,
@@ -144,6 +184,22 @@ fn main() {
         pmns_r.d_theta13_deg,
         pmns_r.d_delta_deg,
         pmns_r.d_jarlskog,
+        pmns_th23_corr_c,
+        pmns_corr.theta12_deg,
+        pmns_corr.theta23_deg,
+        pmns_corr.theta13_deg,
+        pmns_corr.delta_deg,
+        pmns_corr.jarlskog,
+        pmns_corr_r.d_theta12_deg,
+        pmns_corr_r.d_theta23_deg,
+        pmns_corr_r.d_theta13_deg,
+        pmns_corr_r.d_delta_deg,
+        pmns_corr_r.d_jarlskog,
+        pmns_th23_corr_c,
+        pmns_theta23_direct_abs,
+        pmns_theta23_corr_abs,
+        pmns_theta23_improvement_factor,
+        pmns_theta23_improves_10x,
         pmns_tex.theta12_deg,
         pmns_tex.theta23_deg,
         pmns_tex.theta13_deg,
@@ -166,6 +222,15 @@ fn main() {
     println!(
         "PMNS θ12={:.3}° θ23={:.3}° θ13={:.3}° δ={:.3}° J={:.3e}",
         pmns.theta12_deg, pmns.theta23_deg, pmns.theta13_deg, pmns.delta_deg, pmns.jarlskog
+    );
+    println!(
+        "PMNS(corr c={:.3}) θ12={:.3}° θ23={:.3}° θ13={:.3}° δ={:.3}° J={:.3e}",
+        pmns_th23_corr_c,
+        pmns_corr.theta12_deg,
+        pmns_corr.theta23_deg,
+        pmns_corr.theta13_deg,
+        pmns_corr.delta_deg,
+        pmns_corr.jarlskog
     );
     println!(
         "CKM(texture)  θ12={:.3}° θ23={:.3}° θ13={:.3}° δ={:.3}° J={:.3e}",
