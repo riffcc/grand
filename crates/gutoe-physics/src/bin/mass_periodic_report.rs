@@ -737,7 +737,7 @@ fn main() -> anyhow::Result<()> {
 
     // Unified element table: nuclear stability + atomic SCF + coupled thermodynamics.
     let mut unified_csv = String::from(
-        "Z,representative_A,predicted_stable_like_isotopes,predicted_has_stable,observed_has_stable_ref,observed_stable_isotopes_ref,beta_optimal_count,local_min_count,a_min,a_max,n_min,n_max,best_A,best_N,best_stability_score,best_binding_per_nucleon_mev,best_s2n_mev,best_s2p_mev,best_fissility,best_sf_log10_half_life_s,weak_q_margin_min_mev,weak_q_margin_max_mev,weak_q_margin_mean_mev,stable_like_A_list,stable_like_N_list,scf_iterations,scf_residual,scf_electron_count,scf_valence_electrons,scf_total_electronic_energy_ev,scf_homo_energy_ev,scf_lumo_energy_ev,scf_ionization_energy_ev,scf_electron_affinity_ev,scf_electronegativity_mulliken_ev,scf_chemical_hardness_ev,scf_atomic_radius_pm,scf_covalent_radius_pm,scf_polarizability_a0_cubed,scf_electron_configuration,scf_frontier_orbitals,chem_coupled_mode,chem_family,chem_period,chem_state_298k_1bar,chem_state_273k_1bar_stp,chem_state_1000k_1bar,chem_molar_mass_g_mol,chem_atomic_mass_u,chem_mass_per_atom_kg,chem_atomic_radius_pm,chem_molar_volume_cm3_mol,chem_volume_per_atom_ang3,chem_molar_volume_stp_l_mol_if_gas,chem_density_g_cm3,chem_cohesive_energy_ev,chem_debye_temperature_k,chem_latent_fusion_kj_mol,chem_latent_vaporization_kj_mol,chem_melting_temperature_k,chem_boiling_temperature_k,chem_vapor_pressure_298k_pa,chem_bulk_modulus_gpa,chem_thermal_expansion_1_per_k,chem_cp_solid_j_mol_k,chem_cp_liquid_j_mol_k,chem_cp_gas_j_mol_k,chem_delta_density_vs_proxy_g_cm3,chem_delta_melting_vs_proxy_k,chem_delta_boiling_vs_proxy_k,chem_scf_iterations,chem_scf_residual,chem_scf_valence_electrons,chem_scf_atomic_radius_pm,chem_scf_ie_ev,chem_scf_ea_ev,chem_scf_chi_ev,chem_scf_hardness_ev,chem_coupled_radius_pm,chem_cohesive_frontier_proxy_ev\n",
+        "Z,representative_A,predicted_stable_like_isotopes,predicted_has_stable,observed_has_stable_ref,observed_stable_isotopes_ref,beta_optimal_count,local_min_count,a_min,a_max,n_min,n_max,best_A,best_N,best_stability_score,best_binding_per_nucleon_mev,best_s2n_mev,best_s2p_mev,best_fissility,best_sf_log10_half_life_s,weak_q_margin_min_mev,weak_q_margin_max_mev,weak_q_margin_mean_mev,stable_like_A_list,stable_like_N_list,scf_iterations,scf_residual,scf_electron_count,scf_valence_electrons,scf_total_electronic_energy_ev,scf_homo_energy_ev,scf_lumo_energy_ev,scf_ionization_energy_ev,scf_electron_affinity_ev,scf_electronegativity_mulliken_ev,scf_chemical_hardness_ev,scf_atomic_radius_pm,scf_covalent_radius_pm,scf_polarizability_a0_cubed,scf_electron_configuration,scf_frontier_orbitals,chem_coupled_mode,chem_family,chem_period,chem_crystal_prototype,chem_state_298k_1bar,chem_state_273k_1bar_stp,chem_state_1000k_1bar,chem_molar_mass_g_mol,chem_atomic_mass_u,chem_mass_per_atom_kg,chem_atomic_radius_pm,chem_molar_volume_cm3_mol,chem_volume_per_atom_ang3,chem_molar_volume_stp_l_mol_if_gas,chem_density_g_cm3,chem_cohesive_energy_ev,chem_debye_temperature_k,chem_latent_fusion_kj_mol,chem_latent_vaporization_kj_mol,chem_melting_temperature_k,chem_boiling_temperature_k,chem_vapor_pressure_298k_pa,chem_bulk_modulus_gpa,chem_thermal_expansion_1_per_k,chem_cp_solid_j_mol_k,chem_cp_liquid_j_mol_k,chem_cp_gas_j_mol_k,chem_delta_density_vs_proxy_g_cm3,chem_delta_melting_vs_proxy_k,chem_delta_boiling_vs_proxy_k,chem_scf_iterations,chem_scf_residual,chem_scf_valence_electrons,chem_scf_atomic_radius_pm,chem_scf_ie_ev,chem_scf_ea_ev,chem_scf_chi_ev,chem_scf_hardness_ev,chem_coupled_radius_pm,chem_cohesive_frontier_proxy_ev\n",
     );
     let mut unified_rows = 0usize;
     let mut unified_density_clamp_count = 0usize;
@@ -892,6 +892,7 @@ fn main() -> anyhow::Result<()> {
             chem_diag_hardness,
             chem_diag_coupled_radius,
             chem_diag_frontier_cohesive,
+            chem_diag_crystal,
         ) = if chem_coupled {
             let (pred, diag) = predict_element_thermo_coupled_with_diagnostics(z, representative_a);
             (
@@ -906,6 +907,7 @@ fn main() -> anyhow::Result<()> {
                 diag.scf_chemical_hardness_ev,
                 diag.coupled_radius_pm,
                 diag.cohesive_frontier_proxy_ev,
+                diag.crystal_prototype.as_str().to_string(),
             )
         } else {
             (
@@ -920,6 +922,7 @@ fn main() -> anyhow::Result<()> {
                 f64::NAN,
                 f64::NAN,
                 f64::NAN,
+                "n/a".to_string(),
             )
         };
 
@@ -1005,6 +1008,7 @@ fn main() -> anyhow::Result<()> {
             chem_coupled.to_string(),
             family_name(thermo.family).to_string(),
             thermo.period.to_string(),
+            chem_diag_crystal,
             state_name(thermo.ambient_state_298k).to_string(),
             state_name(state_273k).to_string(),
             state_name(state_1000k).to_string(),

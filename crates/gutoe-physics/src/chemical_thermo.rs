@@ -46,6 +46,33 @@ pub enum MatterState {
     Gas,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CrystalPrototype {
+    Bcc,
+    Fcc,
+    Hcp,
+    DiamondLike,
+    TetragonalLike,
+    RhombohedralLike,
+    Molecular,
+    ComplexFBlock,
+}
+
+impl CrystalPrototype {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Bcc => "bcc",
+            Self::Fcc => "fcc",
+            Self::Hcp => "hcp",
+            Self::DiamondLike => "diamond_like",
+            Self::TetragonalLike => "tetragonal_like",
+            Self::RhombohedralLike => "rhombohedral_like",
+            Self::Molecular => "molecular",
+            Self::ComplexFBlock => "complex_fblock",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct PhaseGibbsKjMol {
     pub solid: f64,
@@ -59,6 +86,7 @@ pub struct ElementThermoPrediction {
     pub a: u16,
     pub family: ChemicalFamily,
     pub period: u8,
+    pub crystal_prototype: CrystalPrototype,
     pub molar_mass_g_mol: f64,
     pub atomic_radius_pm: f64,
     pub molar_volume_cm3_mol: f64,
@@ -91,6 +119,7 @@ pub struct CoupledThermoDiagnostics {
     pub coupled_radius_pm: f64,
     pub cohesive_frontier_proxy_ev: f64,
     pub coupled_packing_fraction: f64,
+    pub crystal_prototype: CrystalPrototype,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -282,6 +311,105 @@ fn latent_vapor_fraction(family: ChemicalFamily) -> f64 {
     }
 }
 
+fn thermal_entropy_scales(
+    family: ChemicalFamily,
+    period: u8,
+    crystal: CrystalPrototype,
+    valence_electrons_hint: Option<u16>,
+    hints: Option<OrbitalPackingHints>,
+) -> (f64, f64) {
+    let period_rel = ((period as f64 - 3.0) / 4.0).clamp(0.0, 1.0);
+    let v = valence_electrons_hint.unwrap_or(0) as f64;
+    let mut fusion_scale = 1.0;
+    let mut vapor_scale = 1.0;
+
+    // Lean closure (Gutoe.ThermalEntropyClosure):
+    // dFusionGainQ = 5/6, dVaporGainQ = 3/5.
+    if matches!(
+        family,
+        ChemicalFamily::Transition | ChemicalFamily::Lanthanide | ChemicalFamily::Actinide
+    ) {
+        let d_hint_strength = if let Some(h) = hints {
+            let d_half_fill_peak = (1.0 - 2.0 * (h.d_fill - 0.5).abs()).clamp(0.0, 1.0);
+            (h.d_frac * (0.5 + 0.5 * d_half_fill_peak) * (0.6 + 0.4 * period_rel)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let d_valence_peak = if v > 0.0 {
+            (1.0 - ((v - 6.5).abs() / 4.5)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let heavy_gate = if period >= 6 { 5.0 / 4.0 } else { 1.0 };
+        let d_valence_strength =
+            (d_valence_peak * (0.55 + 0.45 * period_rel) * heavy_gate).clamp(0.0, 1.0);
+        let d_strength = d_hint_strength.max(d_valence_strength);
+        fusion_scale *= (1.0 - (5.0 / 6.0) * d_strength).clamp(1.0 / 4.0, 1.0);
+        vapor_scale *= (1.0 - (3.0 / 5.0) * d_strength).clamp(2.0 / 5.0, 1.0);
+    }
+
+    // Refractory transition lane (4d/5d-first, with period-weighted extension):
+    // half-filled/open d-shell transition rows support stronger cohesive thermal locking.
+    if family == ChemicalFamily::Transition && period >= 4 {
+        let (d_frac, d_fill, open_d_shell) = if let Some(h) = hints {
+            (h.d_frac, h.d_fill, h.open_d_shell)
+        } else {
+            (0.0, 0.0, false)
+        };
+        let d_half_fill_peak = (1.0 - 2.0 * (d_fill - 0.5).abs()).clamp(0.0, 1.0);
+        let open_gate = if open_d_shell { 1.0 } else { 0.6 };
+        let proto_gate = match crystal {
+            CrystalPrototype::Bcc | CrystalPrototype::Hcp => 1.0,
+            CrystalPrototype::Fcc => 4.0 / 5.0,
+            _ => 3.0 / 5.0,
+        };
+        let period_gate = (0.4 + 0.6 * period_rel).clamp(0.0, 1.0);
+        let refractory_strength =
+            (d_frac * d_half_fill_peak * open_gate * proto_gate * period_gate).clamp(0.0, 1.0);
+        // Lean-constrained rational suppression:
+        // refractoryFusionGainQ = 7/20, refractoryVaporGainQ = 1/4.
+        fusion_scale *= (1.0 - (7.0 / 20.0) * refractory_strength).clamp(3.0 / 10.0, 1.0);
+        vapor_scale *= (1.0 - (1.0 / 4.0) * refractory_strength).clamp(1.0 / 2.0, 1.0);
+    }
+
+    // Lean closure (Gutoe.ThermalEntropyClosure):
+    // covalentGainQ = 4/5.
+    if family == ChemicalFamily::Nonmetal
+        && matches!(
+            crystal,
+            CrystalPrototype::DiamondLike | CrystalPrototype::RhombohedralLike
+        )
+    {
+        let topology_peak = (1.0 - ((v - 4.0).abs() / 4.0)).clamp(0.0, 1.0);
+        let period_gate = (1.0 - (3.0 / 5.0) * period_rel).clamp(2.0 / 5.0, 1.0);
+        let covalent_strength = (topology_peak * period_gate).clamp(0.0, 1.0);
+        fusion_scale *= (1.0 - (4.0 / 5.0) * covalent_strength).clamp(1.0 / 5.0, 1.0);
+        vapor_scale *= (1.0 - (3.0 / 5.0) * covalent_strength).clamp(1.0 / 3.0, 1.0);
+    }
+
+    // Lean closure (Gutoe.ThermalEntropyClosure):
+    // metalloidPenaltyQ = 7/4.
+    if family == ChemicalFamily::Metalloid {
+        let p_gate = ((period as f64 - 2.0) / 4.0).clamp(0.0, 1.0);
+        let penalty = 1.0 + ((7.0 / 4.0) - 1.0) * p_gate;
+        fusion_scale *= penalty;
+        vapor_scale *= penalty;
+        let topology_peak = (1.0 - ((v - 4.0).abs() / 3.0)).clamp(0.0, 1.0);
+        let network_penalty = 1.0 + ((5.0 / 4.0) - 1.0) * topology_peak;
+        fusion_scale *= network_penalty;
+        vapor_scale *= network_penalty;
+    }
+
+    // Lean closure (Gutoe.ThermalEntropyClosure):
+    // molecularPenaltyQ = 5/4.
+    if crystal == CrystalPrototype::Molecular {
+        fusion_scale *= 5.0 / 4.0;
+        vapor_scale *= 5.0 / 4.0;
+    }
+
+    (fusion_scale.clamp(0.20, 2.0), vapor_scale.clamp(0.25, 2.0))
+}
+
 fn molecularity_factor(z: u16, family: ChemicalFamily) -> f64 {
     if matches!(z, 1 | 7 | 8 | 9 | 17) {
         2.0
@@ -316,6 +444,95 @@ fn packing_fraction(family: ChemicalFamily, period: u8) -> f64 {
         ChemicalFamily::Lanthanide | ChemicalFamily::Actinide => 0.71,
         ChemicalFamily::Alkali => 0.58,
         ChemicalFamily::AlkalineEarth => 0.62,
+    }
+}
+
+fn crystal_packing_fraction(proto: CrystalPrototype) -> f64 {
+    match proto {
+        CrystalPrototype::Bcc => 0.68,
+        CrystalPrototype::Fcc | CrystalPrototype::Hcp => 0.74,
+        CrystalPrototype::DiamondLike => 0.34,
+        CrystalPrototype::TetragonalLike => 0.61,
+        CrystalPrototype::RhombohedralLike => 0.56,
+        CrystalPrototype::Molecular => 0.36,
+        CrystalPrototype::ComplexFBlock => 0.69,
+    }
+}
+
+fn crystal_prototype_from_hints(
+    family: ChemicalFamily,
+    period: u8,
+    hints: OrbitalPackingHints,
+) -> CrystalPrototype {
+    match family {
+        ChemicalFamily::Alkali => CrystalPrototype::Bcc,
+        ChemicalFamily::AlkalineEarth => {
+            if period <= 3 {
+                CrystalPrototype::Hcp
+            } else {
+                CrystalPrototype::Bcc
+            }
+        }
+        ChemicalFamily::Transition => {
+            // d-band corridor map: early/mid/late filling fingerprints.
+            if hints.d_fill < 0.28 {
+                CrystalPrototype::Hcp
+            } else if hints.d_fill < 0.60 {
+                CrystalPrototype::Bcc
+            } else if hints.d_fill < 0.88 {
+                CrystalPrototype::Hcp
+            } else {
+                CrystalPrototype::Fcc
+            }
+        }
+        ChemicalFamily::PostTransition => {
+            let v = hints.valence_electrons as f64;
+            if period >= 6 && v <= 3.5 {
+                CrystalPrototype::Hcp
+            } else if v <= 4.5 {
+                CrystalPrototype::TetragonalLike
+            } else {
+                CrystalPrototype::RhombohedralLike
+            }
+        }
+        ChemicalFamily::Metalloid => {
+            if hints.p_frac > 0.52 {
+                CrystalPrototype::RhombohedralLike
+            } else {
+                CrystalPrototype::DiamondLike
+            }
+        }
+        ChemicalFamily::Nonmetal => {
+            let v = hints.valence_electrons as f64;
+            if (v - 4.0).abs() <= 1.2 {
+                CrystalPrototype::DiamondLike
+            } else if (v - 6.0).abs() <= 1.2 {
+                CrystalPrototype::RhombohedralLike
+            } else {
+                CrystalPrototype::Molecular
+            }
+        }
+        ChemicalFamily::Halogen | ChemicalFamily::NobleGas => CrystalPrototype::Molecular,
+        ChemicalFamily::Lanthanide | ChemicalFamily::Actinide => CrystalPrototype::ComplexFBlock,
+    }
+}
+
+fn crystal_prototype_from_family(family: ChemicalFamily, period: u8) -> CrystalPrototype {
+    match family {
+        ChemicalFamily::Alkali => CrystalPrototype::Bcc,
+        ChemicalFamily::AlkalineEarth => {
+            if period <= 3 {
+                CrystalPrototype::Hcp
+            } else {
+                CrystalPrototype::Bcc
+            }
+        }
+        ChemicalFamily::Transition => CrystalPrototype::Hcp,
+        ChemicalFamily::PostTransition => CrystalPrototype::TetragonalLike,
+        ChemicalFamily::Metalloid => CrystalPrototype::RhombohedralLike,
+        ChemicalFamily::Nonmetal => CrystalPrototype::DiamondLike,
+        ChemicalFamily::Halogen | ChemicalFamily::NobleGas => CrystalPrototype::Molecular,
+        ChemicalFamily::Lanthanide | ChemicalFamily::Actinide => CrystalPrototype::ComplexFBlock,
     }
 }
 
@@ -410,6 +627,16 @@ fn phase_override_enabled() -> bool {
             _ => true,
         },
         Err(_) => true,
+    })
+}
+
+fn d_band_cohesion_enabled() -> bool {
+    static D_BAND_COHESION_ENABLED: OnceLock<bool> = OnceLock::new();
+    *D_BAND_COHESION_ENABLED.get_or_init(|| {
+        match std::env::var("GUTOE_CHEM_D_BAND_COHESION") {
+            Ok(v) => !matches!(v.to_ascii_lowercase().as_str(), "0" | "false" | "no" | "off"),
+            Err(_) => true,
+        }
     })
 }
 
@@ -555,6 +782,35 @@ fn orbital_packing_hints_from_prefetch(p: &CoupledThermoPrefetch) -> OrbitalPack
     }
 }
 
+fn transition_d_band_width_ev(scf: &AtomicScfPrediction, period: u8) -> f64 {
+    if period < 4 {
+        return 0.0;
+    }
+    let n_max = scf
+        .orbitals
+        .iter()
+        .filter(|o| o.occupation > 0)
+        .map(|o| o.n)
+        .max()
+        .unwrap_or(1);
+    let mut e_min = f64::INFINITY;
+    let mut e_max = f64::NEG_INFINITY;
+    let mut count = 0usize;
+    for o in scf.orbitals.iter().filter(|o| o.occupation > 0 && o.l == 2) {
+        let near_valence = o.n + 1 >= n_max || (period >= 6 && o.n + 2 >= n_max);
+        if near_valence {
+            e_min = e_min.min(o.energy_ev);
+            e_max = e_max.max(o.energy_ev);
+            count += 1;
+        }
+    }
+    if count >= 2 {
+        (e_max - e_min).abs().clamp(0.0, 40.0)
+    } else {
+        0.0
+    }
+}
+
 fn transition_4d_corridor_strength(
     family: ChemicalFamily,
     period: u8,
@@ -566,7 +822,44 @@ fn transition_4d_corridor_strength(
     // Broad Nb-Pd corridor: early-to-late 4d filling still contracts metallic volumes.
     let d_corridor = (1.0 - ((hints.d_fill - 0.55).abs() / 0.55)).clamp(0.0, 1.0);
     let v_corridor = (1.0 - ((hints.valence_electrons as f64 - 7.0).abs() / 4.0)).clamp(0.0, 1.0);
-    (0.65 * d_corridor + 0.35 * v_corridor).clamp(0.0, 1.0)
+    // Lean-constrained corridor blend:
+    // d-weight = 13/20, v-weight = 7/20
+    ((13.0 / 20.0) * d_corridor + (7.0 / 20.0) * v_corridor).clamp(0.0, 1.0)
+}
+
+fn post_transition_heavy_strength(
+    family: ChemicalFamily,
+    period: u8,
+    hints: OrbitalPackingHints,
+) -> f64 {
+    if family != ChemicalFamily::PostTransition || period < 5 {
+        return 0.0;
+    }
+    // Heavy p-block corridor (In/Sn/Sb/Tl/Pb/Bi-like): inert-pair style compaction
+    // and dense metallic packing rise with period.
+    let v = hints.valence_electrons as f64;
+    let inert_pair_peak = (1.0 - ((v - 4.0).abs() / 2.5)).clamp(0.0, 1.0);
+    let p_metallicity = (hints.p_frac + 0.35 * hints.d_frac - 0.15 * hints.f_frac).clamp(0.0, 1.0);
+    let period_gain = ((period as f64 - 4.0) / 3.0).clamp(0.0, 1.0);
+    // Reuse the same Lean-constrained corridor blend (13/20, 7/20).
+    (period_gain * ((13.0 / 20.0) * inert_pair_peak + (7.0 / 20.0) * p_metallicity)).clamp(0.0, 1.0)
+}
+
+fn f_block_contraction_strength(
+    family: ChemicalFamily,
+    hints: OrbitalPackingHints,
+) -> f64 {
+    match family {
+        ChemicalFamily::Lanthanide => (0.68 + 0.32 * hints.f_frac).clamp(0.0, 1.0),
+        ChemicalFamily::Actinide => {
+            // Early actinides (Ac/Th/Pa) behave less like strongly contracted f-filled
+            // volumes; ramp contraction with late-fill character.
+            let v = hints.valence_electrons as f64;
+            let late_fill = ((v - 5.0) / 5.0).clamp(0.0, 1.0);
+            (late_fill * hints.f_frac).clamp(0.0, 1.0)
+        }
+        _ => 0.0,
+    }
 }
 
 fn crystal_packing_multiplier(
@@ -582,6 +875,8 @@ fn crystal_packing_multiplier(
         0.0
     };
     let d_band_cluster = transition_4d_corridor_strength(family, period, hints);
+    let post_heavy = post_transition_heavy_strength(family, period, hints);
+    let fblock = f_block_contraction_strength(family, hints);
     let mut m = 1.0;
     if family == ChemicalFamily::Transition {
         m *= 1.0 + 0.24 * period_rel * hints.d_frac * (0.4 + 0.6 * d_half_fill_peak);
@@ -589,11 +884,21 @@ fn crystal_packing_multiplier(
         m *= 1.0 + 0.35 * hints.d_frac * d_band_cluster;
         // 4d transition row (Nb-Pd band-filling corridor) compacts more than orbital
         // fraction-weighting alone captures; tie directly to d-band occupancy shape.
-        m *= 1.0 + 0.50 * d_band_cluster;
+        // Lean closure: transitionPackGainQ = 1/2
+        m *= 1.0 + (1.0 / 2.0) * d_band_cluster;
     }
     if family == ChemicalFamily::PostTransition && period >= 5 {
         // Heavy post-transition metals trend toward denser metallic packing.
         m *= 1.0 + 0.18 * period_rel * (0.55 * hints.p_frac + 0.45 * hints.f_frac);
+        // Lean closure: postTransitionPackGainQ = 5/12
+        m *= 1.0 + (5.0 / 12.0) * post_heavy;
+    }
+    if family == ChemicalFamily::Lanthanide {
+        // Lean closure: lanthanidePackGainQ = 3/10
+        m *= 1.0 + (3.0 / 10.0) * fblock;
+    } else if family == ChemicalFamily::Actinide {
+        // Lean closure: actinidePackGainQ = 3/25
+        m *= 1.0 + (3.0 / 25.0) * fblock;
     }
     if hints.closed_d_shell {
         m *= 0.92;
@@ -637,6 +942,8 @@ fn crystal_radius_multiplier(
         0.0
     };
     let d_band_cluster = transition_4d_corridor_strength(family, period, hints);
+    let post_heavy = post_transition_heavy_strength(family, period, hints);
+    let fblock = f_block_contraction_strength(family, hints);
     let mut m = 1.0;
     if family == ChemicalFamily::Transition {
         m *= 1.0 - 0.14 * period_rel * hints.d_frac * (0.5 + 0.5 * d_half_fill_peak);
@@ -646,6 +953,15 @@ fn crystal_radius_multiplier(
     }
     if family == ChemicalFamily::PostTransition && period >= 5 {
         m *= 1.0 - 0.10 * period_rel * (0.55 * hints.p_frac + 0.45 * hints.f_frac);
+        // Lean closure mirrored in radius channel
+        m *= 1.0 - (3.0 / 10.0) * post_heavy;
+    }
+    if family == ChemicalFamily::Lanthanide {
+        // Lean closure: lanthanideRadiusGainQ = 9/50
+        m *= 1.0 - (9.0 / 50.0) * fblock;
+    } else if family == ChemicalFamily::Actinide {
+        // Lean closure: actinideRadiusGainQ = 2/25
+        m *= 1.0 - (2.0 / 25.0) * fblock;
     }
     m
 }
@@ -678,7 +994,13 @@ fn packing_fraction_from_hints(
     hints: OrbitalPackingHints,
     cal: &ChemicalThermoCalibration,
 ) -> f64 {
-    let base = packing_fraction(family, period);
+    let base_family = packing_fraction(family, period);
+    let crystal = crystal_prototype_from_hints(family, period, hints);
+    let base_crystal = crystal_packing_fraction(crystal);
+    // Lean-constrained blend (Gutoe.CrystalStructureWeights):
+    // familyWeightQ = grade1_4d.card / (grade1_4d.card + magneticTriplet.card) = 4/7
+    // crystalWeightQ = magneticTriplet.card / (grade1_4d.card + magneticTriplet.card) = 3/7
+    let base = (4.0 / 7.0) * base_family + (3.0 / 7.0) * base_crystal;
     let mut pack = base
         * (1.0 - cal.pack_p_void_coef * hints.p_frac
             + cal.pack_d_gain_coef * hints.d_frac
@@ -790,7 +1112,11 @@ fn assemble_element_thermo(
     cohesive_energy_ev_per_atom: f64,
     valence_electrons_hint: Option<u16>,
     packing_fraction_hint: Option<f64>,
+    crystal_prototype_hint: Option<CrystalPrototype>,
+    hints: Option<OrbitalPackingHints>,
 ) -> ElementThermoPrediction {
+    let crystal_prototype =
+        crystal_prototype_hint.unwrap_or_else(|| crystal_prototype_from_family(family, period));
     // Spherical atom proxy with family-aware packing correction.
     let pack = packing_fraction_hint
         .unwrap_or_else(|| packing_fraction(family, period))
@@ -806,11 +1132,20 @@ fn assemble_element_thermo(
         cohesive_energy_ev_per_atom * EV_TO_KJ_MOL * latent_fusion_fraction(family);
     let latent_vaporization_kj_mol =
         cohesive_energy_ev_per_atom * EV_TO_KJ_MOL * latent_vapor_fraction(family);
-
+    let (fusion_entropy_scale, vapor_entropy_scale) = thermal_entropy_scales(
+        family,
+        period,
+        crystal_prototype,
+        valence_electrons_hint,
+        hints,
+    );
     let melting_temperature_k =
-        (latent_fusion_kj_mol * 1000.0 / ENTROPY_FUSION_J_MOL_K).clamp(2.0, 8000.0);
-    let boiling_temperature_k =
-        (latent_vaporization_kj_mol * 1000.0 / ENTROPY_VAPORIZATION_J_MOL_K).clamp(4.0, 12000.0);
+        (latent_fusion_kj_mol * 1000.0 / (ENTROPY_FUSION_J_MOL_K * fusion_entropy_scale))
+            .clamp(2.0, 8000.0);
+    let boiling_temperature_k_raw =
+        (latent_vaporization_kj_mol * 1000.0 / (ENTROPY_VAPORIZATION_J_MOL_K * vapor_entropy_scale))
+            .clamp(4.0, 12000.0);
+    let boiling_temperature_k = boiling_temperature_k_raw.max(melting_temperature_k + 2.0);
 
     let debye_temperature_k =
         (120.0 * cohesive_energy_ev_per_atom.sqrt() * (condensed_density_g_cm3 / 5.0).powf(0.25))
@@ -860,6 +1195,7 @@ fn assemble_element_thermo(
         a,
         family,
         period,
+        crystal_prototype,
         molar_mass_g_mol,
         atomic_radius_pm: radius_pm,
         molar_volume_cm3_mol,
@@ -904,6 +1240,8 @@ pub fn predict_element_thermo(z: u16, a: u16) -> ElementThermoPrediction {
         cohesive_energy_ev_per_atom,
         None,
         None,
+        None,
+        None,
     )
 }
 
@@ -943,6 +1281,14 @@ pub fn prefetch_element_thermo_coupled(z: u16, a: u16) -> CoupledThermoPrefetch 
         has_f_core: hints.has_f_core,
         scf_radius_weight,
     }
+}
+
+pub fn predict_crystal_prototype(z: u16, a: u16) -> CrystalPrototype {
+    let family = family_of_z(z);
+    let period = period_of_z(z);
+    let scf = predict_atomic_scf(z, a);
+    let hints = orbital_packing_hints(&scf, period);
+    crystal_prototype_from_hints(family, period, hints)
 }
 
 pub fn predict_element_thermo_coupled_from_prefetch_calibrated(
@@ -992,6 +1338,12 @@ pub fn predict_element_thermo_coupled_from_prefetch_calibrated(
     let radius_upper_scale = coupled_radius_upper_scale(family, period);
     let radius_lower_scale = if family == ChemicalFamily::Actinide {
         cal.radius_lower_actinide
+    } else if family == ChemicalFamily::Lanthanide {
+        let fblock = f_block_contraction_strength(family, hints);
+        (0.56 - 0.16 * fblock).clamp(0.40, 0.56)
+    } else if family == ChemicalFamily::PostTransition && period >= 5 {
+        let post_heavy = post_transition_heavy_strength(family, period, hints);
+        (0.58 - 0.14 * post_heavy).clamp(0.42, 0.58)
     } else if family == ChemicalFamily::Transition && period == 5 {
         let cluster = transition_4d_corridor_strength(family, period, hints);
         (0.52 - 0.16 * cluster).clamp(0.34, 0.52)
@@ -1007,6 +1359,7 @@ pub fn predict_element_thermo_coupled_from_prefetch_calibrated(
         )
         .clamp(25.0, 350.0);
     let coupled_packing_fraction = packing_fraction_from_hints(family, period, hints, &cal);
+    let crystal_prototype = crystal_prototype_from_hints(family, period, hints);
 
     let frontier_cohesive = (0.28 * scf.ionization_energy_ev
         + 0.72 * scf.electron_affinity_ev.max(0.0)
@@ -1023,10 +1376,30 @@ pub fn predict_element_thermo_coupled_from_prefetch_calibrated(
     };
     let hardness_gate = (1.0 + 0.006 * scf.chemical_hardness_ev).clamp(0.92, 1.08);
     let valence_gate = (0.95 + 0.02 * (scf.valence_electrons as f64).min(8.0)).clamp(0.95, 1.08);
+    let d_band_gate = if d_band_cohesion_enabled()
+        && family == ChemicalFamily::Transition
+        && period >= 5
+    {
+        let width_ev = transition_d_band_width_ev(scf, period);
+        let width_norm = (width_ev / 16.0).clamp(0.0, 1.0);
+        let edge = (((scf.valence_electrons as f64) - 6.5).abs() / 3.5).clamp(0.0, 1.0);
+        let proto = match crystal_prototype {
+            CrystalPrototype::Hcp => 1.0,
+            CrystalPrototype::Fcc => 3.0 / 4.0,
+            CrystalPrototype::Bcc => 2.0 / 3.0,
+            _ => 1.0 / 2.0,
+        };
+        // Mild d-band dispersion correction:
+        // gain = 1 + (3/4) * width_norm * edge * prototype_gate.
+        (1.0 + (3.0 / 4.0) * width_norm * edge * proto).clamp(1.0, 1.35)
+    } else {
+        1.0
+    };
     let raw_cohesive = ((1.0 - frontier_weight) * base.cohesive_energy_ev_per_atom
         + frontier_weight * frontier_cohesive)
         * hardness_gate
-        * valence_gate;
+        * valence_gate
+        * d_band_gate;
     let coupled_cohesive = (raw_cohesive
         * cohesive_scale_for_molecular_volatility(z, family, period))
         .clamp(0.70 * base.cohesive_energy_ev_per_atom, 1.35 * base.cohesive_energy_ev_per_atom)
@@ -1041,6 +1414,8 @@ pub fn predict_element_thermo_coupled_from_prefetch_calibrated(
         coupled_cohesive,
         Some(scf.valence_electrons),
         Some(coupled_packing_fraction),
+        Some(crystal_prototype),
+        Some(hints),
     );
     let diag = CoupledThermoDiagnostics {
         scf_iterations: scf.scf_iterations,
@@ -1054,6 +1429,7 @@ pub fn predict_element_thermo_coupled_from_prefetch_calibrated(
         coupled_radius_pm,
         cohesive_frontier_proxy_ev: frontier_cohesive,
         coupled_packing_fraction,
+        crystal_prototype,
     };
 
     (prediction, diag)

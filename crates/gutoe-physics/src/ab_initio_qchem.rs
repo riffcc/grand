@@ -312,6 +312,22 @@ fn electron_configuration_string(orbitals: &[OrbitalState]) -> String {
         .join(" ")
 }
 
+fn f_shell_fill_fraction(orbitals: &[OrbitalState], n_max_occ: u8) -> f64 {
+    let mut occ = 0.0;
+    let mut cap = 0.0;
+    for o in orbitals.iter().filter(|o| o.occupation > 0) {
+        if o.l >= 3 && o.n + 2 >= n_max_occ {
+            occ += o.occupation as f64;
+            cap += orbital_capacity(o.l) as f64;
+        }
+    }
+    if cap > 0.0 {
+        (occ / cap).clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
 pub fn predict_atomic_scf(z: u16, a: u16) -> AtomicScfPrediction {
     let max_n = 12;
     let electron_count = z;
@@ -345,20 +361,6 @@ pub fn predict_atomic_scf(z: u16, a: u16) -> AtomicScfPrediction {
 
     let homo_energy_ev = orbitals[homo_idx].energy_ev;
     let lumo_energy_ev = orbitals[lumo_idx].energy_ev;
-    let ie_raw = (-homo_energy_ev).max(0.0);
-    let ea_raw = (-lumo_energy_ev).max(0.0);
-    let ie_scale = ionization_calibration_scale(z);
-    let ionization_energy_ev = (ie_raw * ie_scale).max(0.0);
-    let ea_scale = (0.55 + 0.45 * ie_scale).clamp(0.20, 1.20);
-    let electron_affinity_ev = (ea_raw * ea_scale).clamp(0.0, ionization_energy_ev * 0.98);
-    let electronegativity_mulliken_ev = 0.5 * (ionization_energy_ev + electron_affinity_ev);
-    let chemical_hardness_ev = 0.5 * (ionization_energy_ev - electron_affinity_ev);
-    let chemical_softness_inv_ev = if chemical_hardness_ev > 1.0e-9 {
-        1.0 / (2.0 * chemical_hardness_ev)
-    } else {
-        f64::INFINITY
-    };
-
     let n_max_occ = orbitals
         .iter()
         .filter(|o| o.occupation > 0)
@@ -373,6 +375,37 @@ pub fn predict_atomic_scf(z: u16, a: u16) -> AtomicScfPrediction {
         })
         .map(|o| o.occupation as u16)
         .sum::<u16>();
+    let family = family_of_z(z);
+    let period = period_of_z(z);
+    let ie_raw = (-homo_energy_ev).max(0.0);
+    let ea_raw = (-lumo_energy_ev).max(0.0);
+    let ie_scale = ionization_calibration_scale(z);
+    let mut ionization_energy_ev = (ie_raw * ie_scale).max(0.0);
+
+    // Lean-constrained Koopmans relaxation correction:
+    // nonmetalRelaxGainQ = 1/4, lanthanideSpreadGainQ = 25/6.
+    if family == AtomicFamily::Nonmetal {
+        let v = valence_electrons as f64;
+        let p_shell_peak = (1.0 - ((v - 6.0).abs() / 3.0)).clamp(0.0, 1.0);
+        let period_gate = ((8.0 - period as f64) / 6.0).clamp(0.35, 1.0);
+        let relax_mult = 1.0 - (1.0 / 4.0) * p_shell_peak * period_gate;
+        ionization_energy_ev *= relax_mult.clamp(0.70, 1.0);
+    }
+    if family == AtomicFamily::Lanthanide {
+        let f_fill = f_shell_fill_fraction(&orbitals, n_max_occ);
+        let spread_shift_ev = (25.0 / 6.0) * (0.5 - f_fill);
+        ionization_energy_ev = (ionization_energy_ev + spread_shift_ev).max(0.0);
+    }
+
+    let ea_scale = (0.55 + 0.45 * ie_scale).clamp(0.20, 1.20);
+    let electron_affinity_ev = (ea_raw * ea_scale).clamp(0.0, ionization_energy_ev * 0.98);
+    let electronegativity_mulliken_ev = 0.5 * (ionization_energy_ev + electron_affinity_ev);
+    let chemical_hardness_ev = 0.5 * (ionization_energy_ev - electron_affinity_ev);
+    let chemical_softness_inv_ev = if chemical_hardness_ev > 1.0e-9 {
+        1.0 / (2.0 * chemical_hardness_ev)
+    } else {
+        f64::INFINITY
+    };
 
     let frontier_radius_pm = orbitals[homo_idx].mean_radius_pm;
     let atomic_radius_pm = (2.45 * frontier_radius_pm).clamp(25.0, 450.0);
