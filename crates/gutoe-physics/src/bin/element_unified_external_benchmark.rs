@@ -153,6 +153,17 @@ fn env_u16(name: &str, default: u16) -> u16 {
         .unwrap_or(default)
 }
 
+fn env_bool(name: &str, default: bool) -> bool {
+    match env::var(name) {
+        Ok(v) => match v.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "y" | "on" => true,
+            "0" | "false" | "no" | "n" | "off" => false,
+            _ => default,
+        },
+        Err(_) => default,
+    }
+}
+
 fn main() -> Result<()> {
     let unified_path = env::var("GUTOE_UNIFIED_TABLE")
         .unwrap_or_else(|_| "/tmp/nuclear_chart/element_unified_algebra_table.csv".to_string());
@@ -163,9 +174,16 @@ fn main() -> Result<()> {
         env::var("GUTOE_BENCH_OUT").unwrap_or_else(|_| "/tmp/nuclear_chart".to_string());
     let z_min = env_u16("GUTOE_BENCH_Z_MIN", 1);
     let z_max = env_u16("GUTOE_BENCH_Z_MAX", 94);
+    let red_canary_enabled = env_bool("GUTOE_BENCH_RED_CANARY_ENABLED", true);
+    let red_canary_strict = env_bool("GUTOE_BENCH_RED_CANARY_STRICT", true);
+    let red_canary_reset = env_bool("GUTOE_BENCH_RED_CANARY_RESET", false);
 
     fs::create_dir_all(&out_dir)?;
     let out = PathBuf::from(out_dir);
+    let red_canary_state_path = env::var("GUTOE_BENCH_RED_CANARY_STATE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| out.join("element_unified_external_benchmark.best_red_count"));
+    let red_canary_json_path = out.join("element_unified_external_benchmark_canary.json");
 
     let unified_rows = read_csv_rows(Path::new(&unified_path))?;
     let reference_rows = read_csv_rows(Path::new(&reference_path))?;
@@ -578,6 +596,41 @@ fn main() -> Result<()> {
         c.red_any
     );
 
+    let previous_best_red = if red_canary_enabled && !red_canary_reset {
+        fs::read_to_string(&red_canary_state_path)
+            .ok()
+            .and_then(|s| s.trim().parse::<usize>().ok())
+    } else {
+        None
+    };
+    let red_canary_regressed = previous_best_red
+        .map(|best| c.red_any > best)
+        .unwrap_or(false);
+    let red_canary_improved = previous_best_red
+        .map(|best| c.red_any < best)
+        .unwrap_or(false);
+    let red_canary_best_after = previous_best_red
+        .map(|best| best.min(c.red_any))
+        .unwrap_or(c.red_any);
+    let red_canary_pass = !red_canary_regressed;
+    let red_canary_previous_s = previous_best_red
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| "none".to_string());
+
+    let txt_summary = format!(
+        "{}red_canary_enabled = {}\nred_canary_strict = {}\nred_canary_state = {}\nred_canary_previous_best = {}\nred_canary_current = {}\nred_canary_best_after = {}\nred_canary_improved = {}\nred_canary_regressed = {}\nred_canary_pass = {}\n",
+        txt_summary,
+        red_canary_enabled,
+        red_canary_strict,
+        red_canary_state_path.display(),
+        red_canary_previous_s,
+        c.red_any,
+        red_canary_best_after,
+        red_canary_improved,
+        red_canary_regressed,
+        red_canary_pass
+    );
+
     let csv_path = out.join("element_unified_external_benchmark.csv");
     let json_path = out.join("element_unified_external_benchmark.json");
     let txt_path = out.join("element_unified_external_benchmark.txt");
@@ -587,9 +640,52 @@ fn main() -> Result<()> {
     let mut txt = File::create(&txt_path)?;
     txt.write_all(txt_summary.as_bytes())?;
 
+    if red_canary_enabled {
+        fs::write(&red_canary_state_path, format!("{}\n", red_canary_best_after))?;
+        let canary_json = format!(
+            concat!(
+                "{{\n",
+                "  \"enabled\": {},\n",
+                "  \"strict\": {},\n",
+                "  \"state_path\": \"{}\",\n",
+                "  \"previous_best\": {},\n",
+                "  \"current\": {},\n",
+                "  \"best_after\": {},\n",
+                "  \"improved\": {},\n",
+                "  \"regressed\": {},\n",
+                "  \"pass\": {}\n",
+                "}}\n"
+            ),
+            red_canary_enabled,
+            red_canary_strict,
+            red_canary_state_path.display(),
+            previous_best_red
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "null".to_string()),
+            c.red_any,
+            red_canary_best_after,
+            red_canary_improved,
+            red_canary_regressed,
+            red_canary_pass
+        );
+        fs::write(&red_canary_json_path, canary_json)?;
+    }
+
     println!("wrote {}", csv_path.display());
     println!("wrote {}", json_path.display());
     println!("wrote {}", txt_path.display());
+    if red_canary_enabled {
+        println!("wrote {}", red_canary_state_path.display());
+        println!("wrote {}", red_canary_json_path.display());
+    }
+
+    if red_canary_enabled && red_canary_strict && red_canary_regressed {
+        return Err(anyhow!(
+            "red canary regression: elements_with_any_red increased from {} to {}",
+            previous_best_red.unwrap_or(c.red_any),
+            c.red_any
+        ));
+    }
 
     Ok(())
 }
