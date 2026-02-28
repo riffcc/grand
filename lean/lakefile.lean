@@ -60,6 +60,7 @@ lean_lib Gutoe where
              `Gutoe.BBN,
              `Gutoe.DarkMatterSector,
              `Gutoe.ChemicalThermodynamics,
+             `Gutoe.AbiogenesisThreshold,
              `Gutoe.RTSCAdmissibility,
              `Gutoe.RTSCWitnessClosure,
              `Gutoe.RTSCIsotopeStability,
