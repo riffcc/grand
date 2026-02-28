@@ -57,6 +57,18 @@ fn v_bool(v: &Value, path: &[&str]) -> Result<bool, String> {
         .ok_or_else(|| format!("non-bool at {}", path.join(".")))
 }
 
+fn v_str(v: &Value, path: &[&str]) -> Result<String, String> {
+    let mut cur = v;
+    for k in path {
+        cur = cur
+            .get(*k)
+            .ok_or_else(|| format!("missing key {} in {}", k, path.join(".")))?;
+    }
+    cur.as_str()
+        .map(str::to_string)
+        .ok_or_else(|| format!("non-string at {}", path.join(".")))
+}
+
 fn main() {
     const PMNS_GAIN_ENV: &str = "GUTOE_LEPTOGENESIS_PMNS_GAIN";
     const PMNS_GAIN_BASELINE: &str = "0";
@@ -99,6 +111,24 @@ fn main() {
         ],
     ) {
         eprintln!("global_gate: chiral_symmetry_breaking_report failed: {e}");
+        std::process::exit(2);
+    }
+    if let Err(e) = run("cargo", &["run", "-q", "-p", "gutoe-em", "--bin", "neutrino_ci_gate"]) {
+        eprintln!("global_gate: neutrino_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "lithium7_stellar_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: lithium7_stellar_ci_gate failed: {e}");
         std::process::exit(2);
     }
 
@@ -148,6 +178,9 @@ fn main() {
     let alpha = read_json("/tmp/bh_renders/alpha_web_ci_report/alpha_web_ci_report.json").expect("alpha json");
     let chiral = read_json("/tmp/bh_renders/chiral_symmetry_breaking/chiral_symmetry_breaking_report.json")
         .expect("chiral json");
+    let neutrino = read_json("/tmp/bh_renders/neutrino_ci_gate.json").expect("neutrino json");
+    let li7_stellar =
+        read_json("/tmp/bh_renders/lithium7_stellar_ci_gate.json").expect("lithium7 stellar json");
     let sigma = read_json("/tmp/bh_renders/sigma8_decomposition/sigma8_decomposition_report.json")
         .expect("sigma json");
 
@@ -186,6 +219,17 @@ fn main() {
 
     let alpha_pass = v_bool(&alpha, &["ci_gate", "passes_all"]).unwrap();
     let chiral_pass = v_bool(&chiral, &["gate", "passes_all"]).unwrap();
+    let neutrino_pass = v_bool(&neutrino, &["overall_pass"]).unwrap();
+    let neutrino_hierarchy = v_str(&neutrino, &["texture_lane", "hierarchy_prediction"]).unwrap();
+    let neutrino_mass_character =
+        v_str(&neutrino, &["texture_lane", "mass_character_prediction"]).unwrap();
+    let neutrino_m3_ev = v_f64(&neutrino, &["absolute_lane", "m3_ev"]).unwrap();
+    let neutrino_sum_ev = v_f64(&neutrino, &["absolute_lane", "sum_ev"]).unwrap();
+    let neutrino_majorana_resid =
+        v_f64(&neutrino, &["texture_lane", "majorana_symmetry_residual"]).unwrap();
+    let li7_stellar_pass = v_bool(&li7_stellar, &["overall_pass"]).unwrap();
+    let li7_stellar_delta_abs = v_f64(&li7_stellar, &["best_match", "closure_delta_abs"]).unwrap();
+    let li7_stellar_delta_abs_max = v_f64(&li7_stellar, &["closure_delta_abs_max"]).unwrap();
 
     let cmb_pass = tt <= 1.30 && te <= 1.20 && ee <= 1.10;
 
@@ -199,6 +243,8 @@ fn main() {
         && proton_pass
         && alpha_pass
         && chiral_pass
+        && neutrino_pass
+        && li7_stellar_pass
         && cmb_pass
         && sigma8_pass;
 
@@ -224,6 +270,20 @@ fn main() {
     writeln!(txt, "proton_pass = {}", proton_pass).ok();
     writeln!(txt, "alpha_web_ci_pass = {}", alpha_pass).ok();
     writeln!(txt, "chiral_symmetry_breaking_pass = {}", chiral_pass).ok();
+    writeln!(txt, "neutrino_hierarchy = {}", neutrino_hierarchy).ok();
+    writeln!(txt, "neutrino_mass_character = {}", neutrino_mass_character).ok();
+    writeln!(txt, "neutrino_majorana_symmetry_residual = {:.12e}", neutrino_majorana_resid).ok();
+    writeln!(txt, "neutrino_m3_ev = {:.12e}", neutrino_m3_ev).ok();
+    writeln!(txt, "neutrino_sum_ev = {:.12e}", neutrino_sum_ev).ok();
+    writeln!(txt, "neutrino_pass = {}", neutrino_pass).ok();
+    writeln!(txt, "li7_stellar_closure_delta_abs = {:.12}", li7_stellar_delta_abs).ok();
+    writeln!(
+        txt,
+        "li7_stellar_closure_delta_abs_max = {:.12}",
+        li7_stellar_delta_abs_max
+    )
+    .ok();
+    writeln!(txt, "li7_stellar_pass = {}", li7_stellar_pass).ok();
     writeln!(txt, "cmb_tt_red = {:.12}", tt).ok();
     writeln!(txt, "cmb_te_red = {:.12}", te).ok();
     writeln!(txt, "cmb_ee_red = {:.12}", ee).ok();
@@ -275,6 +335,19 @@ fn main() {
         },
         "chiral_symmetry_breaking": {
             "pass": chiral_pass
+        },
+        "neutrino": {
+            "hierarchy_prediction": neutrino_hierarchy,
+            "mass_character_prediction": neutrino_mass_character,
+            "majorana_symmetry_residual": neutrino_majorana_resid,
+            "m3_ev": neutrino_m3_ev,
+            "sum_ev": neutrino_sum_ev,
+            "pass": neutrino_pass
+        },
+        "lithium7_stellar_depletion": {
+            "closure_delta_abs": li7_stellar_delta_abs,
+            "closure_delta_abs_max": li7_stellar_delta_abs_max,
+            "pass": li7_stellar_pass
         },
         "cmb": {
             "tt_full_red": tt,

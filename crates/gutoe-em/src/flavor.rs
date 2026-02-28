@@ -426,6 +426,38 @@ pub fn neutrino_hierarchy_prediction() -> &'static str {
     }
 }
 
+/// Majorana-symmetry residual for the neutrino texture lane.
+///
+/// A pure left-handed Majorana mass matrix is complex-symmetric (`M = M^T`).
+/// This metric reports the largest entrywise deviation from that symmetry.
+pub fn neutrino_majorana_symmetry_residual() -> f64 {
+    let (_ml, mnu) = pmns_mass_textures_from_clifford();
+    let mut max_resid = 0.0f64;
+    for i in 0..3 {
+        for j in (i + 1)..3 {
+            let r = (mnu[i][j] - mnu[j][i]).norm();
+            if r > max_resid {
+                max_resid = r;
+            }
+        }
+    }
+    max_resid
+}
+
+/// Structural neutrino mass-character prediction from the texture lane.
+///
+/// Returns:
+/// - `"majorana_like"` if the texture is symmetric to tolerance
+/// - `"dirac"` otherwise (the lane is Hermitian, not symmetric)
+pub fn neutrino_dirac_majorana_prediction() -> &'static str {
+    let residual = neutrino_majorana_symmetry_residual();
+    if residual <= 1.0e-12 {
+        "majorana_like"
+    } else {
+        "dirac"
+    }
+}
+
 fn build_observables(s12: f64, s23: f64, s13: f64, delta_rad: f64) -> MixingObservables {
     let theta12_deg = s12.asin().to_degrees();
     let theta23_deg = s23.asin().to_degrees();
@@ -747,5 +779,20 @@ mod tests {
         );
         within_envelope(corrected, PMNS_PDG_ENVELOPE)
             .expect("corrected PMNS theta23 alpha2 outside PDG envelope");
+    }
+
+    #[test]
+    fn neutrino_hierarchy_is_normal_in_texture_lane() {
+        assert_eq!(neutrino_hierarchy_prediction(), "normal");
+    }
+
+    #[test]
+    fn neutrino_texture_prefers_dirac_over_majorana_symmetry() {
+        let resid = neutrino_majorana_symmetry_residual();
+        assert!(
+            resid > 1.0e-6,
+            "majorana residual too small for Dirac lane claim: {resid:.12e}"
+        );
+        assert_eq!(neutrino_dirac_majorana_prediction(), "dirac");
     }
 }
