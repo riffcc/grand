@@ -78,6 +78,27 @@ impl Default for UniverseWindows {
     }
 }
 
+/// Numerical depth controls for end-to-end universe simulation.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UniverseSimulationDepth {
+    /// Number of log-redshift history samples between z=0 and `history_z_max`.
+    pub history_points: usize,
+    /// Maximum redshift represented in the exported history table.
+    pub history_z_max: f64,
+    /// Maximum redshift used in FRW time integrals (acts as t~0 cutoff).
+    pub integral_z_max: f64,
+}
+
+impl Default for UniverseSimulationDepth {
+    fn default() -> Self {
+        Self {
+            history_points: 256,
+            history_z_max: 1.0e9,
+            integral_z_max: Z_INTEGRAL_MAX,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct UniverseEpoch {
     pub name: &'static str,
@@ -228,11 +249,13 @@ fn age_of_universe_seconds(
     omega_m0: f64,
     omega_k0: f64,
     omega_lambda0: f64,
+    integral_z_max: f64,
 ) -> f64 {
+    let z_cap = integral_z_max.max(1.0);
     integrate_time_from_z0_to_z1(
         h0_km_s_mpc,
         0.0,
-        Z_INTEGRAL_MAX,
+        z_cap,
         omega_r0,
         omega_m0,
         omega_k0,
@@ -247,11 +270,13 @@ fn age_at_redshift_seconds(
     omega_m0: f64,
     omega_k0: f64,
     omega_lambda0: f64,
+    integral_z_max: f64,
 ) -> f64 {
+    let z_cap = integral_z_max.max(z.max(0.0) + 1.0);
     integrate_time_from_z0_to_z1(
         h0_km_s_mpc,
         z.max(0.0),
-        Z_INTEGRAL_MAX,
+        z_cap,
         omega_r0,
         omega_m0,
         omega_k0,
@@ -286,9 +311,18 @@ fn build_epoch(
     omega_m0: f64,
     omega_k0: f64,
     omega_lambda0: f64,
+    integral_z_max: f64,
 ) -> UniverseEpoch {
     let age_seconds =
-        age_at_redshift_seconds(h0_km_s_mpc, z, omega_r0, omega_m0, omega_k0, omega_lambda0);
+        age_at_redshift_seconds(
+            h0_km_s_mpc,
+            z,
+            omega_r0,
+            omega_m0,
+            omega_k0,
+            omega_lambda0,
+            integral_z_max,
+        );
     let (omega_r, omega_m, omega_lambda) =
         omega_components_at_z(z, omega_r0, omega_m0, omega_k0, omega_lambda0);
     UniverseEpoch {
@@ -311,6 +345,7 @@ fn simulate_history(
     omega_m0: f64,
     omega_k0: f64,
     omega_lambda0: f64,
+    integral_z_max: f64,
 ) -> Vec<UniverseHistoryRow> {
     if n == 0 || z_max <= 0.0 {
         return Vec::new();
@@ -323,7 +358,15 @@ fn simulate_history(
         let x = ln1pz.exp();
         let z = x - 1.0;
         let age_seconds =
-            age_at_redshift_seconds(h0_km_s_mpc, z, omega_r0, omega_m0, omega_k0, omega_lambda0);
+            age_at_redshift_seconds(
+                h0_km_s_mpc,
+                z,
+                omega_r0,
+                omega_m0,
+                omega_k0,
+                omega_lambda0,
+                integral_z_max,
+            );
         let (omega_r, omega_m, omega_lambda) =
             omega_components_at_z(z, omega_r0, omega_m0, omega_k0, omega_lambda0);
         out.push(UniverseHistoryRow {
@@ -339,9 +382,10 @@ fn simulate_history(
     out
 }
 
-pub fn evaluate_universe_gate(
+pub fn evaluate_universe_gate_with_depth(
     assumptions: UniverseAssumptions,
     windows: UniverseWindows,
+    depth: UniverseSimulationDepth,
 ) -> UniverseScorecard {
     let inflation = evaluate_inflation_gate(InflationWindows::default());
     let baryogenesis = evaluate_baryogenesis_gate(BaryogenesisWindows::default());
@@ -391,7 +435,14 @@ pub fn evaluate_universe_gate(
     );
 
     let age_seconds =
-        age_of_universe_seconds(h0_km_s_mpc, omega_r0, omega_m0, omega_k0, omega_lambda0);
+        age_of_universe_seconds(
+            h0_km_s_mpc,
+            omega_r0,
+            omega_m0,
+            omega_k0,
+            omega_lambda0,
+            depth.integral_z_max,
+        );
     let age_gyr = age_seconds / SEC_PER_GYR;
 
     let z_bbn = 1.0e9 / T_CMB0_K - 1.0;
@@ -407,6 +458,7 @@ pub fn evaluate_universe_gate(
             omega_m0,
             omega_k0,
             omega_lambda0,
+            depth.integral_z_max,
         ),
         build_epoch(
             "BBN",
@@ -416,6 +468,7 @@ pub fn evaluate_universe_gate(
             omega_m0,
             omega_k0,
             omega_lambda0,
+            depth.integral_z_max,
         ),
         build_epoch(
             "Recombination",
@@ -425,6 +478,7 @@ pub fn evaluate_universe_gate(
             omega_m0,
             omega_k0,
             omega_lambda0,
+            depth.integral_z_max,
         ),
         build_epoch(
             "MatterLambdaEquality",
@@ -434,6 +488,7 @@ pub fn evaluate_universe_gate(
             omega_m0,
             omega_k0,
             omega_lambda0,
+            depth.integral_z_max,
         ),
         build_epoch(
             "Today",
@@ -443,16 +498,18 @@ pub fn evaluate_universe_gate(
             omega_m0,
             omega_k0,
             omega_lambda0,
+            depth.integral_z_max,
         ),
     ];
     let history = simulate_history(
-        256,
-        1.0e9,
+        depth.history_points,
+        depth.history_z_max,
         h0_km_s_mpc,
         omega_r0,
         omega_m0,
         omega_k0,
         omega_lambda0,
+        depth.integral_z_max,
     );
 
     let bbn_age_seconds = epochs
@@ -508,6 +565,13 @@ pub fn evaluate_universe_gate(
         epochs,
         history,
     }
+}
+
+pub fn evaluate_universe_gate(
+    assumptions: UniverseAssumptions,
+    windows: UniverseWindows,
+) -> UniverseScorecard {
+    evaluate_universe_gate_with_depth(assumptions, windows, UniverseSimulationDepth::default())
 }
 
 #[cfg(test)]

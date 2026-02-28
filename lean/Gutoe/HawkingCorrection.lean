@@ -88,6 +88,12 @@ theorem group_velocity_lt_c (c a k : ℝ) (hc : c > 0) (ha : a > 0)
   have hsin_pos : Real.sin (k * a / 2) > 0 := sin_pos_of_pos_of_lt_pi harg_pos harg_lt
   nlinarith [cos_lt_one_of_sin_pos hsin_pos]
 
+/-- FTL is forbidden for local mode propagation in this lane:
+    no mode has group velocity above the invariant speed `c`. — REAL -/
+theorem no_local_ftl_group_velocity (c a k : ℝ) (hc : c > 0) :
+    ¬ (groupVelocity c a k > c) := by
+  exact not_lt_of_ge (group_velocity_le_c c a k hc)
+
 -- ── Effective surface gravity ────────────────────────────────────────────────
 
 /-- Effective surface gravity: κ_eff(ω) = κ · cos(ωa/(2c)). -/
