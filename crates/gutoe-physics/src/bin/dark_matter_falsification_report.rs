@@ -111,7 +111,7 @@ fn main() {
     }
     writeln!(
         json,
-        "  \"summary\": {{\"at_least_one_branch_passes_all\": {}}}\n}}",
+        ",\n  \"summary\": {{\"at_least_one_branch_passes_all\": {}}}\n}}",
         scorecards.iter().any(|s| s.passes_all())
     )
     .expect("write");
