@@ -88,6 +88,7 @@ lean_lib Gutoe where
              `Gutoe.HaarFiberCollapse,
              `Gutoe.StrongCouplingCInfBridge,
              `Gutoe.ElectronScaleTransduction,
+             `Gutoe.HadronTransduction,
              `Gutoe.SM.Rep,
              `Gutoe.SM.Anomalies,
              `Gutoe.SM.HyperchargeBridge,

@@ -203,6 +203,20 @@ fn main() {
             "-p",
             "gutoe-physics",
             "--bin",
+            "hadron_transduction_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: hadron_transduction_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
             "cardiovascular_binding_ci_gate",
         ],
     ) {
@@ -347,6 +361,8 @@ fn main() {
         read_json("/tmp/bh_renders/abiogenesis_ci_gate.json").expect("abiogenesis json");
     let entropy_progression = read_json("/tmp/bh_renders/entropy_progression_ci_gate.json")
         .expect("entropy progression json");
+    let hadron_transduction = read_json("/tmp/bh_renders/hadron_transduction_ci_gate.json")
+        .expect("hadron transduction json");
     let ms_localized = read_json("/tmp/bh_renders/ms_localized_dual_compartment_ci_gate.json")
         .expect("ms localized dual-compartment gate json");
     let antibiotic_resistance = read_json("/tmp/bh_renders/antibiotic_resistance_ci_gate.json")
@@ -440,6 +456,13 @@ fn main() {
         v_f64(&entropy_progression, &["summary", "local_maxima_count"]).unwrap();
     let entropy_progression_minima =
         v_f64(&entropy_progression, &["summary", "local_minima_count"]).unwrap();
+    let hadron_transduction_pass = v_bool(&hadron_transduction, &["overall_pass"]).unwrap();
+    let hadron_pion_rel_error =
+        v_f64(&hadron_transduction, &["summary", "pion_rel_error"]).unwrap();
+    let hadron_kaon_rel_error =
+        v_f64(&hadron_transduction, &["summary", "kaon_rel_error"]).unwrap();
+    let hadron_valid_fraction =
+        v_f64(&hadron_transduction, &["summary", "valid_fraction"]).unwrap();
     let ms_localized_pass = v_bool(&ms_localized, &["overall_pass"]).unwrap();
     let ms_localized_efficacy_pass = v_bool(&ms_localized, &["gate", "efficacy_pass"]).unwrap();
     let ms_localized_safety_pass = v_bool(&ms_localized, &["gate", "safety_pass"]).unwrap();
@@ -502,6 +525,7 @@ fn main() {
         && degeneracy_pass
         && abiogenesis_pass
         && entropy_progression_pass
+        && hadron_transduction_pass
         && ms_localized_pass
         && antibiotic_resistance_pass
         && phage_host_matching_pass
@@ -635,6 +659,30 @@ fn main() {
     .ok();
     writeln!(
         txt,
+        "hadron_transduction_valid_fraction = {:.12}",
+        hadron_valid_fraction
+    )
+    .ok();
+    writeln!(
+        txt,
+        "hadron_transduction_pion_rel_error = {:.12e}",
+        hadron_pion_rel_error
+    )
+    .ok();
+    writeln!(
+        txt,
+        "hadron_transduction_kaon_rel_error = {:.12e}",
+        hadron_kaon_rel_error
+    )
+    .ok();
+    writeln!(
+        txt,
+        "hadron_transduction_pass = {}",
+        hadron_transduction_pass
+    )
+    .ok();
+    writeln!(
+        txt,
         "ms_localized_localization_factor = {:.6}",
         ms_localized_localization_factor
     )
@@ -675,7 +723,12 @@ fn main() {
         ms_localized_efficacy_pass
     )
     .ok();
-    writeln!(txt, "ms_localized_safety_pass = {}", ms_localized_safety_pass).ok();
+    writeln!(
+        txt,
+        "ms_localized_safety_pass = {}",
+        ms_localized_safety_pass
+    )
+    .ok();
     writeln!(txt, "ms_localized_pass = {}", ms_localized_pass).ok();
     writeln!(
         txt,
@@ -737,7 +790,12 @@ fn main() {
         phage_host_matching_ndm_best
     )
     .ok();
-    writeln!(txt, "phage_host_matching_pass = {}", phage_host_matching_pass).ok();
+    writeln!(
+        txt,
+        "phage_host_matching_pass = {}",
+        phage_host_matching_pass
+    )
+    .ok();
     writeln!(txt, "cmb_tt_red = {:.12}", tt).ok();
     writeln!(txt, "cmb_te_red = {:.12}", te).ok();
     writeln!(txt, "cmb_ee_red = {:.12}", ee).ok();
@@ -822,6 +880,12 @@ fn main() {
             "local_maxima_count": entropy_progression_maxima,
             "local_minima_count": entropy_progression_minima,
             "pass": entropy_progression_pass
+        },
+        "hadron_transduction": {
+            "valid_fraction": hadron_valid_fraction,
+            "pion_rel_error": hadron_pion_rel_error,
+            "kaon_rel_error": hadron_kaon_rel_error,
+            "pass": hadron_transduction_pass
         },
         "ms_localized_dual_compartment": {
             "localization_factor": ms_localized_localization_factor,
