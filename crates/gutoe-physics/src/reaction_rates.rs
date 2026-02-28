@@ -87,6 +87,19 @@ impl RateEngine {
                 "triple_alpha",
                 &[(0.05, 5.0e-31), (0.1, 3.0e-24), (0.2, 4.0e-16)],
             ),
+            // Proxy Pop-II lithium burn anchors around the 2.5e6 K threshold.
+            // Units are normalized per-year effective rates for envelope depletion.
+            table(
+                "li7_burn",
+                &[
+                    (0.0015, 2.0e-10),
+                    (0.0020, 6.0e-10),
+                    (0.0025, 1.7e-9),
+                    (0.0030, 4.5e-9),
+                    (0.0035, 1.1e-8),
+                    (0.0040, 2.5e-8),
+                ],
+            ),
         ];
         Self { tables }
     }

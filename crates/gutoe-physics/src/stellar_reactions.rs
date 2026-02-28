@@ -11,6 +11,7 @@ pub enum Species {
     H2,
     He3,
     He4,
+    Li7,
     Be7,
     B8,
     C12,
@@ -31,6 +32,7 @@ impl Species {
             Species::H2 => 2,
             Species::He3 => 3,
             Species::He4 => 4,
+            Species::Li7 => 7,
             Species::Be7 => 7,
             Species::B8 => 8,
             Species::C12 => 12,
@@ -49,6 +51,7 @@ impl Species {
             Species::H2 => 1,
             Species::He3 => 2,
             Species::He4 => 2,
+            Species::Li7 => 3,
             Species::Be7 => 4,
             Species::B8 => 5,
             Species::C12 => 6,
@@ -242,6 +245,16 @@ impl ReactionNetwork {
                 branching_weight: 1.0,
                 q_mev: 7.275,
             },
+            // Lithium depletion anchor for Pop-II envelope burning:
+            // ⁷Li + p -> 2 * ⁴He  (Q ≈ 17.347 MeV).
+            Reaction {
+                id: "li7_burn",
+                channel: "li_burn",
+                reactants: vec![sto(Species::Li7, 1), sto(Species::P1, 1)],
+                products: vec![sto(Species::He4, 2)],
+                branching_weight: 1.0,
+                q_mev: 17.347,
+            },
         ];
         Self { reactions }
     }
@@ -260,6 +273,7 @@ impl ReactionNetwork {
             Species::H2,
             Species::He3,
             Species::He4,
+            Species::Li7,
             Species::C12,
             Species::N13,
             Species::C13,
@@ -323,6 +337,7 @@ mod tests {
         assert!(net.channel_reactions("pp").count() >= 3);
         assert!(net.channel_reactions("cno").count() >= 6);
         assert!(net.channel_reactions("triple_alpha").count() >= 1);
+        assert!(net.channel_reactions("li_burn").count() >= 1);
     }
 
     #[test]

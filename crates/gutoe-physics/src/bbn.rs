@@ -106,6 +106,10 @@ pub const LITHIUM7_BE7_CHANNEL_FRACTION: f64 = 1.0 - LITHIUM7_DIRECT_CHANNEL_FRA
 /// `(5/16) * (66/67) = 165/536`.
 pub const LITHIUM7_BE7_DARK_SUPPRESSION: f64 =
     DARK_FRACTION_TOTAL_STATE_SPLIT * LITHIUM7_VOID_CORRECTION;
+/// Structural Be-7 destruction enhancement relative to the unsuppressed branch:
+/// `1 / (165/536) = 536/165`.
+pub const LITHIUM7_BE7_DESTRUCTION_ENHANCEMENT_STRUCTURAL: f64 =
+    1.0 / LITHIUM7_BE7_DARK_SUPPRESSION;
 
 /// Visible-lane occupancy entering Li-7 network source (`11/16`).
 pub const LITHIUM7_VISIBLE_FRACTION: f64 =
@@ -148,6 +152,63 @@ pub fn lithium7_be7_component_unsuppressed(eta10: f64) -> f64 {
 /// Be-7 precursor component after channel-specific dark coupling.
 pub fn lithium7_be7_component_dark_coupled(eta10: f64) -> f64 {
     lithium7_be7_component_unsuppressed(eta10) * LITHIUM7_BE7_DARK_SUPPRESSION
+}
+
+/// Li-7 abundance for an explicit Be-7 branch survival factor.
+///
+/// The direct branch is unchanged while the Be-7 branch is scaled by
+/// `be7_survival`.
+pub fn primordial_lithium7_ratio_with_be7_survival(eta10: f64, be7_survival: f64) -> f64 {
+    if eta10 <= 0.0 {
+        return f64::NAN;
+    }
+    lithium7_direct_component(eta10) + lithium7_be7_component_unsuppressed(eta10) * be7_survival
+}
+
+/// Be-7 survival factor required to exactly match the Li-7 observational anchor.
+///
+/// This is a diagnostic transduction:
+/// `required = (Li_obs - direct) / be7_raw`.
+pub fn lithium7_be7_dark_suppression_required(eta10: f64) -> f64 {
+    if eta10 <= 0.0 {
+        return f64::NAN;
+    }
+    let be7_raw = lithium7_be7_component_unsuppressed(eta10);
+    if be7_raw <= 0.0 {
+        return f64::NAN;
+    }
+    (LI7H_OBSERVED - lithium7_direct_component(eta10)) / be7_raw
+}
+
+/// Destruction enhancement needed on the Be-7 branch to hit Li-7 observation.
+pub fn lithium7_be7_destruction_enhancement_required(eta10: f64) -> f64 {
+    let required_survival = lithium7_be7_dark_suppression_required(eta10);
+    if required_survival <= 0.0 {
+        return f64::NAN;
+    }
+    1.0 / required_survival
+}
+
+/// Additional Be-7 destruction multiplier required relative to the
+/// structurally derived channel-coupled branch.
+pub fn lithium7_be7_additional_destruction_multiplier(eta10: f64) -> f64 {
+    lithium7_be7_destruction_enhancement_required(eta10)
+        / LITHIUM7_BE7_DESTRUCTION_ENHANCEMENT_STRUCTURAL
+}
+
+/// Residual depletion factor needed after the active channel-coupled lane.
+///
+/// A value below `1` means additional post-BBN depletion is required to reach
+/// the observational Li-7 anchor.
+pub fn lithium7_residual_post_bbn_depletion_factor(eta10: f64) -> f64 {
+    if eta10 <= 0.0 {
+        return f64::NAN;
+    }
+    let li_pred = primordial_lithium7_ratio_channel_coupled(eta10);
+    if li_pred <= 0.0 {
+        return f64::NAN;
+    }
+    LI7H_OBSERVED / li_pred
 }
 
 /// Channel-specific Li-7 lane:
@@ -290,6 +351,9 @@ mod tests {
         assert!((LITHIUM7_DIRECT_CHANNEL_FRACTION - 1.0 / 16.0).abs() < 1.0e-12);
         assert!((LITHIUM7_BE7_CHANNEL_FRACTION - 15.0 / 16.0).abs() < 1.0e-12);
         assert!((LITHIUM7_BE7_DARK_SUPPRESSION - (5.0 / 16.0) * (66.0 / 67.0)).abs() < 1.0e-12);
+        assert!(
+            (LITHIUM7_BE7_DESTRUCTION_ENHANCEMENT_STRUCTURAL - (536.0 / 165.0)).abs() < 1.0e-12
+        );
         assert!((LITHIUM7_CHANNEL_COUPLED_FACTOR - (3011.0 / 8576.0)).abs() < 1.0e-12);
         assert!((LITHIUM7_VISIBLE_FRACTION - 11.0 / 16.0).abs() < 1.0e-12);
         assert!((LITHIUM7_REACTION_NETWORK_GAIN - 33.0 / 16.0).abs() < 1.0e-12);
@@ -355,6 +419,40 @@ mod tests {
             direct,
             be7_raw,
             be7_dark
+        );
+    }
+
+    #[test]
+    fn lithium7_required_be7_suppression_reconstructs_observation() {
+        let eta10 = eta10_from_baryogenesis();
+        let required_survival = lithium7_be7_dark_suppression_required(eta10);
+        let reconstructed = primordial_lithium7_ratio_with_be7_survival(eta10, required_survival);
+        let rel = (reconstructed - LI7H_OBSERVED).abs() / LI7H_OBSERVED;
+        assert!(
+            rel < 1.0e-12,
+            "required suppression should reconstruct observed Li-7"
+        );
+    }
+
+    #[test]
+    fn lithium7_closure_metrics_are_consistent() {
+        let eta10 = eta10_from_baryogenesis();
+        let required_survival = lithium7_be7_dark_suppression_required(eta10);
+        let required_enhancement = lithium7_be7_destruction_enhancement_required(eta10);
+        let extra_multiplier = lithium7_be7_additional_destruction_multiplier(eta10);
+        let depletion = lithium7_residual_post_bbn_depletion_factor(eta10);
+        let ratio = lithium7_tension_ratio_channel_coupled(eta10);
+
+        assert!(required_survival > 0.0 && required_survival < 1.0);
+        assert!(required_enhancement > 1.0);
+        assert!(
+            extra_multiplier > 1.0,
+            "current structural suppression should still require extra Be-7 destruction"
+        );
+        assert!(depletion > 0.0 && depletion < 1.0);
+        assert!(
+            (depletion - (1.0 / ratio)).abs() < 1.0e-12,
+            "residual depletion must equal inverse predictive tension"
         );
     }
 }

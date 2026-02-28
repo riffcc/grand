@@ -1,9 +1,13 @@
 //! Quantitative Big Bang Nucleosynthesis report for GRAND-349.
 
 use gutoe_physics::{
-    evaluate_bbn_gate, lithium7_be7_component_dark_coupled, lithium7_be7_component_unsuppressed,
-    lithium7_direct_component, lithium7_reaction_network_source, BbnWindows, DEUTERIUM_ETA_EXP,
-    ETA10_REF, HELIUM3_ETA_EXP, LITHIUM7_BE7_DARK_SUPPRESSION, LITHIUM7_CHANNEL_COUPLED_FACTOR,
+    evaluate_bbn_gate, lithium7_be7_additional_destruction_multiplier,
+    lithium7_be7_component_dark_coupled, lithium7_be7_component_unsuppressed,
+    lithium7_be7_dark_suppression_required, lithium7_be7_destruction_enhancement_required,
+    lithium7_direct_component, lithium7_reaction_network_source,
+    lithium7_residual_post_bbn_depletion_factor, BbnWindows, DEUTERIUM_ETA_EXP, ETA10_REF,
+    HELIUM3_ETA_EXP, LITHIUM7_BE7_DARK_SUPPRESSION,
+    LITHIUM7_BE7_DESTRUCTION_ENHANCEMENT_STRUCTURAL, LITHIUM7_CHANNEL_COUPLED_FACTOR,
     LITHIUM7_REACTION_NETWORK_GAIN, LITHIUM7_TENSION_AMPLIFICATION, LITHIUM7_VISIBLE_FRACTION,
 };
 use std::fs::{self, File};
@@ -16,6 +20,11 @@ fn main() {
     let li7_direct = lithium7_direct_component(score.eta10);
     let li7_be7_raw = lithium7_be7_component_unsuppressed(score.eta10);
     let li7_be7_dark = lithium7_be7_component_dark_coupled(score.eta10);
+    let li7_be7_required_suppression = lithium7_be7_dark_suppression_required(score.eta10);
+    let li7_be7_required_enhancement = lithium7_be7_destruction_enhancement_required(score.eta10);
+    let li7_be7_additional_multiplier = lithium7_be7_additional_destruction_multiplier(score.eta10);
+    let li7_residual_depletion_factor = lithium7_residual_post_bbn_depletion_factor(score.eta10);
+    let li7_residual_depletion_percent = 100.0 * (1.0 - li7_residual_depletion_factor);
 
     let out_dir = std::env::var("GUTOE_BBN_OUT").unwrap_or_else(|_| "/tmp/bh_renders".to_string());
     let _ = fs::create_dir_all(&out_dir);
@@ -34,7 +43,12 @@ fn main() {
         LITHIUM7_TENSION_AMPLIFICATION
     )
     .expect("write");
-    writeln!(txt, "lithium7_visible_fraction = {:.12}", LITHIUM7_VISIBLE_FRACTION).expect("write");
+    writeln!(
+        txt,
+        "lithium7_visible_fraction = {:.12}",
+        LITHIUM7_VISIBLE_FRACTION
+    )
+    .expect("write");
     writeln!(
         txt,
         "lithium7_reaction_network_gain = {:.12}",
@@ -49,14 +63,68 @@ fn main() {
     writeln!(txt, "Li7_direct_component = {:.12e}", li7_direct).expect("write");
     writeln!(txt, "Li7_be7_component_raw = {:.12e}", li7_be7_raw).expect("write");
     writeln!(txt, "Li7_be7_component_dark = {:.12e}", li7_be7_dark).expect("write");
-    writeln!(txt, "Li7_be7_dark_suppression = {:.12}", LITHIUM7_BE7_DARK_SUPPRESSION).expect("write");
-    writeln!(txt, "Li7_channel_coupled_factor = {:.12}", LITHIUM7_CHANNEL_COUPLED_FACTOR).expect("write");
+    writeln!(
+        txt,
+        "Li7_be7_dark_suppression = {:.12}",
+        LITHIUM7_BE7_DARK_SUPPRESSION
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "Li7_channel_coupled_factor = {:.12}",
+        LITHIUM7_CHANNEL_COUPLED_FACTOR
+    )
+    .expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[residuals]").expect("write");
     writeln!(txt, "Y_p_delta = {:.12e}", score.yp_delta).expect("write");
     writeln!(txt, "D/H_rel_error = {:.12}", score.dh_rel_error).expect("write");
     writeln!(txt, "3He/H_rel_error = {:.12}", score.he3_rel_error).expect("write");
     writeln!(txt, "Li7_tension_ratio = {:.12}", score.li_tension_ratio).expect("write");
+    writeln!(txt).expect("write");
+    writeln!(txt, "[lithium_closure]").expect("write");
+    writeln!(
+        txt,
+        "Li7_be7_dark_suppression_structural = {:.12}",
+        LITHIUM7_BE7_DARK_SUPPRESSION
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "Li7_be7_dark_suppression_required_for_unity = {:.12}",
+        li7_be7_required_suppression
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "Li7_be7_destruction_enhancement_structural = {:.12}",
+        LITHIUM7_BE7_DESTRUCTION_ENHANCEMENT_STRUCTURAL
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "Li7_be7_destruction_enhancement_required_for_unity = {:.12}",
+        li7_be7_required_enhancement
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "Li7_be7_additional_destruction_multiplier = {:.12}",
+        li7_be7_additional_multiplier
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "Li7_residual_post_bbn_depletion_factor = {:.12}",
+        li7_residual_depletion_factor
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "Li7_residual_post_bbn_depletion_percent = {:.12}",
+        li7_residual_depletion_percent
+    )
+    .expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[gate]").expect("write");
     writeln!(txt, "yp_ok = {}", score.yp_ok).expect("write");
@@ -69,7 +137,7 @@ fn main() {
     let mut json = File::create(&json_path).expect("create json");
     writeln!(
         json,
-        "{{\n  \"eta10\": {:.12},\n  \"eta10_ref\": {:.12},\n  \"deuterium_eta_exp\": {:.12},\n  \"helium3_eta_exp\": {:.12},\n  \"lithium7_tension_amplification\": {:.12},\n  \"lithium7_visible_fraction\": {:.12},\n  \"lithium7_reaction_network_gain\": {:.12},\n  \"lithium7_be7_dark_suppression\": {:.12},\n  \"lithium7_channel_coupled_factor\": {:.12},\n  \"yp_pred\": {:.12e},\n  \"dh_pred\": {:.12e},\n  \"he3h_pred\": {:.12e},\n  \"li7h_pred\": {:.12e},\n  \"li7_source\": {:.12e},\n  \"li7_direct_component\": {:.12e},\n  \"li7_be7_component_raw\": {:.12e},\n  \"li7_be7_component_dark\": {:.12e},\n  \"yp_delta\": {:.12e},\n  \"dh_rel_error\": {:.12},\n  \"he3_rel_error\": {:.12},\n  \"li_tension_ratio\": {:.12},\n  \"windows\": {{\"yp_abs_max\": {:.12}, \"dh_rel_max\": {:.12}, \"he3_rel_max\": {:.12}, \"li_tension_ratio_min\": {:.12}, \"li_tension_ratio_max\": {:.12}}},\n  \"yp_ok\": {},\n  \"dh_ok\": {},\n  \"he3_ok\": {},\n  \"li_tension_ok\": {},\n  \"passes_primary\": {},\n  \"passes_all\": {}\n}}",
+        "{{\n  \"eta10\": {:.12},\n  \"eta10_ref\": {:.12},\n  \"deuterium_eta_exp\": {:.12},\n  \"helium3_eta_exp\": {:.12},\n  \"lithium7_tension_amplification\": {:.12},\n  \"lithium7_visible_fraction\": {:.12},\n  \"lithium7_reaction_network_gain\": {:.12},\n  \"lithium7_be7_dark_suppression\": {:.12},\n  \"lithium7_be7_destruction_enhancement_structural\": {:.12},\n  \"lithium7_channel_coupled_factor\": {:.12},\n  \"yp_pred\": {:.12e},\n  \"dh_pred\": {:.12e},\n  \"he3h_pred\": {:.12e},\n  \"li7h_pred\": {:.12e},\n  \"li7_source\": {:.12e},\n  \"li7_direct_component\": {:.12e},\n  \"li7_be7_component_raw\": {:.12e},\n  \"li7_be7_component_dark\": {:.12e},\n  \"yp_delta\": {:.12e},\n  \"dh_rel_error\": {:.12},\n  \"he3_rel_error\": {:.12},\n  \"li_tension_ratio\": {:.12},\n  \"li7_be7_dark_suppression_required\": {:.12},\n  \"li7_be7_destruction_enhancement_required\": {:.12},\n  \"li7_be7_additional_destruction_multiplier\": {:.12},\n  \"li7_residual_post_bbn_depletion_factor\": {:.12},\n  \"li7_residual_post_bbn_depletion_percent\": {:.12},\n  \"windows\": {{\"yp_abs_max\": {:.12}, \"dh_rel_max\": {:.12}, \"he3_rel_max\": {:.12}, \"li_tension_ratio_min\": {:.12}, \"li_tension_ratio_max\": {:.12}}},\n  \"yp_ok\": {},\n  \"dh_ok\": {},\n  \"he3_ok\": {},\n  \"li_tension_ok\": {},\n  \"passes_primary\": {},\n  \"passes_all\": {}\n}}",
         score.eta10,
         ETA10_REF,
         DEUTERIUM_ETA_EXP,
@@ -78,6 +146,7 @@ fn main() {
         LITHIUM7_VISIBLE_FRACTION,
         LITHIUM7_REACTION_NETWORK_GAIN,
         LITHIUM7_BE7_DARK_SUPPRESSION,
+        LITHIUM7_BE7_DESTRUCTION_ENHANCEMENT_STRUCTURAL,
         LITHIUM7_CHANNEL_COUPLED_FACTOR,
         score.yp_pred,
         score.dh_pred,
@@ -91,6 +160,11 @@ fn main() {
         score.dh_rel_error,
         score.he3_rel_error,
         score.li_tension_ratio,
+        li7_be7_required_suppression,
+        li7_be7_required_enhancement,
+        li7_be7_additional_multiplier,
+        li7_residual_depletion_factor,
+        li7_residual_depletion_percent,
         windows.yp_abs_max,
         windows.dh_rel_max,
         windows.he3_rel_max,

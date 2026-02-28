@@ -181,6 +181,20 @@ fn main() {
         eprintln!("global_gate: abiogenesis_ci_gate failed: {e}");
         std::process::exit(2);
     }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "entropy_progression_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: entropy_progression_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
 
     run_or_exit(
         "baryogenesis_report[gain=0]",
@@ -275,6 +289,8 @@ fn main() {
         .expect("parameter degeneracy json");
     let abiogenesis =
         read_json("/tmp/bh_renders/abiogenesis_ci_gate.json").expect("abiogenesis json");
+    let entropy_progression = read_json("/tmp/bh_renders/entropy_progression_ci_gate.json")
+        .expect("entropy progression json");
     let sigma = read_json("/tmp/bh_renders/sigma8_decomposition/sigma8_decomposition_report.json")
         .expect("sigma json");
 
@@ -347,6 +363,21 @@ fn main() {
     let abiogenesis_lower_3sigma =
         v_f64(&abiogenesis, &["inevitability", "n_times_p_lower_3sigma"]).unwrap();
     let abiogenesis_margin = v_f64(&abiogenesis, &["inevitability", "robust_margin"]).unwrap();
+    let entropy_progression_pass = v_bool(&entropy_progression, &["overall_pass"]).unwrap();
+    let entropy_progression_final_per_area = v_f64(
+        &entropy_progression,
+        &["summary", "final_total_per_area_w_m2_k"],
+    )
+    .unwrap();
+    let entropy_progression_final_universe = v_f64(
+        &entropy_progression,
+        &["summary", "final_total_universe_w_k"],
+    )
+    .unwrap();
+    let entropy_progression_maxima =
+        v_f64(&entropy_progression, &["summary", "local_maxima_count"]).unwrap();
+    let entropy_progression_minima =
+        v_f64(&entropy_progression, &["summary", "local_minima_count"]).unwrap();
 
     let cmb_pass = tt <= 1.30 && te <= 1.20 && ee <= 1.10;
 
@@ -364,6 +395,7 @@ fn main() {
         && li7_stellar_pass
         && degeneracy_pass
         && abiogenesis_pass
+        && entropy_progression_pass
         && cmb_pass
         && sigma8_pass;
 
@@ -462,6 +494,36 @@ fn main() {
     )
     .ok();
     writeln!(txt, "abiogenesis_pass = {}", abiogenesis_pass).ok();
+    writeln!(
+        txt,
+        "entropy_progression_final_per_area_w_m2_k = {:.12e}",
+        entropy_progression_final_per_area
+    )
+    .ok();
+    writeln!(
+        txt,
+        "entropy_progression_final_universe_w_k = {:.12e}",
+        entropy_progression_final_universe
+    )
+    .ok();
+    writeln!(
+        txt,
+        "entropy_progression_local_maxima = {:.0}",
+        entropy_progression_maxima
+    )
+    .ok();
+    writeln!(
+        txt,
+        "entropy_progression_local_minima = {:.0}",
+        entropy_progression_minima
+    )
+    .ok();
+    writeln!(
+        txt,
+        "entropy_progression_pass = {}",
+        entropy_progression_pass
+    )
+    .ok();
     writeln!(txt, "cmb_tt_red = {:.12}", tt).ok();
     writeln!(txt, "cmb_te_red = {:.12}", te).ok();
     writeln!(txt, "cmb_ee_red = {:.12}", ee).ok();
@@ -539,6 +601,13 @@ fn main() {
             "n_times_p_lower_3sigma": abiogenesis_lower_3sigma,
             "robust_margin": abiogenesis_margin,
             "pass": abiogenesis_pass
+        },
+        "entropy_progression": {
+            "final_per_area_w_m2_k": entropy_progression_final_per_area,
+            "final_universe_w_k": entropy_progression_final_universe,
+            "local_maxima_count": entropy_progression_maxima,
+            "local_minima_count": entropy_progression_minima,
+            "pass": entropy_progression_pass
         },
         "cmb": {
             "tt_full_red": tt,

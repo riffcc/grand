@@ -118,6 +118,27 @@ noncomputable def lithium7Be7ComponentUnsuppressed (eta10 : ℝ) : ℝ :=
 noncomputable def lithium7Be7ComponentDarkCoupled (eta10 : ℝ) : ℝ :=
   lithium7Be7ComponentUnsuppressed eta10 * lithium7Be7DarkSuppression
 
+/-- Li-7 abundance for an explicit Be-7 branch survival factor. -/
+noncomputable def primordialLithium7RatioWithBe7Survival (eta10 be7Survival : ℝ) : ℝ :=
+  lithium7DirectComponent eta10 + lithium7Be7ComponentUnsuppressed eta10 * be7Survival
+
+/-- Be-7 survival factor required to match the Li-7 observational anchor. -/
+noncomputable def lithium7Be7DarkSuppressionRequired (eta10 : ℝ) : ℝ :=
+  ((li7OverHObservedQ : ℝ) - lithium7DirectComponent eta10) /
+    lithium7Be7ComponentUnsuppressed eta10
+
+/-- Structural Be-7 destruction enhancement relative to unsuppressed branch. -/
+noncomputable def lithium7Be7DestructionEnhancementStructural : ℝ :=
+  1 / lithium7Be7DarkSuppression
+
+/-- Be-7 destruction enhancement required for exact Li-7 closure. -/
+noncomputable def lithium7Be7DestructionEnhancementRequired (eta10 : ℝ) : ℝ :=
+  1 / lithium7Be7DarkSuppressionRequired eta10
+
+/-- Additional Be-7 destruction multiplier required relative to structural lane. -/
+noncomputable def lithium7Be7AdditionalDestructionMultiplier (eta10 : ℝ) : ℝ :=
+  lithium7Be7DestructionEnhancementRequired eta10 / lithium7Be7DestructionEnhancementStructural
+
 /-- Channel-coupled Li-7 abundance lane (absolute predictive lane). -/
 noncomputable def primordialLithium7RatioChannelCoupled (eta10 : ℝ) : ℝ :=
   lithium7DirectComponent eta10 + lithium7Be7ComponentDarkCoupled eta10
@@ -141,6 +162,10 @@ noncomputable def lithium7TensionRatioCorrected (eta10 : ℝ) : ℝ :=
 /-- Channel-coupled Li-7 tension ratio lane (`pred_channel/observed`). -/
 noncomputable def lithium7TensionRatioChannelCoupled (eta10 : ℝ) : ℝ :=
   primordialLithium7RatioChannelCoupled eta10 / (li7OverHObservedQ : ℝ)
+
+/-- Residual post-BBN depletion factor required from channel-coupled prediction. -/
+noncomputable def lithium7ResidualPostBbnDepletionFactor (eta10 : ℝ) : ℝ :=
+  (li7OverHObservedQ : ℝ) / primordialLithium7RatioChannelCoupled eta10
 
 theorem eta10_ref_eq_6 : eta10Ref = 6 := by
   unfold eta10Ref
@@ -246,6 +271,12 @@ theorem lithium7_be7_dark_suppression_eq :
   rw [dark_fraction_of_total_states_eq, lithium7_void_correction_eq]
   norm_num
 
+theorem lithium7_be7_destruction_enhancement_structural_eq :
+    lithium7Be7DestructionEnhancementStructural = (536 : ℝ) / 165 := by
+  unfold lithium7Be7DestructionEnhancementStructural
+  rw [lithium7_be7_dark_suppression_eq]
+  norm_num
+
 theorem lithium7_channel_coupled_factor_eq :
     lithium7ChannelCoupledFactor = (3011 : ℝ) / 8576 := by
   unfold lithium7ChannelCoupledFactor
@@ -326,5 +357,21 @@ theorem lithium7_channel_coupled_ratio_reference_window :
       lithium7TensionRatioChannelCoupled eta10Ref ≤ (7 / 5 : ℝ) := by
   rw [lithium7_channel_coupled_tension_ratio_at_reference]
   constructor <;> norm_num
+
+theorem lithium7_required_suppression_reconstructs_observation
+    (eta10 : ℝ) (hbe7 : lithium7Be7ComponentUnsuppressed eta10 ≠ 0) :
+    primordialLithium7RatioWithBe7Survival eta10 (lithium7Be7DarkSuppressionRequired eta10)
+      = (li7OverHObservedQ : ℝ) := by
+  unfold primordialLithium7RatioWithBe7Survival lithium7Be7DarkSuppressionRequired
+  field_simp [hbe7]
+  ring
+
+theorem lithium7_residual_depletion_factor_eq_inv_tension (eta10 : ℝ) :
+    lithium7ResidualPostBbnDepletionFactor eta10 =
+      1 / lithium7TensionRatioChannelCoupled eta10 := by
+  unfold lithium7ResidualPostBbnDepletionFactor lithium7TensionRatioChannelCoupled
+  symm
+  simpa using
+    (one_div_div (primordialLithium7RatioChannelCoupled eta10) (li7OverHObservedQ : ℝ))
 
 end Gutoe.BBN
