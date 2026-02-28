@@ -152,7 +152,10 @@ mod tests {
             });
         }
         let est = estimate_class_ell_diff(&tt, 1200, 2200).expect("estimate");
-        assert!((est - ell_diff_true).abs() / ell_diff_true < 0.12, "est={est}");
+        assert!(
+            (est - ell_diff_true).abs() / ell_diff_true < 0.12,
+            "est={est}"
+        );
     }
 
     #[test]

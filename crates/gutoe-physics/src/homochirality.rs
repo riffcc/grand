@@ -165,4 +165,3 @@ mod tests {
         assert_eq!(preferred_amino_handedness(), Handedness::Left);
     }
 }
-

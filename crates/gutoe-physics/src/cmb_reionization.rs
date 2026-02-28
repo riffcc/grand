@@ -66,7 +66,10 @@ pub fn structural_reionization_redshift(eta10: f64) -> f64 {
 
 /// Integrate optical depth from z=0 to structural z_reion, with fully ionized
 /// hydrogen and a first-order helium electron correction.
-pub fn derive_tau_reio(a: MicrophysicsAssumptions, eta10: f64) -> Result<ReionizationDerived, String> {
+pub fn derive_tau_reio(
+    a: MicrophysicsAssumptions,
+    eta10: f64,
+) -> Result<ReionizationDerived, String> {
     let z_reion = structural_reionization_redshift(eta10);
     if !z_reion.is_finite() || z_reion <= 0.0 {
         return Err(format!("invalid structural z_reion: {z_reion}"));

@@ -91,7 +91,9 @@ fn comoving_distance_mpc(z: f64, a: MicrophysicsAssumptions) -> f64 {
 
 /// Derive Silk diffusion and visibility-width scales directly from the
 /// in-framework recombination microphysics.
-pub fn derive_silk_damping_envelope(a: MicrophysicsAssumptions) -> Result<SilkDampingDerived, String> {
+pub fn derive_silk_damping_envelope(
+    a: MicrophysicsAssumptions,
+) -> Result<SilkDampingDerived, String> {
     let rho_c0 = critical_density0(a);
     let n_b0 = a.omega_b0 * rho_c0 / M_PROTON;
     let n_h0 = X_H_PRIMORDIAL * n_b0;
@@ -256,7 +258,11 @@ mod tests {
     fn derived_scales_are_physical() {
         let d = derive_silk_damping_envelope(baseline()).expect("derive scales");
         assert!(d.z_star > 850.0 && d.z_star < 1300.0, "z*= {}", d.z_star);
-        assert!(d.sigma_z > 10.0 && d.sigma_z < 250.0, "sigma_z= {}", d.sigma_z);
+        assert!(
+            d.sigma_z > 10.0 && d.sigma_z < 250.0,
+            "sigma_z= {}",
+            d.sigma_z
+        );
         assert!(d.diffusion_length_mpc > 0.1 && d.diffusion_length_mpc < 80.0);
         assert!(d.ell_diff > 100.0 && d.ell_diff < 6000.0);
         assert!(d.ell_vis > 100.0 && d.ell_vis < 8000.0);

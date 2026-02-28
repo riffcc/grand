@@ -313,16 +313,15 @@ fn build_epoch(
     omega_lambda0: f64,
     integral_z_max: f64,
 ) -> UniverseEpoch {
-    let age_seconds =
-        age_at_redshift_seconds(
-            h0_km_s_mpc,
-            z,
-            omega_r0,
-            omega_m0,
-            omega_k0,
-            omega_lambda0,
-            integral_z_max,
-        );
+    let age_seconds = age_at_redshift_seconds(
+        h0_km_s_mpc,
+        z,
+        omega_r0,
+        omega_m0,
+        omega_k0,
+        omega_lambda0,
+        integral_z_max,
+    );
     let (omega_r, omega_m, omega_lambda) =
         omega_components_at_z(z, omega_r0, omega_m0, omega_k0, omega_lambda0);
     UniverseEpoch {
@@ -357,16 +356,15 @@ fn simulate_history(
         let ln1pz = t * ln1pz_max;
         let x = ln1pz.exp();
         let z = x - 1.0;
-        let age_seconds =
-            age_at_redshift_seconds(
-                h0_km_s_mpc,
-                z,
-                omega_r0,
-                omega_m0,
-                omega_k0,
-                omega_lambda0,
-                integral_z_max,
-            );
+        let age_seconds = age_at_redshift_seconds(
+            h0_km_s_mpc,
+            z,
+            omega_r0,
+            omega_m0,
+            omega_k0,
+            omega_lambda0,
+            integral_z_max,
+        );
         let (omega_r, omega_m, omega_lambda) =
             omega_components_at_z(z, omega_r0, omega_m0, omega_k0, omega_lambda0);
         out.push(UniverseHistoryRow {
@@ -434,15 +432,14 @@ pub fn evaluate_universe_gate_with_depth(
         MicrophysicsWindows::default(),
     );
 
-    let age_seconds =
-        age_of_universe_seconds(
-            h0_km_s_mpc,
-            omega_r0,
-            omega_m0,
-            omega_k0,
-            omega_lambda0,
-            depth.integral_z_max,
-        );
+    let age_seconds = age_of_universe_seconds(
+        h0_km_s_mpc,
+        omega_r0,
+        omega_m0,
+        omega_k0,
+        omega_lambda0,
+        depth.integral_z_max,
+    );
     let age_gyr = age_seconds / SEC_PER_GYR;
 
     let z_bbn = 1.0e9 / T_CMB0_K - 1.0;
