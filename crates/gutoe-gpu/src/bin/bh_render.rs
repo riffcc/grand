@@ -26,14 +26,16 @@ use gutoe_gpu::{
     geodesic3d::{reduce_3d_to_axisym, trace_photon_3d_schwarzschild, CameraFrame, Vec3},
     kerr::KerrMetric,
     metric::{GutoeMetric, C_INF, LAMBDA_QG, WATSON_SC},
-    synchrotron::{band_tint, band_weight_with_exposure, RenderSpectrum as SpectralBand},
+    synchrotron::{
+        band_frequency_hz, band_tint, band_weight_with_exposure, RenderSpectrum as SpectralBand,
+    },
     tracer::{
         b_critical, trace_photon, trace_photon_interior, trace_photon_interior_core,
         trace_photon_kerr, trace_photon_kerr_activity, trace_photon_kerr_debug,
         trace_photon_kerr_wave_branches, trace_photon_kerr_wave_samples, write_ppm, RenderConfig,
         TraceResult,
     },
-    transfer::{covariant_absorption, covariant_emissivity, transfer_step},
+    transfer::{covariant_synchrotron_coefficients, transfer_step},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -872,22 +874,42 @@ fn pixel_color(
 
     let spectral = band_weight_with_exposure(spectral_band, t_rel, fixed_exposure_override());
     let (j_scale, a_scale) = plasma_profile_scales(r_eff, r_s, n_cross, plasma_model);
-    // Local covariant source proxy.
+    // Local emission envelope from disk thermodynamics/profile gates.
     let source_local = (t_rel * fade * outer_taper * spectral * j_scale).max(0.0);
     let g_cov = transfer.max(1e-9).powf(0.25);
-    let alpha_base =
-        0.35 * tau_scale.max(0.0) * (1.0 + (n_cross.saturating_sub(1)) as f64 * 0.15) * a_scale;
+    let x = (r_eff / r_s.max(1e-9)).max(1e-6);
+    let nu_obs_hz = band_frequency_hz(spectral_band);
+    // Fiducial GRMHD-style scales (Sgr A*/M87* order of magnitude) with profile modulation.
+    let ne_base_m3 = (1.0e12 * x.powf(-1.1) * a_scale).max(1.0);
+    let te_base_k = (6.0e10 * t_rel * j_scale).clamp(1.0e8, 5.0e12);
+    let b_base_t = (30.0 * x.powf(-1.0) * j_scale.sqrt()).clamp(1e-6, 1.0e3);
+    let sin_pitch = sin_inc.abs().clamp(0.1, 1.0);
+    // Render calibration from physical j_nu/alpha_nu units to display-space intensity.
+    let j_render_scale = 2.0e-36;
+    let alpha_render_scale = 8.0e-7 * tau_scale.max(0.0);
     let luminance_raw = if use_transfer {
-        // Multi-step covariant transfer integration along an effective path
-        // segment through the emitting flow.
+        // Multi-step covariant transfer integration using thermal relativistic
+        // synchrotron coefficients (Mahadevan-style emissivity + Kirchhoff alpha).
         let steps = 8usize;
         let path_scale = (r_eff / r_s.max(1e-9)).max(1e-9);
         let mut intensity = 0.0_f64;
         for si in 0..steps {
             let u = (si as f64 + 0.5) / steps as f64; // 0..1
             let local_mod = 1.0 + 0.20 * (1.0 - u);
-            let j_obs = covariant_emissivity((source_local * local_mod).max(0.0), g_cov);
-            let alpha_obs = covariant_absorption(alpha_base * (0.7 + 0.6 * u), g_cov);
+            let coeff = covariant_synchrotron_coefficients(
+                (ne_base_m3 * (0.85 + 0.30 * local_mod)).max(1.0),
+                (b_base_t * (0.90 + 0.20 * local_mod)).max(1e-9),
+                (te_base_k * (0.92 + 0.16 * local_mod)).clamp(1.0e8, 5.0e12),
+                nu_obs_hz.max(1.0),
+                g_cov,
+                sin_pitch,
+            );
+            let j_obs = (coeff.j_obs * source_local * j_render_scale * (0.8 + 0.4 * u)).max(0.0);
+            let alpha_obs = (coeff.alpha_obs
+                * alpha_render_scale
+                * (0.7 + 0.6 * u)
+                * (1.0 + (n_cross.saturating_sub(1)) as f64 * 0.15))
+                .max(0.0);
             let tau_seg = (alpha_obs * path_scale / steps as f64).max(0.0);
             let source_fn = if alpha_obs > 1e-12 {
                 j_obs / alpha_obs

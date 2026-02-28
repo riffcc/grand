@@ -1,16 +1,66 @@
 // GUTOE covariant synchrotron transfer scaffold (Lean parity)
 // Copyright (C) 2026 Riff Labs, AGPL-3.0-or-later
 
-/// Covariant emissivity proxy: j_obs = j_local * g^3.
+use crate::synchrotron::{thermal_synchrotron_absorption, thermal_synchrotron_emissivity};
+
+/// GR invariant scaling: j_nu / nu^2 is invariant, so j_obs = g^2 * j_em.
 #[inline]
 pub fn covariant_emissivity(j_local: f64, g: f64) -> f64 {
-    j_local * g.powi(3)
+    let g_safe = g.max(1e-12);
+    j_local.max(0.0) * g_safe * g_safe
 }
 
-/// Covariant absorption proxy: alpha_obs = alpha_local * g.
+/// GR invariant scaling: alpha_nu * nu is invariant, so alpha_obs = alpha_em / g.
 #[inline]
 pub fn covariant_absorption(alpha_local: f64, g: f64) -> f64 {
-    alpha_local * g
+    let g_safe = g.max(1e-12);
+    alpha_local.max(0.0) / g_safe
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SynchrotronTransferCoefficients {
+    pub j_em: f64,
+    pub alpha_em: f64,
+    pub source_em: f64,
+    pub j_obs: f64,
+    pub alpha_obs: f64,
+    pub source_obs: f64,
+}
+
+/// Covariant thermal synchrotron coefficients from a literature-fit local model.
+///
+/// Local `j_nu` uses a Mahadevan-style relativistic fit and `alpha_nu` comes
+/// from Kirchhoff (`alpha_nu = j_nu / B_nu`). Then redshift scaling is applied
+/// with GR invariants to obtain observer-frame coefficients.
+#[inline]
+pub fn covariant_synchrotron_coefficients(
+    n_e_m3: f64,
+    b_tesla: f64,
+    te_kelvin: f64,
+    nu_obs_hz: f64,
+    g: f64,
+    sin_pitch: f64,
+) -> SynchrotronTransferCoefficients {
+    let g_safe = g.max(1e-12);
+    let nu_em_hz = (nu_obs_hz / g_safe).max(0.0);
+    let j_em = thermal_synchrotron_emissivity(n_e_m3, b_tesla, te_kelvin, nu_em_hz, sin_pitch);
+    let alpha_em = thermal_synchrotron_absorption(n_e_m3, b_tesla, te_kelvin, nu_em_hz, sin_pitch);
+    let source_em = if alpha_em > 1e-40 { j_em / alpha_em } else { j_em };
+    let j_obs = covariant_emissivity(j_em, g_safe);
+    let alpha_obs = covariant_absorption(alpha_em, g_safe);
+    let source_obs = if alpha_obs > 1e-40 {
+        j_obs / alpha_obs
+    } else {
+        j_obs
+    };
+    SynchrotronTransferCoefficients {
+        j_em,
+        alpha_em,
+        source_em,
+        j_obs,
+        alpha_obs,
+        source_obs,
+    }
 }
 
 /// One-step transfer map:
@@ -102,5 +152,26 @@ mod tests {
         assert!((p0 - p1).abs() < 1e-10);
         assert_eq!(r.i, s.i);
         assert_eq!(r.v, s.v);
+    }
+
+    #[test]
+    fn covariant_scaling_matches_invariant_rules() {
+        let j = 2.5;
+        let a = 0.4;
+        let g = 0.5;
+        let j_obs = covariant_emissivity(j, g);
+        let a_obs = covariant_absorption(a, g);
+        assert!((j_obs - j * g * g).abs() < 1e-12);
+        assert!((a_obs - a / g).abs() < 1e-12);
+    }
+
+    #[test]
+    fn thermal_covariant_coefficients_are_finite_and_nonnegative() {
+        let c = covariant_synchrotron_coefficients(1.0e11, 30.0, 7.0e10, 230.0e9, 0.72, 0.7);
+        assert!(c.j_em.is_finite() && c.j_em >= 0.0);
+        assert!(c.alpha_em.is_finite() && c.alpha_em >= 0.0);
+        assert!(c.j_obs.is_finite() && c.j_obs >= 0.0);
+        assert!(c.alpha_obs.is_finite() && c.alpha_obs >= 0.0);
+        assert!(c.source_obs.is_finite() && c.source_obs >= 0.0);
     }
 }
