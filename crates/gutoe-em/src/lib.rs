@@ -7,13 +7,15 @@
 
 pub mod alpha;
 pub mod analysis;
+pub mod fcnc;
 pub mod flavor;
+pub mod holonomy;
+pub mod quantum_lepton;
 pub mod su2_gauge;
 pub mod weak;
-pub mod quantum_lepton;
 pub use quantum_lepton::{
-    quantum_hydrogen_ground_state, quantum_shell_enrichment, expected_energy,
-    apply_hamiltonian, two_electron_ground_state, LeptonPsi,
+    apply_hamiltonian, expected_energy, quantum_hydrogen_ground_state, quantum_shell_enrichment,
+    two_electron_ground_state, LeptonPsi,
 };
 pub mod config;
 pub mod gauge;
@@ -24,35 +26,46 @@ pub use analysis::{analyze, detect_quarks, find_proton_triplets, AnalysisResult,
 pub use config::{
     LatticeConfig, QuarkType, DOWN_CHARGE, LEPTON_CHARGE, LEPTON_SEED, UP_CHARGE, VOID,
 };
+pub use fcnc::{
+    channel_label, ckm_structural_loop_proxy, ckm_structural_loop_proxy_matches_expected,
+    fcnc_gim_from_clifford, fcnc_gim_from_observables, fcnc_gim_from_textures, up_flavors,
+    FcncGimMetrics, GimChannelMetrics, FCNC_LOOP_PROXY_EXPECTED,
+};
 pub use flavor::{
-    ckm_from_clifford, ckm_from_textures, cp_violation_witness, pmns_from_clifford,
-    pmns_from_clifford_theta23_alpha2, pmns_from_textures, pmns_theta23_sq_alpha2_corrected,
-    pmns_theta23_sq_direct, residuals, within_envelope, CP_PHASE_TOL_DEG, CKM_CP_J_MIN,
-    PMNS_CP_J_MIN, PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL, MixingEnvelope, MixingObservables,
-    MixingResiduals, MixingTargets, CKM_PDG_ENVELOPE, CKM_TARGET, PMNS_PDG_ENVELOPE,
-    PMNS_TARGET, neutrino_hierarchy_prediction, neutrino_texture_eigenvalues,
+    ckm_from_clifford, ckm_from_textures, cp_violation_witness, neutrino_hierarchy_prediction,
+    neutrino_texture_eigenvalues, pmns_from_clifford, pmns_from_clifford_theta23_alpha2,
+    pmns_from_textures, pmns_theta23_sq_alpha2_corrected, pmns_theta23_sq_direct, residuals,
+    within_envelope, MixingEnvelope, MixingObservables, MixingResiduals, MixingTargets,
+    CKM_CP_J_MIN, CKM_PDG_ENVELOPE, CKM_TARGET, CP_PHASE_TOL_DEG, PMNS_CP_J_MIN, PMNS_PDG_ENVELOPE,
+    PMNS_TARGET, PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL,
+};
+pub use holonomy::{
+    class_angle_from_trace, closed_loop_holonomy, enumerate_triangles, sample_holonomy_diagnostics,
+    transport_product, triangle_loop_holonomy, triangle_loop_trace_over_2,
+    triangle_wilson_residual_abs, u1_geometric_phase, u1_phase_composition_residual,
+    HolonomyDiagnostics, RestrictedHolonomySignature, TriangleHolonomySample,
 };
 pub use gauge::{
     compute_charge_density, em_force_on_lepton, jacobi_poisson, maxwell_wave_step, update_gauge,
     GaugeFields,
 };
 pub use geometry::{mesh_neighbours, mesh_neighbours_3d, site_coords};
+pub use sim::{
+    alignment_rg, cycle_prob_rg, init_lattice, instanton_threshold, landau_pole, running_alpha_s,
+    sample_without_replacement, step, step_counted, veracity, z3_instanton_action,
+};
 pub use su2_gauge::{
     confinement_experiment, su2_dag, su2_dot, su2_identity, su2_mul, su2_random,
     su2_random_perturb, su2_re_tr, wilson_triangles_at, Su2, Su2Links,
 };
 pub use weak::{
-    electroweak_summary, electroweak_vev_from_fermi, electroweak_vev_from_lattice_order_parameter,
-    electron_mass_from_proton_anchor, fermi_constant, higgs_mass_from_vev, higgs_mu_sq,
+    electron_mass_from_proton_anchor, electroweak_summary, electroweak_vev_from_fermi,
+    electroweak_vev_from_lattice_order_parameter, fermi_constant, higgs_mass_from_vev, higgs_mu_sq,
     higgs_nontrivial_vev, higgs_potential, higgs_potential_derivative, higgs_vev,
-    normalized_higgs_order_parameter, sin2_weinberg, weak_coupling_from_alpha, w_boson_mass,
-    w_mass_from_vev_and_alpha, w_z_mass_ratio, z_boson_mass, z_mass_from_vev_and_alpha,
-    ALPHA_EW_MZ, ELECTRON_STATE, EWSB_SCALE_FACTOR, HIGGS_CRITICAL_VOID_FRACTION,
-    HIGGS_QUARTIC_LAMBDA, NEUTRINO_STATE, PROTON_MASS_ANCHOR_MEV, VEV_OVER_PROTON,
-};
-pub use sim::{
-    alignment_rg, cycle_prob_rg, init_lattice, instanton_threshold, landau_pole,
-    running_alpha_s, sample_without_replacement, step, step_counted, veracity, z3_instanton_action,
+    normalized_higgs_order_parameter, sin2_weinberg, w_boson_mass, w_mass_from_vev_and_alpha,
+    w_z_mass_ratio, weak_coupling_from_alpha, z_boson_mass, z_mass_from_vev_and_alpha, ALPHA_EW_MZ,
+    ELECTRON_STATE, EWSB_SCALE_FACTOR, HIGGS_CRITICAL_VOID_FRACTION, HIGGS_QUARTIC_LAMBDA,
+    NEUTRINO_STATE, PROTON_MASS_ANCHOR_MEV, VEV_OVER_PROTON,
 };
 
 // ── Hydrogen Formation Integration Test ──────────────────────────────────────
@@ -74,8 +87,8 @@ pub use sim::{
 mod hydrogen_formation_test {
     use std::collections::{HashMap, HashSet};
 
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     use crate::analysis::{analyze, detect_quarks, find_proton_triplets};
     use crate::config::{LatticeConfig, QuarkType, LEPTON_SEED};
@@ -144,9 +157,7 @@ mod hydrogen_formation_test {
                 trips0.iter().map(|&[d, _, _]| d / layer_stride).collect();
 
             let mut cands: Vec<usize> = (0..n)
-                .filter(|&i| {
-                    !p_sites0.contains(&i) && proton_layers0.contains(&(i / layer_stride))
-                })
+                .filter(|&i| !p_sites0.contains(&i) && proton_layers0.contains(&(i / layer_stride)))
                 .collect();
             if cands.is_empty() {
                 // Fallback: any non-proton site
@@ -160,7 +171,9 @@ mod hydrogen_formation_test {
 
             println!(
                 "  seed {seed_idx}: {} protons, {} proton-layers, {} inject candidates",
-                trips0.len(), proton_layers0.len(), cands.len()
+                trips0.len(),
+                proton_layers0.len(),
+                cands.len()
             );
 
             // ── Phase 2: EM active ────────────────────────────────────────────
@@ -262,7 +275,7 @@ mod hydrogen_formation_test {
 
             // ── Detect protons and build Coulomb field ────────────────────────
             let quarks = detect_quarks(&lat, &cfg);
-            let trips  = find_proton_triplets(&quarks, &cfg);
+            let trips = find_proton_triplets(&quarks, &cfg);
             if trips.is_empty() {
                 println!("  seed {seed_idx}: no protons — skip");
                 continue;
@@ -303,8 +316,8 @@ mod hydrogen_formation_test {
                 &phi,
                 &shell_sites,
                 &cfg,
-                300,    // imaginary time iterations
-                0.05,   // step size δτ
+                300,  // imaginary time iterations
+                0.05, // step size δτ
                 alpha_em,
             );
 
@@ -343,12 +356,8 @@ mod hydrogen_formation_test {
             "\nQUANTUM HYDROGEN: YES — E_ground = {mean_e:+.4} < 0 (bound)  \
              Born enrichment = {mean_enrich:.2}× > 1 (localised)"
         );
-        println!(
-            "  Classical lepton hop → quantum Schrodinger equation on hex lattice."
-        );
-        println!(
-            "  Same Cl(1,3) algebra. Same Poisson solver. Unitary dynamics."
-        );
+        println!("  Classical lepton hop → quantum Schrodinger equation on hex lattice.");
+        println!("  Same Cl(1,3) algebra. Same Poisson solver. Unitary dynamics.");
     }
 }
 
@@ -373,17 +382,15 @@ mod hydrogen_formation_test {
 mod experiment_10 {
     use std::collections::{HashMap, HashSet};
 
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     use crate::analysis::{detect_quarks, find_proton_triplets};
     use crate::config::{LatticeConfig, QuarkType};
     use crate::gauge::{compute_charge_density, jacobi_poisson, update_gauge, GaugeFields};
-    use crate::quantum_lepton::{
-        born_rule_entropy, quantum_hydrogen_ground_state, h2_plus_energy,
-    };
+    use crate::quantum_lepton::{born_rule_entropy, h2_plus_energy, quantum_hydrogen_ground_state};
     use crate::sim::init_lattice;
-    use crate::weak::{higgs_vev, w_boson_mass, z_boson_mass, sin2_weinberg};
+    use crate::weak::{higgs_vev, sin2_weinberg, w_boson_mass, z_boson_mass};
 
     /// THE GRAND LOOP: from void to chemistry.
     ///
@@ -414,11 +421,23 @@ mod experiment_10 {
 
         println!("  Void fraction: f₀ = {f0_void:.4} (= 1.0, perfect Higgs condensate)");
         println!("  State entropy:  S  = {s_void:.4}  (= 0, zero information)");
-        println!("  sin²θ_W = {:.6}  (algebraic, from Z₃ orbits)", sin2_weinberg());
-        println!("  W mass (at f₀=1): m_W = {:.4}", w_boson_mass(f0_void, g_weak));
-        println!("  Z mass (at f₀=1): m_Z = {:.4}", z_boson_mass(w_boson_mass(f0_void, g_weak)));
+        println!(
+            "  sin²θ_W = {:.6}  (algebraic, from Z₃ orbits)",
+            sin2_weinberg()
+        );
+        println!(
+            "  W mass (at f₀=1): m_W = {:.4}",
+            w_boson_mass(f0_void, g_weak)
+        );
+        println!(
+            "  Z mass (at f₀=1): m_Z = {:.4}",
+            z_boson_mass(w_boson_mass(f0_void, g_weak))
+        );
 
-        assert!((f0_void - 1.0).abs() < 1e-15, "Void = pure Higgs condensate");
+        assert!(
+            (f0_void - 1.0).abs() < 1e-15,
+            "Void = pure Higgs condensate"
+        );
         assert!(s_void.abs() < 1e-15, "Void has zero entropy");
 
         // ── STAGE 1: Quark condensation → proton formation ────────────────────
@@ -438,18 +457,25 @@ mod experiment_10 {
 
         println!("  Protons formed: {}", protons.len());
         println!("  Void fraction: {f0_t0:.4} → {f0_t150:.4}  (Higgs VEV decreases)");
-        println!("  W mass change: {:.4} → {:.4}",
+        println!(
+            "  W mass change: {:.4} → {:.4}",
             w_boson_mass(f0_t0, g_weak),
             w_boson_mass(f0_t150, g_weak)
         );
 
-        assert!(!protons.is_empty(), "Protons must form from void in Stage 1");
+        assert!(
+            !protons.is_empty(),
+            "Protons must form from void in Stage 1"
+        );
 
         // ── STAGE 2: Quantum hydrogen ─────────────────────────────────────────
         println!("\n── Stage 2: Quantum hydrogen (Schrödinger on hex lattice) ──");
 
         // Use a single-layer lattice for the quantum calculation
-        let cfg_2d = LatticeConfig { layers: 1, ..cfg.clone() };
+        let cfg_2d = LatticeConfig {
+            layers: 1,
+            ..cfg.clone()
+        };
         let n_2d = cfg_2d.n_sites();
         let center = n_2d / 2;
 
@@ -460,9 +486,8 @@ mod experiment_10 {
 
         // Quantum ground state
         let shell = vec![center];
-        let (psi_H, e_hydrogen, e_kin, e_pot) = quantum_hydrogen_ground_state(
-            &phi_proton, &shell, &cfg_2d, 300, 0.05, alpha_em,
-        );
+        let (psi_H, e_hydrogen, e_kin, e_pot) =
+            quantum_hydrogen_ground_state(&phi_proton, &shell, &cfg_2d, 300, 0.05, alpha_em);
 
         let s_hydrogen = born_rule_entropy(&psi_H);
 
@@ -470,43 +495,53 @@ mod experiment_10 {
         println!("  Born entropy: S = {s_hydrogen:.4}  (localized near proton)");
         println!("  Hydrogen formed: E < 0 ✓");
 
-        assert!(e_hydrogen < 0.0, "Hydrogen must be bound: E = {e_hydrogen:+.6}");
+        assert!(
+            e_hydrogen < 0.0,
+            "Hydrogen must be bound: E = {e_hydrogen:+.6}"
+        );
 
         // ── STAGE 3: H₂⁺ molecular bond ──────────────────────────────────────
         println!("\n── Stage 3: H₂⁺ molecular bond ──");
 
-        let cfg_h2 = LatticeConfig { hex_rows: 24, hex_cols: 24, layers: 1, ..cfg.clone() };
+        let cfg_h2 = LatticeConfig {
+            hex_rows: 24,
+            hex_cols: 24,
+            layers: 1,
+            ..cfg.clone()
+        };
         let row = 12usize;
         let p1_col = 8usize;
         let l = 24usize;
         let p1 = row * l + p1_col;
 
         // Measure E_total at sep=1 (bonding) and sep=6 (dissociation)
-        let (e_e_bond, e_pp_bond, e_total_bond) = h2_plus_energy(
-            p1, p1 + 1, &cfg_h2, 500, 400, 0.04, alpha_em,
-        );
-        let (_e_e_diss, _e_pp_diss, e_total_diss) = h2_plus_energy(
-            p1, p1 + 6, &cfg_h2, 500, 400, 0.04, alpha_em,
-        );
+        let (e_e_bond, e_pp_bond, e_total_bond) =
+            h2_plus_energy(p1, p1 + 1, &cfg_h2, 500, 400, 0.04, alpha_em);
+        let (_e_e_diss, _e_pp_diss, e_total_diss) =
+            h2_plus_energy(p1, p1 + 6, &cfg_h2, 500, 400, 0.04, alpha_em);
 
         // Reference: single hydrogen atom
         let mut rho_p1 = vec![0.0f64; cfg_h2.n_sites()];
         rho_p1[p1] = 1.0;
         let phi_p1 = jacobi_poisson(&rho_p1, &cfg_h2, 500);
         let shell_h2 = vec![p1];
-        let (_, e_isolated, _, _) = quantum_hydrogen_ground_state(
-            &phi_p1, &shell_h2, &cfg_h2, 400, 0.04, alpha_em,
-        );
+        let (_, e_isolated, _, _) =
+            quantum_hydrogen_ground_state(&phi_p1, &shell_h2, &cfg_h2, 400, 0.04, alpha_em);
 
         let binding_energy = e_total_bond - e_isolated;
 
         println!("  E_isolated   = {e_isolated:+.6}  (one H atom)");
-        println!("  E_bond(sep=1): E_e={e_e_bond:+.4}, E_pp={e_pp_bond:+.4}, total={e_total_bond:+.4}");
+        println!(
+            "  E_bond(sep=1): E_e={e_e_bond:+.4}, E_pp={e_pp_bond:+.4}, total={e_total_bond:+.4}"
+        );
         println!("  E_diss(sep=6): total={e_total_diss:+.4}");
         println!("  Binding energy: ΔE = E_bond - E_isolated = {binding_energy:+.6}");
         println!("  Chemistry: H₂⁺ bond energy < 0 ✓");
 
-        assert!(e_total_bond < e_total_diss, "Molecule more stable at shorter separation");
+        assert!(
+            e_total_bond < e_total_diss,
+            "Molecule more stable at shorter separation"
+        );
         assert!(binding_energy < 0.0, "H₂⁺ bonding: E_bond < E_isolated");
 
         // ── STAGE 4: Arrow of time (entropy at each stage) ───────────────────
@@ -541,8 +576,10 @@ mod experiment_10 {
         let m_z_phys = z_boson_mass(m_w_phys);
 
         println!("  sin²θ_W = 3/13 = {sin2_w:.6}  (experimental: 0.23122, error: 0.19%)");
-        println!("  m_W/m_Z = √(10/13) = {:.6}  (experimental: 0.8819, error: 0.50%)",
-            m_w_phys / m_z_phys);
+        println!(
+            "  m_W/m_Z = √(10/13) = {:.6}  (experimental: 0.8819, error: 0.50%)",
+            m_w_phys / m_z_phys
+        );
         println!("  n_gen = |Z₃| = 3  (from ThreeGenerations.lean)");
         println!("  α⁻¹  = T(16)+1 = 137  (from FineStructure.lean)");
 
@@ -553,7 +590,10 @@ mod experiment_10 {
         println!("║  VOID                                                        ║");
         println!("║   │  Z₃ symmetry breaking (Cl(1,3) forced)                  ║");
         println!("║   ↓                                                          ║");
-        println!("║  QUARKS + PROTONS  ({} protons in 150 steps)", protons.len());
+        println!(
+            "║  QUARKS + PROTONS  ({} protons in 150 steps)",
+            protons.len()
+        );
         println!("║   │  U(1) Coulomb binding (∇²φ = −ρ)                        ║");
         println!("║   ↓                                                          ║");
         println!("║  HYDROGEN  (E = {e_hydrogen:+.4}, bound)                   ║");

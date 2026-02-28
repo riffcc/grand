@@ -2053,7 +2053,13 @@ mod tests {
         let mu_rel = ((mmu_struct - mmu_exp) / mmu_exp).abs();
         let tau_rel = ((mtau_struct - mtau_exp) / mtau_exp).abs();
 
-        assert!(mu_rel < 0.01, "structural-alpha mu regression: rel={mu_rel:.6e}");
-        assert!(tau_rel < 0.01, "structural-alpha tau regression: rel={tau_rel:.6e}");
+        assert!(
+            mu_rel < 0.01,
+            "structural-alpha mu regression: rel={mu_rel:.6e}"
+        );
+        assert!(
+            tau_rel < 0.01,
+            "structural-alpha tau regression: rel={tau_rel:.6e}"
+        );
     }
 }

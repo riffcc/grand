@@ -147,7 +147,11 @@ impl Su2Links {
     pub fn get(&self, from: usize, to: usize) -> Su2 {
         let key = (from.min(to), from.max(to));
         let u = self.links.get(&key).copied().unwrap_or_else(su2_identity);
-        if from < to { u } else { su2_dag(&u) }
+        if from < to {
+            u
+        } else {
+            su2_dag(&u)
+        }
     }
 
     /// Set directed link U(from → to).  Stores the canonical (min, max) orientation.
@@ -202,7 +206,11 @@ impl Su2Links {
                 }
             }
         }
-        if count == 0 { 0.0 } else { total / count as f64 }
+        if count == 0 {
+            0.0
+        } else {
+            total / count as f64
+        }
     }
 
     // ── Metropolis update ──────────────────────────────────────────────────────
@@ -317,7 +325,11 @@ pub fn wilson_triangles_at(links: &Su2Links, source: usize, cfg: &LatticeConfig)
             }
         }
     }
-    if count == 0 { 0.0 } else { total / count as f64 }
+    if count == 0 {
+        0.0
+    } else {
+        total / count as f64
+    }
 }
 
 /// Run a confinement experiment at a given β value.
@@ -363,7 +375,11 @@ pub fn confinement_experiment<R: Rng>(
     }
 
     let plaq_avg = plaq_sum / n_meas as f64;
-    let w3_avg = if w3_count > 0 { w3_sum / w3_count as f64 } else { 1e-10 };
+    let w3_avg = if w3_count > 0 {
+        w3_sum / w3_count as f64
+    } else {
+        1e-10
+    };
     let v3 = if w3_avg > 1e-10 { -w3_avg.ln() } else { 100.0 };
 
     (plaq_avg, v3)
@@ -375,11 +391,16 @@ pub fn confinement_experiment<R: Rng>(
 mod tests {
     use super::*;
     use crate::config::LatticeConfig;
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     fn small_cfg() -> LatticeConfig {
-        LatticeConfig { hex_rows: 8, hex_cols: 8, layers: 1, ..Default::default() }
+        LatticeConfig {
+            hex_rows: 8,
+            hex_cols: 8,
+            layers: 1,
+            ..Default::default()
+        }
     }
 
     // ── SU(2) algebra ──────────────────────────────────────────────────────────
@@ -433,15 +454,26 @@ mod tests {
 
         // i·j = k
         let ij = su2_mul(&gamma12, &gamma23);
-        assert!((ij[3] - 1.0).abs() < 1e-12, "γ¹²·γ²³ should equal γ³¹ (k): {:?}", ij);
+        assert!(
+            (ij[3] - 1.0).abs() < 1e-12,
+            "γ¹²·γ²³ should equal γ³¹ (k): {:?}",
+            ij
+        );
 
         // j·i = −k  (anticommutation)
         let ji = su2_mul(&gamma23, &gamma12);
-        assert!((ji[3] + 1.0).abs() < 1e-12, "γ²³·γ¹² should equal −γ³¹: {:?}", ji);
+        assert!(
+            (ji[3] + 1.0).abs() < 1e-12,
+            "γ²³·γ¹² should equal −γ³¹: {:?}",
+            ji
+        );
 
         // [i,j] = 2k: ij[3] − ji[3] = 2
         let comm = ij[3] - ji[3];
-        assert!((comm - 2.0).abs() < 1e-12, "[γ¹²,γ²³] = 2γ³¹: diff = {comm}");
+        assert!(
+            (comm - 2.0).abs() < 1e-12,
+            "[γ¹²,γ²³] = 2γ³¹: diff = {comm}"
+        );
 
         // Cyclic: j·k = i, k·i = j
         let jk = su2_mul(&gamma23, &gamma31);
@@ -450,9 +482,16 @@ mod tests {
         assert!((ki[2] - 1.0).abs() < 1e-12, "k·i = j: {:?}", ki);
 
         // All three generators square to −1 (the su(2) Lie algebra relation)
-        for (gen, name) in [&gamma12, &gamma23, &gamma31].iter().zip(["γ¹²","γ²³","γ³¹"]) {
+        for (gen, name) in [&gamma12, &gamma23, &gamma31]
+            .iter()
+            .zip(["γ¹²", "γ²³", "γ³¹"])
+        {
             let sq = su2_mul(gen, gen);
-            assert!((sq[0] + 1.0).abs() < 1e-12, "{name}² should equal −1: {:?}", sq);
+            assert!(
+                (sq[0] + 1.0).abs() < 1e-12,
+                "{name}² should equal −1: {:?}",
+                sq
+            );
         }
     }
 
@@ -463,7 +502,10 @@ mod tests {
         let cfg = small_cfg();
         let links = Su2Links::cold_start(&cfg);
         let p = links.avg_plaquette(&cfg);
-        assert!((p - 1.0).abs() < 1e-10, "Cold start plaquette = {p}, expected 1.0");
+        assert!(
+            (p - 1.0).abs() < 1e-10,
+            "Cold start plaquette = {p}, expected 1.0"
+        );
     }
 
     #[test]
@@ -473,7 +515,10 @@ mod tests {
         let links = Su2Links::hot_start(&mut rng, &cfg);
         let p = links.avg_plaquette(&cfg);
         // E[n₀] of uniform SU(2) = 0 by symmetry; should be small
-        assert!(p.abs() < 0.3, "Hot start plaquette = {p:.4} (expected near 0)");
+        assert!(
+            p.abs() < 0.3,
+            "Hot start plaquette = {p:.4} (expected near 0)"
+        );
     }
 
     #[test]
@@ -525,17 +570,11 @@ mod tests {
         let cfg = small_cfg();
         let mut rng = StdRng::seed_from_u64(42);
 
-        let (plaq_strong, v3_strong) =
-            confinement_experiment(0.3, 200, 50, 0.9, &cfg, &mut rng);
-        let (plaq_weak, v3_weak) =
-            confinement_experiment(2.5, 200, 50, 0.2, &cfg, &mut rng);
+        let (plaq_strong, v3_strong) = confinement_experiment(0.3, 200, 50, 0.9, &cfg, &mut rng);
+        let (plaq_weak, v3_weak) = confinement_experiment(2.5, 200, 50, 0.2, &cfg, &mut rng);
 
-        println!(
-            "Strong coupling β=0.3: plaquette={plaq_strong:.3}  V3={v3_strong:.3}"
-        );
-        println!(
-            "Weak coupling  β=2.5: plaquette={plaq_weak:.3}  V3={v3_weak:.3}"
-        );
+        println!("Strong coupling β=0.3: plaquette={plaq_strong:.3}  V3={v3_strong:.3}");
+        println!("Weak coupling  β=2.5: plaquette={plaq_weak:.3}  V3={v3_weak:.3}");
 
         // Plaquette should be larger at weak coupling (more ordered)
         assert!(
@@ -568,7 +607,10 @@ mod tests {
             }
             let p = links.avg_plaquette(&cfg);
             println!("  β={beta:.1}: plaquette={p:.4}");
-            assert!(p > plaq_prev, "plaquette should increase: β={beta} p={p:.4} prev={plaq_prev:.4}");
+            assert!(
+                p > plaq_prev,
+                "plaquette should increase: β={beta} p={p:.4} prev={plaq_prev:.4}"
+            );
             plaq_prev = p;
         }
     }

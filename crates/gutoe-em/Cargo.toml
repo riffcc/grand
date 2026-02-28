@@ -10,3 +10,4 @@ description = "GUTOE U(1) Gauge Field + Hydrogen Formation Simulation"
 rand.workspace = true
 num-complex.workspace = true
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"

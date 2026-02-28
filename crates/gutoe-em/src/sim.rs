@@ -142,7 +142,11 @@ pub fn landau_pole(cfg: &LatticeConfig) -> f64 {
 /// i.e., when S_inst first crosses ln(m_p/m_e) ≈ 7.515.
 pub fn z3_instanton_action(t: usize, cfg: &LatticeConfig) -> f64 {
     let cp = cycle_prob_rg(t, cfg);
-    if cp <= 0.0 { f64::INFINITY } else { -cp.ln() }
+    if cp <= 0.0 {
+        f64::INFINITY
+    } else {
+        -cp.ln()
+    }
 }
 
 /// First t where S_inst(t) ≥ s_target. Returns None if never reached within
@@ -222,8 +226,7 @@ pub fn step_counted<R: Rng>(
             let nbrs = mesh_neighbours(r, c, z, cfg);
             let active = nbrs.iter().filter(|&&ni| lattice[ni] != VOID).count();
             let total = nbrs.len();
-            if active >= 2.max(total / 4)
-                && rng.gen::<f64>() < (active as f64 / total as f64) * 0.4
+            if active >= 2.max(total / 4) && rng.gen::<f64>() < (active as f64 / total as f64) * 0.4
             {
                 new[site] = QUARK_SEED;
             }
@@ -312,8 +315,9 @@ pub fn step_counted<R: Rng>(
                         }
                     })
                     .collect();
-                if let Some(&(_, target)) =
-                    candidates.iter().max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+                if let Some(&(_, target)) = candidates
+                    .iter()
+                    .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
                 {
                     let displaced = new[target];
                     new[site] = displaced;
@@ -342,9 +346,9 @@ pub fn step<R: Rng>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{LatticeConfig, VOID, LEPTON_SEED};
-    use rand::SeedableRng;
+    use crate::config::{LatticeConfig, LEPTON_SEED, VOID};
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     fn small_cfg() -> LatticeConfig {
         LatticeConfig {

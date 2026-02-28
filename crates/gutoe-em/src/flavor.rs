@@ -131,9 +131,21 @@ type CMat3 = [[Complex64; 3]; 3];
 
 fn c_identity() -> CMat3 {
     [
-        [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0)],
-        [Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
-        [Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)],
+        [
+            Complex64::new(1.0, 0.0),
+            Complex64::new(0.0, 0.0),
+            Complex64::new(0.0, 0.0),
+        ],
+        [
+            Complex64::new(0.0, 0.0),
+            Complex64::new(1.0, 0.0),
+            Complex64::new(0.0, 0.0),
+        ],
+        [
+            Complex64::new(0.0, 0.0),
+            Complex64::new(0.0, 0.0),
+            Complex64::new(1.0, 0.0),
+        ],
     ]
 }
 
@@ -241,9 +253,18 @@ fn jacobi_eigen_hermitian(mut a: CMat3) -> ([f64; 3], CMat3) {
     }
 
     let mut idx = [0usize, 1, 2];
-    idx.sort_by(|&i, &j| a[i][i].re.partial_cmp(&a[j][j].re).unwrap_or(std::cmp::Ordering::Equal));
+    idx.sort_by(|&i, &j| {
+        a[i][i]
+            .re
+            .partial_cmp(&a[j][j].re)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
-    let evals = [a[idx[0]][idx[0]].re, a[idx[1]][idx[1]].re, a[idx[2]][idx[2]].re];
+    let evals = [
+        a[idx[0]][idx[0]].re,
+        a[idx[1]][idx[1]].re,
+        a[idx[2]][idx[2]].re,
+    ];
     let mut evecs = [[Complex64::new(0.0, 0.0); 3]; 3];
     for col_new in 0..3 {
         let col_old = idx[col_new];
@@ -519,12 +540,7 @@ pub fn within_envelope(obs: MixingObservables, env: MixingEnvelope) -> Result<()
             env.delta_min_deg,
             env.delta_max_deg,
         ),
-        (
-            "jarlskog",
-            obs.jarlskog,
-            env.jarlskog_min,
-            env.jarlskog_max,
-        ),
+        ("jarlskog", obs.jarlskog, env.jarlskog_min, env.jarlskog_max),
     ];
 
     for (label, value, lo, hi) in checks {
@@ -576,11 +592,31 @@ mod tests {
     fn ckm_observables_land_in_expected_window() {
         let ckm = ckm_from_clifford();
         let r = residuals(ckm, CKM_TARGET);
-        assert!(r.d_theta12_deg.abs() < 1.0, "theta12 drift too large: {}", r.d_theta12_deg);
-        assert!(r.d_theta23_deg.abs() < 0.4, "theta23 drift too large: {}", r.d_theta23_deg);
-        assert!(r.d_theta13_deg.abs() < 0.08, "theta13 drift too large: {}", r.d_theta13_deg);
-        assert!(r.d_delta_deg.abs() < 2.0, "delta drift too large: {}", r.d_delta_deg);
-        assert!(r.d_jarlskog.abs() < 5e-6, "J drift too large: {}", r.d_jarlskog);
+        assert!(
+            r.d_theta12_deg.abs() < 1.0,
+            "theta12 drift too large: {}",
+            r.d_theta12_deg
+        );
+        assert!(
+            r.d_theta23_deg.abs() < 0.4,
+            "theta23 drift too large: {}",
+            r.d_theta23_deg
+        );
+        assert!(
+            r.d_theta13_deg.abs() < 0.08,
+            "theta13 drift too large: {}",
+            r.d_theta13_deg
+        );
+        assert!(
+            r.d_delta_deg.abs() < 2.0,
+            "delta drift too large: {}",
+            r.d_delta_deg
+        );
+        assert!(
+            r.d_jarlskog.abs() < 5e-6,
+            "J drift too large: {}",
+            r.d_jarlskog
+        );
     }
 
     #[test]
@@ -600,11 +636,31 @@ mod tests {
     fn texture_diagonalization_recovers_ckm_window() {
         let ckm = ckm_from_textures();
         let r = residuals(ckm, CKM_TARGET);
-        assert!(r.d_theta12_deg.abs() < 2.0, "theta12 drift too large: {}", r.d_theta12_deg);
-        assert!(r.d_theta23_deg.abs() < 1.0, "theta23 drift too large: {}", r.d_theta23_deg);
-        assert!(r.d_theta13_deg.abs() < 0.5, "theta13 drift too large: {}", r.d_theta13_deg);
-        assert!(r.d_delta_deg.abs() < 30.0, "delta drift too large: {}", r.d_delta_deg);
-        assert!(r.d_jarlskog.abs() < 2e-5, "J drift too large: {}", r.d_jarlskog);
+        assert!(
+            r.d_theta12_deg.abs() < 2.0,
+            "theta12 drift too large: {}",
+            r.d_theta12_deg
+        );
+        assert!(
+            r.d_theta23_deg.abs() < 1.0,
+            "theta23 drift too large: {}",
+            r.d_theta23_deg
+        );
+        assert!(
+            r.d_theta13_deg.abs() < 0.5,
+            "theta13 drift too large: {}",
+            r.d_theta13_deg
+        );
+        assert!(
+            r.d_delta_deg.abs() < 30.0,
+            "delta drift too large: {}",
+            r.d_delta_deg
+        );
+        assert!(
+            r.d_jarlskog.abs() < 2e-5,
+            "J drift too large: {}",
+            r.d_jarlskog
+        );
     }
 
     #[test]

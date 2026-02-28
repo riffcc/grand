@@ -241,7 +241,7 @@ pub fn fermi_constant(higgs_vev: f64, g_weak: f64) -> f64 {
 /// The weak doublet (ν_e, e⁻) = (state 1, state 2) in Cl(1,3).
 pub fn weak_doublet_counts(lattice: &[u8]) -> (usize, usize) {
     let n_nu = lattice.iter().filter(|&&s| s == NEUTRINO_STATE).count();
-    let n_e  = lattice.iter().filter(|&&s| s == ELECTRON_STATE).count();
+    let n_e = lattice.iter().filter(|&&s| s == ELECTRON_STATE).count();
     (n_nu, n_e)
 }
 
@@ -281,7 +281,7 @@ mod tests {
         println!("  Error:           {error_pct:.3}%  (0 free parameters)");
 
         // 3/13 is exact in rational arithmetic — this is an algebraic prediction
-        assert!((predicted - 3.0/13.0).abs() < 1e-15, "3/13 must be exact");
+        assert!((predicted - 3.0 / 13.0).abs() < 1e-15, "3/13 must be exact");
 
         // Must match experiment to within 0.3%
         assert!(
@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn w_z_mass_ratio_prediction() {
         let predicted = w_z_mass_ratio();
-        let m_w_exp = 80.377_f64;  // GeV (PDG 2024)
+        let m_w_exp = 80.377_f64; // GeV (PDG 2024)
         let m_z_exp = 91.1876_f64; // GeV (PDG 2024)
         let experimental = m_w_exp / m_z_exp;
         let error_pct = ((predicted - experimental) / experimental).abs() * 100.0;
@@ -334,7 +334,11 @@ mod tests {
         }
 
         // m_W = 0 when f₀ = 0 (symmetry restoration at high temperature)
-        assert!(masses[0].abs() < 1e-15, "m_W must vanish at f₀=0: got {}", masses[0]);
+        assert!(
+            masses[0].abs() < 1e-15,
+            "m_W must vanish at f₀=0: got {}",
+            masses[0]
+        );
 
         // m_W is strictly monotone in f₀
         for i in 0..masses.len() - 1 {
@@ -345,7 +349,11 @@ mod tests {
         let m_w_phys = w_boson_mass(0.97, g_weak);
         let m_z_phys = z_boson_mass(m_w_phys);
         println!("  Physical vacuum (f₀=0.97): m_W={m_w_phys:.4}, m_Z={m_z_phys:.4}");
-        println!("  m_W/m_Z = {:.4} (predicted {:.4})", m_w_phys / m_z_phys, w_z_mass_ratio());
+        println!(
+            "  m_W/m_Z = {:.4} (predicted {:.4})",
+            m_w_phys / m_z_phys,
+            w_z_mass_ratio()
+        );
         assert!(
             (m_w_phys / m_z_phys - w_z_mass_ratio()).abs() < 1e-10,
             "m_W/m_Z ratio must be exactly cos(θ_W)"
@@ -371,9 +379,13 @@ mod tests {
     #[test]
     fn nontrivial_higgs_stationary_branch() {
         let f0_broken = 0.97;
-        let vev = higgs_nontrivial_vev(f0_broken).expect("broken phase should admit non-trivial vev");
+        let vev =
+            higgs_nontrivial_vev(f0_broken).expect("broken phase should admit non-trivial vev");
         let d = higgs_potential_derivative(vev, f0_broken);
-        assert!(d.abs() < 1e-10, "stationary branch derivative should vanish, got {d}");
+        assert!(
+            d.abs() < 1e-10,
+            "stationary branch derivative should vanish, got {d}"
+        );
 
         // Symmetry-restored side should have no non-trivial branch.
         let f0_hot = 0.10;
@@ -393,7 +405,10 @@ mod tests {
         assert!((v - 246.22).abs() < 0.5, "vev should be near 246 GeV");
         assert!((m_w - 80.38).abs() < 2.0, "W mass should be near 80 GeV");
         assert!((m_z - 91.19).abs() < 2.0, "Z mass should be near 91 GeV");
-        assert!((m_h - 125.25).abs() < 1.0, "Higgs mass should be near 125 GeV");
+        assert!(
+            (m_h - 125.25).abs() < 1.0,
+            "Higgs mass should be near 125 GeV"
+        );
         assert!((m_w / m_z - w_z_mass_ratio()).abs() < 1e-12);
     }
 
@@ -407,10 +422,22 @@ mod tests {
         let m_h = higgs_mass_from_vev(v);
 
         // Structural absolute predictions from the no-G_F branch.
-        assert!((v - 245.30).abs() < 0.5, "lattice-derived v should be near 245.3 GeV");
-        assert!((m_w - 80.377).abs() < 0.5, "lattice-derived W mass should be near 80.4 GeV");
-        assert!((m_z - 91.1876).abs() < 0.5, "lattice-derived Z mass should be near 91.2 GeV");
-        assert!((m_h - 125.25).abs() < 0.5, "lattice-derived Higgs mass should be near 125.25 GeV");
+        assert!(
+            (v - 245.30).abs() < 0.5,
+            "lattice-derived v should be near 245.3 GeV"
+        );
+        assert!(
+            (m_w - 80.377).abs() < 0.5,
+            "lattice-derived W mass should be near 80.4 GeV"
+        );
+        assert!(
+            (m_z - 91.1876).abs() < 0.5,
+            "lattice-derived Z mass should be near 91.2 GeV"
+        );
+        assert!(
+            (m_h - 125.25).abs() < 0.5,
+            "lattice-derived Higgs mass should be near 125.25 GeV"
+        );
         assert!((m_w / m_z - w_z_mass_ratio()).abs() < 1e-12);
     }
 
@@ -431,11 +458,16 @@ mod tests {
         println!("\n  ── Electroweak phase transition ──");
         println!("  Cold (f₀=1.0): m_W={m_w_cold:.4}, G_F={g_f_cold:.4}");
         println!("  Hot  (f₀=0.1): m_W={m_w_hot:.4}, G_F={g_f_hot:.4}");
-        println!("  G_F(hot)/G_F(cold) = {:.1}× (weak force 100× stronger in hot phase)",
-            g_f_hot / g_f_cold);
+        println!(
+            "  G_F(hot)/G_F(cold) = {:.1}× (weak force 100× stronger in hot phase)",
+            g_f_hot / g_f_cold
+        );
 
         assert!(m_w_cold > m_w_hot, "Cold vacuum must have heavier W boson");
-        assert!(g_f_cold < g_f_hot, "Fermi constant larger in hot (unbroken) phase");
+        assert!(
+            g_f_cold < g_f_hot,
+            "Fermi constant larger in hot (unbroken) phase"
+        );
 
         // G_F ∝ 1/f₀²: reducing f₀ by 10× should increase G_F by 100×
         let ratio = g_f_hot / g_f_cold;
@@ -451,7 +483,10 @@ mod tests {
     /// Weak doublet: (state 1, state 2) = (ν_e, e⁻) in the Clifford algebra.
     #[test]
     fn weak_doublet_from_clifford_algebra() {
-        let cfg = LatticeConfig { layers: 1, ..Default::default() };
+        let cfg = LatticeConfig {
+            layers: 1,
+            ..Default::default()
+        };
         let mut lattice = vec![VOID; cfg.n_sites()];
 
         // Place a neutrino and an electron on the lattice
@@ -465,10 +500,22 @@ mod tests {
         assert_eq!(n_e, 1, "Should find exactly 1 electron");
 
         println!("\n  ── Weak doublet ──");
-        println!("  ν_e = state {} (grade-0 scalar, Cl(1,3) identity)", NEUTRINO_STATE);
-        println!("  e⁻  = state {} (γ⁰, grade-1 timelike vector)", ELECTRON_STATE);
-        println!("  W⁻: e⁻ (state {}) → ν_e (state {})", ELECTRON_STATE, NEUTRINO_STATE);
-        println!("  W⁺: ν_e (state {}) → e⁻ (state {})", NEUTRINO_STATE, ELECTRON_STATE);
+        println!(
+            "  ν_e = state {} (grade-0 scalar, Cl(1,3) identity)",
+            NEUTRINO_STATE
+        );
+        println!(
+            "  e⁻  = state {} (γ⁰, grade-1 timelike vector)",
+            ELECTRON_STATE
+        );
+        println!(
+            "  W⁻: e⁻ (state {}) → ν_e (state {})",
+            ELECTRON_STATE, NEUTRINO_STATE
+        );
+        println!(
+            "  W⁺: ν_e (state {}) → e⁻ (state {})",
+            NEUTRINO_STATE, ELECTRON_STATE
+        );
         println!("  Both are Z₃ singlets — weak force doesn't change quark colour.");
 
         // Quark is NOT in the doublet
@@ -479,8 +526,8 @@ mod tests {
     /// As quarks condense, f₀ decreases slightly, making weak force stronger.
     #[test]
     fn fermi_constant_decreases_with_matter_formation() {
-        use rand::SeedableRng;
         use rand::rngs::StdRng;
+        use rand::SeedableRng;
         use std::collections::HashSet;
 
         let cfg = LatticeConfig::default();
@@ -504,7 +551,10 @@ mod tests {
         println!("  Initial: f₀ = {f0_initial:.4}, G_F = {gf_initial:.4}");
         println!("  Final:   f₀ = {f0_final:.4}, G_F = {gf_final:.4}");
         println!("  Quarks consume void: Δf₀ = {:+.4}", f0_final - f0_initial);
-        println!("  Weak force strengthens: ΔG_F = {:+.4}", gf_final - gf_initial);
+        println!(
+            "  Weak force strengthens: ΔG_F = {:+.4}",
+            gf_final - gf_initial
+        );
 
         // Matter formation must consume void (f₀ decreases)
         assert!(

@@ -71,7 +71,11 @@ mod tests {
         let n = cfg.n_sites();
         for site in 0..n {
             let (r, c, z) = site_coords(site, &cfg);
-            assert_eq!(flat_idx(r, c, z, &cfg), site, "round-trip failed for site {site}");
+            assert_eq!(
+                flat_idx(r, c, z, &cfg),
+                site,
+                "round-trip failed for site {site}"
+            );
         }
     }
 
@@ -87,7 +91,12 @@ mod tests {
         for site in 0..n {
             let (r, c, z) = site_coords(site, &cfg);
             let nbrs = mesh_neighbours(r, c, z, &cfg);
-            assert_eq!(nbrs.len(), 6, "site {site} has {} neighbours, expected 6", nbrs.len());
+            assert_eq!(
+                nbrs.len(),
+                6,
+                "site {site} has {} neighbours, expected 6",
+                nbrs.len()
+            );
         }
     }
 
@@ -127,7 +136,10 @@ mod tests {
             let (r, c, z) = site_coords(site, &cfg);
             for nb in mesh_neighbours(r, c, z, &cfg) {
                 let (_, _, zn) = site_coords(nb, &cfg);
-                assert_eq!(z, zn, "neighbour of site {site} crosses layer boundary: z={z}, zn={zn}");
+                assert_eq!(
+                    z, zn,
+                    "neighbour of site {site} crosses layer boundary: z={z}, zn={zn}"
+                );
             }
         }
     }

@@ -8,8 +8,8 @@
 
 use std::collections::HashMap;
 
-use crate::config::{LatticeConfig, QuarkType, LEPTON_CHARGE, LEPTON_SEED, UP_CHARGE, DOWN_CHARGE};
-use crate::geometry::{site_coords, mesh_neighbours};
+use crate::config::{LatticeConfig, QuarkType, DOWN_CHARGE, LEPTON_CHARGE, LEPTON_SEED, UP_CHARGE};
+use crate::geometry::{mesh_neighbours, site_coords};
 
 // ── Gauge field container ─────────────────────────────────────────────────────
 
@@ -179,7 +179,11 @@ pub fn measure_photon_dispersion(
         // λ = lap · a / (a · a)  (Rayleigh quotient)
         let num: f64 = lap.iter().zip(a.iter()).map(|(l, av)| l * av).sum();
         let den: f64 = a.iter().map(|av| av * av).sum();
-        if den > 1e-14 { num / den } else { 0.0 }
+        if den > 1e-14 {
+            num / den
+        } else {
+            0.0
+        }
     };
 
     // Expected frequency from leapfrog dispersion: ω = arccos(1 + c²·λ/2)
@@ -209,8 +213,7 @@ pub fn measure_photon_dispersion(
         }
     }
     let measured_period = if crossings.len() >= 2 {
-        let half_periods: Vec<f64> =
-            crossings.windows(2).map(|w| w[1] - w[0]).collect();
+        let half_periods: Vec<f64> = crossings.windows(2).map(|w| w[1] - w[0]).collect();
         2.0 * half_periods.iter().sum::<f64>() / half_periods.len() as f64
     } else {
         f64::NAN
@@ -276,7 +279,7 @@ pub fn update_gauge(
 mod tests {
     use super::*;
     use crate::config::LatticeConfig;
-    use crate::geometry::{site_coords, mesh_neighbours};
+    use crate::geometry::{mesh_neighbours, site_coords};
 
     fn small_cfg() -> LatticeConfig {
         LatticeConfig {
@@ -312,7 +315,11 @@ mod tests {
         let c = center_site(&cfg);
         rho[c] = 1.0;
         let phi = jacobi_poisson(&rho, &cfg, 100);
-        assert!(phi[c] > 0.0, "φ at charge site should be positive, got {}", phi[c]);
+        assert!(
+            phi[c] > 0.0,
+            "φ at charge site should be positive, got {}",
+            phi[c]
+        );
         let (r, col, z) = site_coords(c, &cfg);
         let nbrs = mesh_neighbours(r, col, z, &cfg);
         for &nb in &nbrs {
@@ -373,7 +380,11 @@ mod tests {
                 phi2[i] / phi1[i]
             } else {
                 // Both should be ~0
-                if phi2[i].abs() < 1e-10 { 2.0 } else { phi2[i] }
+                if phi2[i].abs() < 1e-10 {
+                    2.0
+                } else {
+                    phi2[i]
+                }
             };
             assert!(
                 (ratio - 2.0).abs() < 0.02,
@@ -574,13 +585,20 @@ mod tests {
             cfg.photon_c
         );
         // Wave must oscillate with a definite, finite period
-        assert!(omega_meas > 1e-6, "Wave must oscillate: ω = {omega_meas:.6}");
+        assert!(
+            omega_meas > 1e-6,
+            "Wave must oscillate: ω = {omega_meas:.6}"
+        );
         // Leapfrog stability: ω < π
-        assert!(omega_meas < std::f64::consts::PI, "ω = {omega_meas:.4} exceeds stability limit π");
+        assert!(
+            omega_meas < std::f64::consts::PI,
+            "ω = {omega_meas:.4} exceeds stability limit π"
+        );
         // Phase velocity in plausible range relative to c
         assert!(
             phase_vel > 0.01 * cfg.photon_c && phase_vel < 10.0 * cfg.photon_c,
-            "Phase velocity {phase_vel:.4} should be O(c={:.4})", cfg.photon_c
+            "Phase velocity {phase_vel:.4} should be O(c={:.4})",
+            cfg.photon_c
         );
     }
 
