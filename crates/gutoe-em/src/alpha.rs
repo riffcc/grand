@@ -74,6 +74,8 @@ pub const EDDINGTON_NUMBER: u32 = triangular(CLIFFORD_DIM) + 1;
 
 /// Physical alpha^-1 for comparison.
 pub const ALPHA_INVERSE_PHYSICAL: f64 = 137.035999084;
+/// Structural alpha inverse from pure Clifford algebra: T(16)+1 = 137.
+pub const ALPHA_INVERSE_STRUCTURAL: f64 = EDDINGTON_NUMBER as f64;
 
 // ── Coulomb coupling measurement ───────────────────────────────────────────
 
@@ -394,8 +396,16 @@ pub const CLIFFORD_COMPLEMENT: u32 = CLIFFORD_DIM - 3; // 16 - dim(SU(2)) = 13
 /// STATUS: Empirical fit. Both numbers independently motivated in the framework
 /// but the mechanism connecting them to the Z₃ phase correction is unknown.
 pub fn electron_mass_from_clifford_improved(m_mu: f64, m_tau: f64) -> f64 {
+    electron_mass_from_clifford_improved_with_alpha(m_mu, m_tau, 1.0 / ALPHA_INVERSE_PHYSICAL)
+}
+
+/// Predict the electron mass from (m_μ, m_τ) with explicit alpha input.
+///
+/// This helper makes the alpha lane explicit so we can evaluate:
+/// - structural alpha: α = 1/137 (pure algebra)
+/// - physical alpha:   α = 1/137.035999... (measurement)
+pub fn electron_mass_from_clifford_improved_with_alpha(m_mu: f64, m_tau: f64, alpha: f64) -> f64 {
     use std::f64::consts::PI;
-    let alpha = 1.0 / ALPHA_INVERSE_PHYSICAL;
     let correction = N_GRADES as f64 * alpha * CLIFFORD_COMPLEMENT as f64 / N_LAYERS as f64;
     let delta = 3.0 * PI / 4.0 - correction;
     let two_pi_3 = 2.0 * PI / 3.0;
@@ -577,7 +587,13 @@ pub fn electron_mass_from_proton(m_proton_mev: f64) -> f64 {
 ///
 /// Accuracy: ~2% for m_μ, ~2% for m_τ (limited by the phase prediction).
 pub fn lepton_masses_from_electron(m_e_mev: f64) -> [f64; 3] {
-    let alpha = 1.0 / ALPHA_INVERSE_PHYSICAL;
+    lepton_masses_from_electron_with_alpha(m_e_mev, 1.0 / ALPHA_INVERSE_PHYSICAL)
+}
+
+/// Predict all three lepton masses in MeV with explicit alpha input.
+///
+/// Use this to compare structural-alpha and physical-alpha lanes directly.
+pub fn lepton_masses_from_electron_with_alpha(m_e_mev: f64, alpha: f64) -> [f64; 3] {
     let correction = N_GRADES as f64 * alpha * CLIFFORD_COMPLEMENT as f64 / N_LAYERS as f64;
     let delta = 3.0 * std::f64::consts::PI / 4.0 - correction;
     let s = std::f64::consts::SQRT_2;
@@ -585,6 +601,11 @@ pub fn lepton_masses_from_electron(m_e_mev: f64) -> [f64; 3] {
     let amp0 = 1.0 + s * delta.cos();
     let m_scale = m_e_mev.sqrt() / amp0;
     z3_harmonic_masses(m_scale, s, delta)
+}
+
+/// Structural-alpha lepton lane: alpha = 1/137 from pure Clifford algebra.
+pub fn lepton_masses_from_electron_structural_alpha(m_e_mev: f64) -> [f64; 3] {
+    lepton_masses_from_electron_with_alpha(m_e_mev, 1.0 / ALPHA_INVERSE_STRUCTURAL)
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -2016,5 +2037,23 @@ mod tests {
             N_GRADES
         );
         println!("    Residual at ~3.5 ppm — open: requires next-order Clifford diagram");
+    }
+
+    #[test]
+    fn structural_alpha_identity_and_lane_regression_gate() {
+        // Hard identity gate.
+        assert_eq!(ALPHA_INVERSE_STRUCTURAL, 137.0);
+        assert_eq!(triangular(1 << 4) + 1, 137);
+
+        // Lane sanity gate (structural alpha path from observed m_e).
+        let me = 0.51099895_f64;
+        let mmu_exp = 105.6583755_f64;
+        let mtau_exp = 1776.93_f64;
+        let [_, mmu_struct, mtau_struct] = lepton_masses_from_electron_structural_alpha(me);
+        let mu_rel = ((mmu_struct - mmu_exp) / mmu_exp).abs();
+        let tau_rel = ((mtau_struct - mtau_exp) / mtau_exp).abs();
+
+        assert!(mu_rel < 0.01, "structural-alpha mu regression: rel={mu_rel:.6e}");
+        assert!(tau_rel < 0.01, "structural-alpha tau regression: rel={tau_rel:.6e}");
     }
 }
