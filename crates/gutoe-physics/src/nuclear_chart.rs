@@ -12,6 +12,9 @@
 
 use crate::constants::LAMBDA_QG;
 use crate::dynamics_map::StandardModelDynamicsMap;
+use crate::few_body_qm::{
+    few_body_binding_variational_mev, light_nucleus_blend_weight, FewBodyQmParams,
+};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
@@ -755,6 +758,7 @@ fn semf_binding_mev(
     n: u16,
     semf: SemfParams,
     shell: ShellParams,
+    few_body: FewBodyQmParams,
     superheavy_candidates: &[u16],
     proton_shell_table: Option<&[f64]>,
     neutron_shell_table: Option<&[f64]>,
@@ -848,7 +852,13 @@ fn semf_binding_mev(
         * gaussian_proximity(n as f64, shell.heavy_target_n, shell.heavy_sigma_n);
     let shell_total = shell_baseline + shell_heavy;
 
-    let binding = volume - surface - coulomb - asymmetry + pairing + shell_total;
+    let mut binding = volume - surface - coulomb - asymmetry + pairing + shell_total;
+    if let Some(light_binding) = few_body_binding_variational_mev(z, n, few_body) {
+        let w = light_nucleus_blend_weight(a_u16);
+        if w > 0.0 {
+            binding = (1.0 - w) * binding + w * light_binding;
+        }
+    }
     (
         binding,
         shell_total,
@@ -914,6 +924,7 @@ fn stability_score(
 /// Build a full nuclide table with SEMF+shell observables.
 pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
     let superheavy_candidates = derived_superheavy_proton_candidates();
+    let few_body = FewBodyQmParams::from_clifford_z3();
     let proton_shell_table = if cfg.shell.use_strutinsky {
         Some(build_strutinsky_shell_table(cfg.z_max, true, cfg.shell))
     } else {
@@ -941,6 +952,7 @@ pub fn scan_nuclear_chart(cfg: ScanConfig) -> Vec<NucleusRecord> {
                 n,
                 cfg.semf,
                 cfg.shell,
+                few_body,
                 &superheavy_candidates,
                 proton_shell_table.as_deref(),
                 neutron_shell_table.as_deref(),
@@ -1548,6 +1560,34 @@ mod tests {
             .expect("Fe-56 must be in scan range");
         assert!(iron56.binding_per_nucleon_mev > 8.2);
         assert!(iron56.binding_per_nucleon_mev < 9.2);
+    }
+
+    #[test]
+    fn few_body_lane_recovers_light_cluster_ordering() {
+        let cfg = ScanConfig {
+            z_min: 1,
+            z_max: 16,
+            n_min: 1,
+            n_max: 20,
+            ..ScanConfig::default()
+        };
+        let records = scan_nuclear_chart(cfg);
+        let d = records
+            .iter()
+            .find(|r| r.z == 1 && r.n == 1)
+            .expect("deuteron in scan");
+        let he4 = records
+            .iter()
+            .find(|r| r.z == 2 && r.n == 2)
+            .expect("alpha in scan");
+        let o16 = records
+            .iter()
+            .find(|r| r.z == 8 && r.n == 8)
+            .expect("O-16 in scan");
+        assert!(d.binding_per_nucleon_mev > 0.7);
+        assert!(he4.binding_per_nucleon_mev > d.binding_per_nucleon_mev);
+        assert!(he4.binding_per_nucleon_mev > 5.0);
+        assert!(o16.binding_per_nucleon_mev > 6.0);
     }
 
     #[test]

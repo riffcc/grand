@@ -5,7 +5,9 @@
 
 use crate::constants::{LAMBDA_QG, VISIBLE_STATE_COUNT_STRUCTURAL};
 use crate::dynamics_map::StandardModelDynamicsMap;
-use crate::nuclear_chart::{derived_superheavy_proton_candidates, ScanConfig, SemfParams, ShellParams};
+use crate::nuclear_chart::{
+    derived_superheavy_proton_candidates, ScanConfig, SemfParams, ShellParams,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NnPotentialParams {
