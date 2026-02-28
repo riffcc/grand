@@ -39,6 +39,20 @@ noncomputable def baryogenesisPrefactor : ℝ :=
 noncomputable def etaBaryonStructural : ℝ :=
   jarlskog ckmSin12 ckmSin23 ckmSin13 ckmDelta * baryogenesisPrefactor
 
+/-- PMNS θ23 void scalar imported from the flavor α² correction lane:
+    `sin²θ23_direct - sin²θ23_corrected`. -/
+noncomputable def pmnsTheta23VoidScalar : ℝ :=
+  (pmnsSin23SqDirectQ - pmnsSin23SqCorrectedQ : ℚ)
+
+/-- Default PMNS-linked leptogenesis multiplier used by runtime:
+    `1 + (sin²θ23_direct - sin²θ23_corrected)`. -/
+noncomputable def leptogenesisPmnsMultiplier : ℝ :=
+  1 + pmnsTheta23VoidScalar
+
+/-- PMNS-corrected baryogenesis prediction for the default structural gain. -/
+noncomputable def etaBaryonStructuralWithPmns : ℝ :=
+  etaBaryonStructural * leptogenesisPmnsMultiplier
+
 theorem alpha_leading_order_eq :
     alphaLeadingOrder = (1 : ℝ) / 137 := by
   unfold alphaLeadingOrder
@@ -94,5 +108,27 @@ theorem eta_baryon_structural_from_shared_primitives :
          (((11 : ℝ) / 12) * ((486 : ℝ) / 485))) := by
   unfold etaBaryonStructural
   rw [baryogenesis_prefactor_eq]
+
+theorem pmns_theta23_void_scalar_eq :
+    pmnsTheta23VoidScalar = (1 : ℝ) / 548 := by
+  norm_num [pmnsTheta23VoidScalar, pmns_theta23_void_term]
+
+theorem leptogenesis_pmns_multiplier_eq :
+    leptogenesisPmnsMultiplier = (549 : ℝ) / 548 := by
+  rw [leptogenesisPmnsMultiplier, pmns_theta23_void_scalar_eq]
+  norm_num
+
+theorem eta_baryon_structural_with_pmns_ratio :
+    etaBaryonStructuralWithPmns = etaBaryonStructural * ((549 : ℝ) / 548) := by
+  unfold etaBaryonStructuralWithPmns
+  rw [leptogenesis_pmns_multiplier_eq]
+
+theorem eta_baryon_structural_with_pmns_pos :
+    0 < etaBaryonStructuralWithPmns := by
+  unfold etaBaryonStructuralWithPmns
+  have hmul : 0 < leptogenesisPmnsMultiplier := by
+    rw [leptogenesis_pmns_multiplier_eq]
+    positivity
+  exact mul_pos eta_baryon_structural_pos hmul
 
 end Gutoe.Baryogenesis
