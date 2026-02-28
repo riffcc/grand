@@ -8,6 +8,9 @@
 use gutoe_core::constants as core_constants;
 use gutoe_physics::constants::{ALPHA, ALPHA_LEADING_ORDER, LAMBDA_QG};
 use gutoe_physics::dynamics_map::StandardModelDynamicsMap;
+use gutoe_physics::{
+    confinement_chiral_link_strength, pseudo_goldstone_ratio, quark_condensate_proxy,
+};
 use std::fs::{self, File};
 use std::io::Write;
 
@@ -112,6 +115,24 @@ fn main() {
             expected: 0.0,
             runtime: sm.neutron_edm_e_cm_from_theta(),
             tol: 1e-30,
+        },
+        ParityRow {
+            term: "chiral_quark_condensate_proxy_structural",
+            expected: -11.0 / 64.0,
+            runtime: quark_condensate_proxy(),
+            tol: 1e-12,
+        },
+        ParityRow {
+            term: "chiral_pseudo_goldstone_ratio_structural",
+            expected: 1.0 / 137.0,
+            runtime: pseudo_goldstone_ratio(),
+            tol: 1e-15,
+        },
+        ParityRow {
+            term: "chiral_confinement_link_strength_structural",
+            expected: 319.0 / 96.0,
+            runtime: confinement_chiral_link_strength(),
+            tol: 1e-12,
         },
     ];
 

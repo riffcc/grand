@@ -14,6 +14,7 @@ import Gutoe.GaugeGroupSU3
 import Gutoe.AsymptoticFreedomEntropy
 import Gutoe.StrongCP
 import Gutoe.StrongCPGeneralCases
+import Gutoe.ChiralSymmetryBreaking
 
 namespace Gutoe.SMQCDUnification
 
@@ -26,6 +27,7 @@ open Gutoe.StrongCP
 open Gutoe.StrongCPGeneralCases
 open Gutoe.StrongCPEmergence
 open Gutoe.StrongCPVacuum
+open Gutoe.ChiralSymmetryBreaking
 
 /-- QCD structural core gate derived from the Cl(1,3) chain. -/
 def qcdCoreGate : Prop :=
@@ -80,5 +82,18 @@ theorem sm_qcd_general_case_bundle_holds
     smQcdGeneralCaseBundle x0 qClass := by
   have hsplit := strong_cp_general_case_split x0 qClass
   exact ⟨sm_qcd_unified_structural_holds, hsplit.1, hsplit.2⟩
+
+/-- Unified QCD structural closure including the GRAND-126 chiral gate. -/
+def qcdCoreWithChiralGate : Prop :=
+  qcdCoreGate ∧
+  quarkCondensateProxy < 0 ∧
+  0 < pionMassSqProxy ∧
+  pseudoGoldstoneRatio = (1 : ℝ) / 137 ∧
+  pionMassSqFromExplicitBreaking 0 = 0 ∧
+  0 < confinementChiralLinkStrength
+
+/-- Existing QCD core gate and chiral-symmetry gate hold simultaneously. -/
+theorem qcd_core_with_chiral_gate_holds : qcdCoreWithChiralGate := by
+  exact ⟨qcd_core_gate_holds, chiral_symmetry_breaking_gate⟩
 
 end Gutoe.SMQCDUnification

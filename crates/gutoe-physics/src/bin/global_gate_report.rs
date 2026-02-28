@@ -87,6 +87,20 @@ fn main() {
         eprintln!("global_gate: alpha_web_ci_report failed: {e}");
         std::process::exit(2);
     }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "chiral_symmetry_breaking_report",
+        ],
+    ) {
+        eprintln!("global_gate: chiral_symmetry_breaking_report failed: {e}");
+        std::process::exit(2);
+    }
 
     run_or_exit(
         "baryogenesis_report[gain=0]",
@@ -132,6 +146,8 @@ fn main() {
     let flavor = read_json("/tmp/bh_renders/flavor_ci_gate.json").expect("flavor json");
     let proton = read_json("/tmp/bh_renders/proton_mass_report/proton_mass_report.json").expect("proton json");
     let alpha = read_json("/tmp/bh_renders/alpha_web_ci_report/alpha_web_ci_report.json").expect("alpha json");
+    let chiral = read_json("/tmp/bh_renders/chiral_symmetry_breaking/chiral_symmetry_breaking_report.json")
+        .expect("chiral json");
     let sigma = read_json("/tmp/bh_renders/sigma8_decomposition/sigma8_decomposition_report.json")
         .expect("sigma json");
 
@@ -169,6 +185,7 @@ fn main() {
     let proton_pass = proton_rel_err.abs() <= 1.0e-3;
 
     let alpha_pass = v_bool(&alpha, &["ci_gate", "passes_all"]).unwrap();
+    let chiral_pass = v_bool(&chiral, &["gate", "passes_all"]).unwrap();
 
     let cmb_pass = tt <= 1.30 && te <= 1.20 && ee <= 1.10;
 
@@ -181,6 +198,7 @@ fn main() {
         && pmns_propagation_pass
         && proton_pass
         && alpha_pass
+        && chiral_pass
         && cmb_pass
         && sigma8_pass;
 
@@ -205,6 +223,7 @@ fn main() {
     writeln!(txt, "proton_rel_error = {:.12e}", proton_rel_err).ok();
     writeln!(txt, "proton_pass = {}", proton_pass).ok();
     writeln!(txt, "alpha_web_ci_pass = {}", alpha_pass).ok();
+    writeln!(txt, "chiral_symmetry_breaking_pass = {}", chiral_pass).ok();
     writeln!(txt, "cmb_tt_red = {:.12}", tt).ok();
     writeln!(txt, "cmb_te_red = {:.12}", te).ok();
     writeln!(txt, "cmb_ee_red = {:.12}", ee).ok();
@@ -253,6 +272,9 @@ fn main() {
         },
         "alpha_web_ci": {
             "pass": alpha_pass
+        },
+        "chiral_symmetry_breaking": {
+            "pass": chiral_pass
         },
         "cmb": {
             "tt_full_red": tt,
