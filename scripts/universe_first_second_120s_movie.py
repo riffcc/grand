@@ -1,0 +1,354 @@
+#!/usr/bin/env python3
+"""
+Render a 1080p cinematic of the first second of cosmic evolution,
+stretched over 120 seconds of video time.
+
+Outputs (default /tmp/bh_renders/first_second):
+- universe_first_second_120s_1080p.mp4
+- universe_first_second_120s_1080p.gif
+- universe_first_second_120s_summary.json
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import pathlib
+import shutil
+import subprocess
+import tempfile
+
+import matplotlib
+import numpy as np
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+
+PLANCK_TIME = 5.391247e-44
+T_END = 1.0
+SEC_PER_YEAR = 31_557_600.0
+
+# Stage markers (order-of-magnitude landmarks)
+T_INFLATION = 1e-36
+T_EW_BREAK = 1e-12
+T_QCD = 1e-6
+T_NEUTRINO = 1e-2
+
+
+def smoothstep(x: float, c: float, w: float) -> float:
+    return 1.0 / (1.0 + math.exp(-(x - c) / max(w, 1e-9)))
+
+
+def temp_radiation_era_k(t: float) -> float:
+    # T ~ 1.16e10 K * (1 s / t)^1/2 (rough early-universe scaling)
+    return 1.16045e10 / math.sqrt(max(t, 1e-40))
+
+
+def phase_fractions(t: float):
+    logt = math.log10(max(t, PLANCK_TIME))
+    s_infl = smoothstep(logt, math.log10(T_INFLATION), 0.35)
+    s_ew = smoothstep(logt, math.log10(T_EW_BREAK), 0.25)
+    s_qcd = smoothstep(logt, math.log10(T_QCD), 0.30)
+
+    foam = (1.0 - s_infl)
+    inflation = s_infl * (1.0 - s_ew)
+    plasma = s_ew * (1.0 - s_qcd)
+    hadronic = s_qcd
+
+    norm = foam + inflation + plasma + hadronic
+    if norm <= 0.0:
+        return 1.0, 0.0, 0.0, 0.0
+    return foam / norm, inflation / norm, plasma / norm, hadronic / norm
+
+
+def make_base_grids(size: int):
+    x = np.linspace(-1.0, 1.0, size)
+    y = np.linspace(-1.0, 1.0, size)
+    X, Y = np.meshgrid(x, y)
+    R = np.sqrt(X * X + Y * Y)
+    A = np.arctan2(Y, X)
+    return X, Y, R, A
+
+
+def foam_layer(X: np.ndarray, Y: np.ndarray, phase: float):
+    z = (
+        np.sin(22.0 * X + 17.0 * Y + phase)
+        + np.sin(31.0 * X - 12.0 * Y + 1.7 * phase)
+        + np.sin(19.0 * (X + Y) - 0.9 * phase)
+    )
+    z = (z - z.min()) / max(z.max() - z.min(), 1e-9)
+    return z
+
+
+def inflation_layer(R: np.ndarray, A: np.ndarray, phase: float, inflation_progress: float):
+    ring = np.exp(-24.0 * (R - (0.10 + 0.55 * inflation_progress)) ** 2)
+    rays = 0.5 + 0.5 * np.sin(9.0 * A + 3.0 * phase)
+    core = np.exp(-20.0 * R * R)
+    z = 0.7 * ring * rays + 0.6 * core
+    z = (z - z.min()) / max(z.max() - z.min(), 1e-9)
+    return z
+
+
+def plasma_layer(X: np.ndarray, Y: np.ndarray, R: np.ndarray, phase: float, temp_norm: float):
+    core = np.exp(-4.0 * R * R)
+    turb = (
+        0.45 * np.sin(8.0 * X + 6.5 * Y + phase)
+        + 0.35 * np.sin(14.0 * R - 1.4 * phase)
+        + 0.20 * np.sin(11.0 * X - 13.0 * Y + 0.7 * phase)
+    )
+    shell = np.exp(-16.0 * (R - 0.58) ** 2)
+    z = core * (1.1 + 1.4 * temp_norm) + 0.20 * shell + 0.18 * turb
+    z *= (R <= 1.0)
+    z = (z - z.min()) / max(z.max() - z.min(), 1e-9)
+    return z
+
+
+def hadron_seed_points(rng: np.random.Generator, n: int = 1600):
+    pts = rng.uniform(0.0, 1.0, size=(n, 2))
+    sizes = rng.uniform(1.0, 8.0, size=n)
+    births = np.sort(rng.uniform(0.0, 1.0, size=n))
+    return pts, sizes, births
+
+
+def render_frame(
+    frame_path: pathlib.Path,
+    i: int,
+    nframes: int,
+    X: np.ndarray,
+    Y: np.ndarray,
+    R: np.ndarray,
+    A: np.ndarray,
+    pts: np.ndarray,
+    sizes: np.ndarray,
+    births: np.ndarray,
+):
+    u = 0.0 if nframes <= 1 else i / (nframes - 1)
+
+    # Log-time mapping from Planck time to 1 second.
+    logt = math.log10(PLANCK_TIME) + u * (math.log10(T_END) - math.log10(PLANCK_TIME))
+    t = 10.0**logt
+
+    temp_k = temp_radiation_era_k(t)
+    temp_norm = np.clip((math.log10(max(temp_k, 1.0)) - 10.0) / 18.0, 0.0, 1.0)
+
+    foam_w, infl_w, plasma_w, had_w = phase_fractions(t)
+
+    # inflation progress from 0..1 through inflation window
+    infl_prog = np.clip(
+        (logt - math.log10(PLANCK_TIME)) / (math.log10(T_EW_BREAK) - math.log10(PLANCK_TIME)),
+        0.0,
+        1.0,
+    )
+
+    phase = 16.0 * u
+    foam = foam_layer(X, Y, phase)
+    infl = inflation_layer(R, A, phase, infl_prog)
+    plasma = plasma_layer(X, Y, R, phase, temp_norm)
+
+    fig = plt.figure(figsize=(19.2, 10.8), dpi=100)
+    ax = fig.add_subplot(111)
+    ax.set_facecolor("black")
+
+    ax.imshow(foam, cmap="bone", alpha=np.clip(0.85 * foam_w, 0.0, 0.9), origin="lower")
+    ax.imshow(infl, cmap="cividis", alpha=np.clip(0.88 * infl_w, 0.0, 0.95), origin="lower")
+    ax.imshow(plasma, cmap="inferno", alpha=np.clip(0.92 * plasma_w + 0.15 * had_w, 0.0, 0.98), origin="lower")
+
+    # magnetic proxy contour overlay
+    gy, gx = np.gradient(plasma)
+    bmag = np.sqrt(gx * gx + gy * gy)
+    levels = np.linspace(np.percentile(bmag, 70), np.percentile(bmag, 98), 7)
+    ax.contour(bmag, levels=levels, colors="#8ecae6", linewidths=0.7, alpha=np.clip(0.25 + 0.55 * plasma_w, 0.0, 0.85))
+
+    # hadron/star-like seeds appear after QCD
+    n_vis = int(had_w * len(pts))
+    if n_vis > 0:
+        h, w = plasma.shape
+        px = pts[:n_vis, 0] * (w - 1)
+        py = pts[:n_vis, 1] * (h - 1)
+        ax.scatter(px, py, s=sizes[:n_vis] * (0.7 + 0.8 * had_w), c="#ffffff", alpha=np.clip(0.15 + 0.75 * had_w, 0.0, 0.95), linewidths=0)
+
+    ax.set_axis_off()
+    ax.set_title("Universe: Conception -> Symmetry Breaking -> 1s", fontsize=20, pad=14)
+
+    stage = "Quantum foam"
+    if t >= T_INFLATION:
+        stage = "Inflation / expansion"
+    if t >= T_EW_BREAK:
+        stage = "Electroweak broken phase"
+    if t >= T_QCD:
+        stage = "QCD confinement onset"
+    if t >= T_NEUTRINO:
+        stage = "Approaching neutrino decoupling"
+
+    telemetry = (
+        f"t = {t:.3e} s\n"
+        f"T = {temp_k:.3e} K\n"
+        f"Stage: {stage}\n"
+        f"weights [foam,infl,plasma,had] = [{foam_w:.2f}, {infl_w:.2f}, {plasma_w:.2f}, {had_w:.2f}]"
+    )
+    ax.text(
+        0.02,
+        0.97,
+        telemetry,
+        transform=ax.transAxes,
+        va="top",
+        ha="left",
+        fontsize=12,
+        family="monospace",
+        color="white",
+        bbox=dict(facecolor="black", alpha=0.58, boxstyle="round,pad=0.35"),
+    )
+
+    milestones = [
+        (PLANCK_TIME, "Planck"),
+        (T_INFLATION, "Inflation"),
+        (T_EW_BREAK, "EW break"),
+        (T_QCD, "QCD"),
+        (T_NEUTRINO, "nu decouple~"),
+        (1.0, "1s"),
+    ]
+
+    bar_x0, bar_y0, bar_w, bar_h = 0.10, 0.05, 0.80, 0.018
+    ax.add_patch(plt.Rectangle((bar_x0, bar_y0), bar_w, bar_h, transform=ax.transAxes, color="white", alpha=0.15))
+    pos = (math.log10(t) - math.log10(PLANCK_TIME)) / (math.log10(1.0) - math.log10(PLANCK_TIME))
+    pos = float(np.clip(pos, 0.0, 1.0))
+    ax.add_patch(plt.Rectangle((bar_x0, bar_y0), bar_w * pos, bar_h, transform=ax.transAxes, color="#90e0ef", alpha=0.75))
+
+    for tm, label in milestones:
+        p = (math.log10(tm) - math.log10(PLANCK_TIME)) / (math.log10(1.0) - math.log10(PLANCK_TIME))
+        p = float(np.clip(p, 0.0, 1.0))
+        x = bar_x0 + bar_w * p
+        ax.plot([x, x], [bar_y0 - 0.006, bar_y0 + bar_h + 0.006], transform=ax.transAxes, color="white", alpha=0.45, lw=0.7)
+        ax.text(x, bar_y0 + bar_h + 0.012, label, transform=ax.transAxes, ha="center", va="bottom", fontsize=8, color="white")
+
+    fig.tight_layout()
+    fig.savefig(frame_path)
+    plt.close(fig)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out-dir", default="/tmp/bh_renders/first_second")
+    ap.add_argument("--clip-seconds", type=float, default=120.0)
+    ap.add_argument("--fps", type=int, default=24)
+    ap.add_argument("--size", type=int, default=560)
+    ap.add_argument("--skip-gif", action="store_true")
+    args = ap.parse_args()
+
+    out_dir = pathlib.Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    nframes = max(2, int(round(args.clip_seconds * args.fps)))
+    X, Y = np.meshgrid(
+        np.linspace(-1.0, 1.0, args.size),
+        np.linspace(-1.0, 1.0, args.size),
+    )
+    R = np.sqrt(X * X + Y * Y)
+    A = np.arctan2(Y, X)
+
+    rng = np.random.default_rng(7)
+    pts, sizes, births = hadron_seed_points(rng, n=1800)
+
+    frame_dir = pathlib.Path(tempfile.mkdtemp(prefix="first_second_frames_"))
+    try:
+        for i in range(nframes):
+            render_frame(
+                frame_dir / f"frame_{i:05d}.png",
+                i,
+                nframes,
+                X,
+                Y,
+                R,
+                A,
+                pts,
+                sizes,
+                births,
+            )
+
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            raise RuntimeError("ffmpeg not found in PATH")
+
+        mp4 = out_dir / "universe_first_second_120s_1080p.mp4"
+        subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                "-framerate",
+                str(args.fps),
+                "-i",
+                str(frame_dir / "frame_%05d.png"),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "slow",
+                "-crf",
+                "18",
+                "-pix_fmt",
+                "yuv420p",
+                str(mp4),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        gif = out_dir / "universe_first_second_120s_1080p.gif"
+        if not args.skip_gif:
+            palette = frame_dir / "palette.png"
+            subprocess.run(
+                [ffmpeg, "-y", "-i", str(frame_dir / "frame_%05d.png"), "-vf", "palettegen", str(palette)],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                [
+                    ffmpeg,
+                    "-y",
+                    "-framerate",
+                    str(args.fps),
+                    "-i",
+                    str(frame_dir / "frame_%05d.png"),
+                    "-i",
+                    str(palette),
+                    "-lavfi",
+                    "paletteuse",
+                    str(gif),
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        summary = {
+            "sim_start_s": PLANCK_TIME,
+            "sim_end_s": 1.0,
+            "clip_seconds": args.clip_seconds,
+            "fps": args.fps,
+            "frames": nframes,
+            "stage_markers_s": {
+                "inflation": T_INFLATION,
+                "electroweak_break": T_EW_BREAK,
+                "qcd": T_QCD,
+                "neutrino_proxy": T_NEUTRINO,
+            },
+            "artifacts": {
+                "mp4": str(mp4),
+                "gif": None if args.skip_gif else str(gif),
+            },
+        }
+        summary_path = out_dir / "universe_first_second_120s_summary.json"
+        summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
+        print("wrote", mp4)
+        if not args.skip_gif:
+            print("wrote", gif)
+        print("wrote", summary_path)
+    finally:
+        shutil.rmtree(frame_dir, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    main()
