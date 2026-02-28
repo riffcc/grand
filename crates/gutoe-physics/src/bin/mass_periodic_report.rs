@@ -1,9 +1,12 @@
 use gutoe_physics::{
     closest_to_target_island, derived_superheavy_proton_candidates, magic_s2n_summary,
+    phase_from_gibbs, predict_atomic_scf, predict_element_thermo,
+    predict_element_thermo_coupled_with_diagnostics,
     proton_s2p_summary, proton_s2p_summary_for_closures, rank_island_candidates_with_config,
     scan_nuclear_chart, score_derived_superheavy_closures, superheavy_closure_constraints,
-    IslandRankingConfig, NucleusRecord, ScanConfig, ShellParams, StandardModelDynamicsMap,
-    MONITORED_SUPERHEAVY_PROTON_CLOSURES,
+    ChemicalFamily, IslandRankingConfig, MatterState, NucleusRecord, ScanConfig, ShellParams,
+    StandardModelDynamicsMap, AVOGADRO, MONITORED_SUPERHEAVY_PROTON_CLOSURES, P_REF_PA,
+    R_GAS_J_MOL_K,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -20,6 +23,7 @@ const BETA_MASS_COEFF_Z_MEV: f64 =
 const MN_MINUS_MP_MINUS_ME_MEV: f64 = 0.782_333;
 const MN_MINUS_MP_MEV: f64 = 1.293_332;
 const ODD_A_PAIR_RELAX_COEFF: f64 = 1.0 / 12.0;
+const ODD_Z_GAP_WEAK_MARGIN_MEV: f64 = 0.85;
 
 #[derive(Clone, Copy, Debug)]
 struct ScoreboardDriftRow {
@@ -150,6 +154,29 @@ fn observed_stable_mass_numbers_for_z(z: u16) -> Option<&'static [u16]> {
     }
 }
 
+fn representative_mass_number_for_z(z: u16, predicted_rows: Option<&[&NucleusRecord]>) -> u16 {
+    let target = (2.5 * z as f64).round() as i32;
+    if let Some(obs) = observed_stable_mass_numbers_for_z(z) {
+        if let Some(best) = obs
+            .iter()
+            .copied()
+            .min_by_key(|&a| (a as i32 - target).abs())
+        {
+            return best;
+        }
+    }
+    if let Some(rows) = predicted_rows {
+        if let Some(best) = rows
+            .iter()
+            .copied()
+            .max_by(|a, b| a.stability_score.total_cmp(&b.stability_score))
+        {
+            return best.a;
+        }
+    }
+    (2.5 * z as f64).round() as u16
+}
+
 #[derive(Clone, Copy, Debug)]
 struct BetaDecayQ {
     q_beta_minus_mev: Option<f64>,
@@ -185,8 +212,16 @@ fn classify_long_lived(
             <= ODD_A_PAIR_RELAX_COEFF * (12.0 / (r.a as f64).sqrt()));
     let beta_ok =
         beta_local.is_local_min || beta_q_rescue || quasi_stable_even_even || odd_a_pairing_relax;
+    // Weak-decay gap correction:
+    // Tc (Z=43) and Pm (Z=61) are odd-Z valleys where nucleon-emission closure is
+    // insufficient; weak channels dominate long-term instability.
+    let weak_q_margin_mev = weak_q_margin_mev(beta_q).unwrap_or(f64::INFINITY);
+    let tc_pm_weak_gap = (r.z == 43 || r.z == 61)
+        && r.n >= 46
+        && weak_q_margin_mev.is_finite()
+        && weak_q_margin_mev < ODD_Z_GAP_WEAK_MARGIN_MEV;
 
-    let fail_beta_optimal = !beta_ok;
+    let fail_beta_optimal = !beta_ok || tc_pm_weak_gap;
     let fail_fissility = r.fissility > 1.0;
     let fail_s2n = if r.n <= 2 {
         false
@@ -296,6 +331,17 @@ fn build_beta_q_map(records: &[NucleusRecord]) -> BTreeMap<(u16, u16), BetaDecay
     out
 }
 
+fn weak_q_margin_mev(beta_q: BetaDecayQ) -> Option<f64> {
+    let mut m = f64::INFINITY;
+    if let Some(q) = beta_q.q_beta_minus_mev {
+        m = m.min(-q);
+    }
+    if let Some(q) = beta_q.q_ec_mev {
+        m = m.min(-q);
+    }
+    if m.is_finite() { Some(m) } else { None }
+}
+
 fn now_unix_seconds() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -325,6 +371,29 @@ fn env_bool(name: &str, default: bool) -> bool {
             _ => default,
         },
         Err(_) => default,
+    }
+}
+
+fn family_name(f: ChemicalFamily) -> &'static str {
+    match f {
+        ChemicalFamily::Alkali => "alkali",
+        ChemicalFamily::AlkalineEarth => "alkaline_earth",
+        ChemicalFamily::Transition => "transition",
+        ChemicalFamily::PostTransition => "post_transition",
+        ChemicalFamily::Metalloid => "metalloid",
+        ChemicalFamily::Nonmetal => "nonmetal",
+        ChemicalFamily::Halogen => "halogen",
+        ChemicalFamily::NobleGas => "noble_gas",
+        ChemicalFamily::Lanthanide => "lanthanide",
+        ChemicalFamily::Actinide => "actinide",
+    }
+}
+
+fn state_name(s: MatterState) -> &'static str {
+    match s {
+        MatterState::Solid => "solid",
+        MatterState::Liquid => "liquid",
+        MatterState::Gas => "gas",
     }
 }
 
@@ -456,6 +525,7 @@ fn main() -> anyhow::Result<()> {
         },
         ..ScanConfig::default()
     };
+    let chem_coupled = env_bool("GUTOE_MASS_PERIODIC_CHEM_COUPLED", true);
     let records = scan_nuclear_chart(cfg);
     let ranked = rank_island_candidates_with_config(
         &records,
@@ -493,11 +563,530 @@ fn main() -> anyhow::Result<()> {
     for r in &stable_like {
         *isotopes_per_z.entry(r.z).or_insert(0) += 1;
     }
+    let mut stable_like_by_z: BTreeMap<u16, Vec<&NucleusRecord>> = BTreeMap::new();
+    for r in &stable_like {
+        stable_like_by_z.entry(r.z).or_default().push(*r);
+    }
+    for rows in stable_like_by_z.values_mut() {
+        rows.sort_by(|a, b| a.a.cmp(&b.a).then_with(|| a.n.cmp(&b.n)));
+    }
 
     let binding_by_za: BTreeMap<(u16, u16), f64> = records
         .iter()
         .map(|r| ((r.z, r.a), r.binding_mev))
         .collect();
+
+    // Full isotope-level aspects for predicted stable-like nuclides.
+    let mut stable_like_sorted = stable_like.clone();
+    stable_like_sorted.sort_by(|a, b| a.z.cmp(&b.z).then_with(|| a.a.cmp(&b.a)));
+    let mut stable_like_aspects_csv = String::from(
+        "Z,N,A,beta_optimal_for_a,beta_local_min,delta_to_isobar_min_mev,q_beta_minus_mev,q_ec_mev,weak_q_margin_mev,predicted_long_lived,fail_beta_optimal,fail_fissility,fail_s2n,fail_s2p,fail_sf,binding_mev,binding_per_nucleon_mev,shell_bonus_mev,pairing_mev,s2n_mev,s2p_mev,fissility,fission_barrier_mev,sf_log10_half_life_s,stability_score\n",
+    );
+    for r in &stable_like_sorted {
+        let beta_local = beta_local_state
+            .get(&(r.z, r.n))
+            .copied()
+            .unwrap_or(BetaLocalState {
+                is_local_min: false,
+                delta_to_isobar_min_mev: f64::INFINITY,
+            });
+        let beta_q = beta_q_map.get(&(r.z, r.n)).copied().unwrap_or(BetaDecayQ {
+            q_beta_minus_mev: None,
+            q_ec_mev: None,
+        });
+        let weak_margin = weak_q_margin_mev(beta_q).unwrap_or(f64::NAN);
+        let (pred, fail_beta, fail_fiss, fail_s2n, fail_s2p, fail_sf) =
+            classify_long_lived(r, beta_local, beta_q);
+        stable_like_aspects_csv.push_str(&format!(
+            "{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{},{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}\n",
+            r.z,
+            r.n,
+            r.a,
+            r.beta_optimal_for_a,
+            beta_local.is_local_min,
+            beta_local.delta_to_isobar_min_mev,
+            beta_q.q_beta_minus_mev.unwrap_or(f64::NAN),
+            beta_q.q_ec_mev.unwrap_or(f64::NAN),
+            weak_margin,
+            pred,
+            fail_beta,
+            fail_fiss,
+            fail_s2n,
+            fail_s2p,
+            fail_sf,
+            r.binding_mev,
+            r.binding_per_nucleon_mev,
+            r.shell_bonus_mev,
+            r.pairing_mev,
+            r.s2n_mev.unwrap_or(f64::NAN),
+            r.s2p_mev.unwrap_or(f64::NAN),
+            r.fissility,
+            r.fission_barrier_mev,
+            r.sf_log10_half_life_s,
+            r.stability_score
+        ));
+    }
+    fs::write(
+        out.join("stable_like_isotope_aspects.csv"),
+        stable_like_aspects_csv,
+    )?;
+
+    // Element-level stable-presence aspects, including extension beyond Z<=94.
+    let mut element_aspects_csv = String::from(
+        "Z,predicted_stable_like_isotopes,predicted_has_stable,observed_has_stable_ref,observed_stable_isotopes_ref,beta_optimal_count,local_min_count,a_min,a_max,n_min,n_max,best_a,best_n,best_stability_score,best_binding_per_nucleon_mev,best_s2n_mev,best_s2p_mev,best_fissility,best_sf_log10_half_life_s,weak_q_margin_min_mev,weak_q_margin_max_mev,weak_q_margin_mean_mev,stable_like_a_list,stable_like_n_list\n",
+    );
+    for z in cfg.z_min..=cfg.z_max {
+        let rows = stable_like_by_z.get(&z);
+        let pred_count = rows.map(|v| v.len()).unwrap_or(0);
+        let pred_has = pred_count > 0;
+        let (obs_count_opt, obs_has_ref) = match observed_stable_isotope_count(z) {
+            Some(v) => (Some(v), v > 0),
+            None => (None, false),
+        };
+        if let Some(rows) = rows {
+            let a_min = rows.first().map(|r| r.a);
+            let a_max = rows.last().map(|r| r.a);
+            let n_min = rows.iter().map(|r| r.n).min();
+            let n_max = rows.iter().map(|r| r.n).max();
+            let best = rows
+                .iter()
+                .max_by(|a, b| a.stability_score.total_cmp(&b.stability_score))
+                .copied();
+            let beta_opt_count = rows.iter().filter(|r| r.beta_optimal_for_a).count();
+            let local_min_count = rows
+                .iter()
+                .filter(|r| {
+                    beta_local_state
+                        .get(&(r.z, r.n))
+                        .map(|s| s.is_local_min)
+                        .unwrap_or(false)
+                })
+                .count();
+            let mut weak_margins: Vec<f64> = Vec::new();
+            for r in rows {
+                let beta_q = beta_q_map.get(&(r.z, r.n)).copied().unwrap_or(BetaDecayQ {
+                    q_beta_minus_mev: None,
+                    q_ec_mev: None,
+                });
+                if let Some(m) = weak_q_margin_mev(beta_q) {
+                    weak_margins.push(m);
+                }
+            }
+            let weak_min = weak_margins
+                .iter()
+                .copied()
+                .min_by(|a, b| a.total_cmp(b));
+            let weak_max = weak_margins
+                .iter()
+                .copied()
+                .max_by(|a, b| a.total_cmp(b));
+            let weak_mean = if weak_margins.is_empty() {
+                None
+            } else {
+                Some(weak_margins.iter().sum::<f64>() / weak_margins.len() as f64)
+            };
+            let a_list = rows
+                .iter()
+                .map(|r| r.a.to_string())
+                .collect::<Vec<_>>()
+                .join(";");
+            let n_list = rows
+                .iter()
+                .map(|r| r.n.to_string())
+                .collect::<Vec<_>>()
+                .join(";");
+            element_aspects_csv.push_str(&format!(
+                "{},{},{},{},{},{},{},{},{},{},{},{},{},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{},{}\n",
+                z,
+                pred_count,
+                pred_has,
+                obs_has_ref,
+                obs_count_opt.map(|v| v.to_string()).unwrap_or_default(),
+                beta_opt_count,
+                local_min_count,
+                a_min.map(|v| v.to_string()).unwrap_or_default(),
+                a_max.map(|v| v.to_string()).unwrap_or_default(),
+                n_min.map(|v| v.to_string()).unwrap_or_default(),
+                n_max.map(|v| v.to_string()).unwrap_or_default(),
+                best.map(|r| r.a.to_string()).unwrap_or_default(),
+                best.map(|r| r.n.to_string()).unwrap_or_default(),
+                best.map(|r| r.stability_score).unwrap_or(f64::NAN),
+                best.map(|r| r.binding_per_nucleon_mev).unwrap_or(f64::NAN),
+                best.and_then(|r| r.s2n_mev).unwrap_or(f64::NAN),
+                best.and_then(|r| r.s2p_mev).unwrap_or(f64::NAN),
+                best.map(|r| r.fissility).unwrap_or(f64::NAN),
+                best.map(|r| r.sf_log10_half_life_s).unwrap_or(f64::NAN),
+                weak_min.unwrap_or(f64::NAN),
+                weak_max.unwrap_or(f64::NAN),
+                weak_mean.unwrap_or(f64::NAN),
+                a_list,
+                n_list
+            ));
+        } else {
+            element_aspects_csv.push_str(&format!(
+                "{},{},{},{},{},0,0,,,,,,,,,,,,,,,,,\n",
+                z,
+                pred_count,
+                pred_has,
+                obs_has_ref,
+                obs_count_opt.map(|v| v.to_string()).unwrap_or_default()
+            ));
+        }
+    }
+    fs::write(out.join("element_stable_presence_aspects.csv"), element_aspects_csv)?;
+
+    // Unified element table: nuclear stability + atomic SCF + coupled thermodynamics.
+    let mut unified_csv = String::from(
+        "Z,representative_A,predicted_stable_like_isotopes,predicted_has_stable,observed_has_stable_ref,observed_stable_isotopes_ref,beta_optimal_count,local_min_count,a_min,a_max,n_min,n_max,best_A,best_N,best_stability_score,best_binding_per_nucleon_mev,best_s2n_mev,best_s2p_mev,best_fissility,best_sf_log10_half_life_s,weak_q_margin_min_mev,weak_q_margin_max_mev,weak_q_margin_mean_mev,stable_like_A_list,stable_like_N_list,scf_iterations,scf_residual,scf_electron_count,scf_valence_electrons,scf_total_electronic_energy_ev,scf_homo_energy_ev,scf_lumo_energy_ev,scf_ionization_energy_ev,scf_electron_affinity_ev,scf_electronegativity_mulliken_ev,scf_chemical_hardness_ev,scf_atomic_radius_pm,scf_covalent_radius_pm,scf_polarizability_a0_cubed,scf_electron_configuration,scf_frontier_orbitals,chem_coupled_mode,chem_family,chem_period,chem_state_298k_1bar,chem_state_273k_1bar_stp,chem_state_1000k_1bar,chem_molar_mass_g_mol,chem_atomic_mass_u,chem_mass_per_atom_kg,chem_atomic_radius_pm,chem_molar_volume_cm3_mol,chem_volume_per_atom_ang3,chem_molar_volume_stp_l_mol_if_gas,chem_density_g_cm3,chem_cohesive_energy_ev,chem_debye_temperature_k,chem_latent_fusion_kj_mol,chem_latent_vaporization_kj_mol,chem_melting_temperature_k,chem_boiling_temperature_k,chem_vapor_pressure_298k_pa,chem_bulk_modulus_gpa,chem_thermal_expansion_1_per_k,chem_cp_solid_j_mol_k,chem_cp_liquid_j_mol_k,chem_cp_gas_j_mol_k,chem_delta_density_vs_proxy_g_cm3,chem_delta_melting_vs_proxy_k,chem_delta_boiling_vs_proxy_k,chem_scf_iterations,chem_scf_residual,chem_scf_valence_electrons,chem_scf_atomic_radius_pm,chem_scf_ie_ev,chem_scf_ea_ev,chem_scf_chi_ev,chem_scf_hardness_ev,chem_coupled_radius_pm,chem_cohesive_frontier_proxy_ev\n",
+    );
+    let mut unified_rows = 0usize;
+    let mut unified_density_clamp_count = 0usize;
+    let mut unified_state_298k_solid = 0usize;
+    let mut unified_state_298k_liquid = 0usize;
+    let mut unified_state_298k_gas = 0usize;
+    let mut unified_abs_density_delta_sum = 0.0;
+    let mut unified_abs_melting_delta_sum = 0.0;
+    let mut unified_abs_boiling_delta_sum = 0.0;
+
+    for z in cfg.z_min..=cfg.z_max {
+        let rows = stable_like_by_z.get(&z);
+        let pred_count = rows.map(|v| v.len()).unwrap_or(0);
+        let pred_has = pred_count > 0;
+        let (obs_count_opt, obs_has_ref) = match observed_stable_isotope_count(z) {
+            Some(v) => (Some(v), v > 0),
+            None => (None, false),
+        };
+
+        let (
+            beta_opt_count,
+            local_min_count,
+            a_min_s,
+            a_max_s,
+            n_min_s,
+            n_max_s,
+            best_a_s,
+            best_n_s,
+            best_score,
+            best_bpn,
+            best_s2n,
+            best_s2p,
+            best_fissility,
+            best_sf,
+            weak_min,
+            weak_max,
+            weak_mean,
+            a_list,
+            n_list,
+        ) = if let Some(rows) = rows {
+            let a_min = rows.first().map(|r| r.a);
+            let a_max = rows.last().map(|r| r.a);
+            let n_min = rows.iter().map(|r| r.n).min();
+            let n_max = rows.iter().map(|r| r.n).max();
+            let best = rows
+                .iter()
+                .max_by(|a, b| a.stability_score.total_cmp(&b.stability_score))
+                .copied();
+            let beta_opt_count = rows.iter().filter(|r| r.beta_optimal_for_a).count();
+            let local_min_count = rows
+                .iter()
+                .filter(|r| {
+                    beta_local_state
+                        .get(&(r.z, r.n))
+                        .map(|s| s.is_local_min)
+                        .unwrap_or(false)
+                })
+                .count();
+            let mut weak_margins: Vec<f64> = Vec::new();
+            for r in rows {
+                let beta_q = beta_q_map.get(&(r.z, r.n)).copied().unwrap_or(BetaDecayQ {
+                    q_beta_minus_mev: None,
+                    q_ec_mev: None,
+                });
+                if let Some(m) = weak_q_margin_mev(beta_q) {
+                    weak_margins.push(m);
+                }
+            }
+            let weak_min = weak_margins
+                .iter()
+                .copied()
+                .min_by(|a, b| a.total_cmp(b))
+                .unwrap_or(f64::NAN);
+            let weak_max = weak_margins
+                .iter()
+                .copied()
+                .max_by(|a, b| a.total_cmp(b))
+                .unwrap_or(f64::NAN);
+            let weak_mean = if weak_margins.is_empty() {
+                f64::NAN
+            } else {
+                weak_margins.iter().sum::<f64>() / weak_margins.len() as f64
+            };
+            let a_list = rows
+                .iter()
+                .map(|r| r.a.to_string())
+                .collect::<Vec<_>>()
+                .join(";");
+            let n_list = rows
+                .iter()
+                .map(|r| r.n.to_string())
+                .collect::<Vec<_>>()
+                .join(";");
+            (
+                beta_opt_count,
+                local_min_count,
+                a_min.map(|v| v.to_string()).unwrap_or_default(),
+                a_max.map(|v| v.to_string()).unwrap_or_default(),
+                n_min.map(|v| v.to_string()).unwrap_or_default(),
+                n_max.map(|v| v.to_string()).unwrap_or_default(),
+                best.map(|r| r.a.to_string()).unwrap_or_default(),
+                best.map(|r| r.n.to_string()).unwrap_or_default(),
+                best.map(|r| r.stability_score).unwrap_or(f64::NAN),
+                best.map(|r| r.binding_per_nucleon_mev).unwrap_or(f64::NAN),
+                best.and_then(|r| r.s2n_mev).unwrap_or(f64::NAN),
+                best.and_then(|r| r.s2p_mev).unwrap_or(f64::NAN),
+                best.map(|r| r.fissility).unwrap_or(f64::NAN),
+                best.map(|r| r.sf_log10_half_life_s).unwrap_or(f64::NAN),
+                weak_min,
+                weak_max,
+                weak_mean,
+                a_list,
+                n_list,
+            )
+        } else {
+            (
+                0,
+                0,
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                String::new(),
+                String::new(),
+            )
+        };
+
+        let representative_a = representative_mass_number_for_z(z, rows.map(|v| v.as_slice()));
+
+        let atomic = predict_atomic_scf(z, representative_a);
+        let thermo_proxy = predict_element_thermo(z, representative_a);
+        let (
+            thermo,
+            chem_diag_scf_iter,
+            chem_diag_scf_resid,
+            chem_diag_valence,
+            chem_diag_radius,
+            chem_diag_ie,
+            chem_diag_ea,
+            chem_diag_chi,
+            chem_diag_hardness,
+            chem_diag_coupled_radius,
+            chem_diag_frontier_cohesive,
+        ) = if chem_coupled {
+            let (pred, diag) = predict_element_thermo_coupled_with_diagnostics(z, representative_a);
+            (
+                pred,
+                diag.scf_iterations,
+                diag.scf_residual,
+                diag.valence_electrons,
+                diag.scf_atomic_radius_pm,
+                diag.scf_ionization_energy_ev,
+                diag.scf_electron_affinity_ev,
+                diag.scf_electronegativity_mulliken_ev,
+                diag.scf_chemical_hardness_ev,
+                diag.coupled_radius_pm,
+                diag.cohesive_frontier_proxy_ev,
+            )
+        } else {
+            (
+                thermo_proxy,
+                0,
+                f64::NAN,
+                0,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+                f64::NAN,
+            )
+        };
+
+        let state_273k = phase_from_gibbs(
+            thermo.latent_fusion_kj_mol,
+            thermo.latent_vaporization_kj_mol,
+            thermo.melting_temperature_k,
+            thermo.boiling_temperature_k,
+            273.15,
+            P_REF_PA,
+        );
+        let state_1000k = phase_from_gibbs(
+            thermo.latent_fusion_kj_mol,
+            thermo.latent_vaporization_kj_mol,
+            thermo.melting_temperature_k,
+            thermo.boiling_temperature_k,
+            1000.0,
+            P_REF_PA,
+        );
+        match thermo.ambient_state_298k {
+            MatterState::Solid => unified_state_298k_solid += 1,
+            MatterState::Liquid => unified_state_298k_liquid += 1,
+            MatterState::Gas => unified_state_298k_gas += 1,
+        }
+
+        if thermo.density_g_cm3 >= 39.9 {
+            unified_density_clamp_count += 1;
+        }
+        let delta_density = thermo.density_g_cm3 - thermo_proxy.density_g_cm3;
+        let delta_melting = thermo.melting_temperature_k - thermo_proxy.melting_temperature_k;
+        let delta_boiling = thermo.boiling_temperature_k - thermo_proxy.boiling_temperature_k;
+        unified_abs_density_delta_sum += delta_density.abs();
+        unified_abs_melting_delta_sum += delta_melting.abs();
+        unified_abs_boiling_delta_sum += delta_boiling.abs();
+
+        let mass_per_atom_kg = (thermo.molar_mass_g_mol / 1000.0) / AVOGADRO;
+        let volume_per_atom_ang3 = (thermo.molar_volume_cm3_mol / AVOGADRO) * 1.0e24;
+        let molar_volume_stp_l_mol_if_gas = (R_GAS_J_MOL_K * 273.15 / P_REF_PA) * 1000.0;
+
+        let csv_q = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
+        let row = vec![
+            z.to_string(),
+            representative_a.to_string(),
+            pred_count.to_string(),
+            pred_has.to_string(),
+            obs_has_ref.to_string(),
+            obs_count_opt.map(|v| v.to_string()).unwrap_or_default(),
+            beta_opt_count.to_string(),
+            local_min_count.to_string(),
+            a_min_s,
+            a_max_s,
+            n_min_s,
+            n_max_s,
+            best_a_s,
+            best_n_s,
+            format!("{:.6}", best_score),
+            format!("{:.6}", best_bpn),
+            format!("{:.6}", best_s2n),
+            format!("{:.6}", best_s2p),
+            format!("{:.6}", best_fissility),
+            format!("{:.6}", best_sf),
+            format!("{:.6}", weak_min),
+            format!("{:.6}", weak_max),
+            format!("{:.6}", weak_mean),
+            csv_q(&a_list),
+            csv_q(&n_list),
+            atomic.scf_iterations.to_string(),
+            format!("{:.9}", atomic.scf_residual),
+            atomic.electron_count.to_string(),
+            atomic.valence_electrons.to_string(),
+            format!("{:.9}", atomic.total_electronic_energy_ev),
+            format!("{:.9}", atomic.homo_energy_ev),
+            format!("{:.9}", atomic.lumo_energy_ev),
+            format!("{:.9}", atomic.ionization_energy_ev),
+            format!("{:.9}", atomic.electron_affinity_ev),
+            format!("{:.9}", atomic.electronegativity_mulliken_ev),
+            format!("{:.9}", atomic.chemical_hardness_ev),
+            format!("{:.6}", atomic.atomic_radius_pm),
+            format!("{:.6}", atomic.covalent_radius_pm),
+            format!("{:.6}", atomic.polarizability_a0_cubed),
+            csv_q(&atomic.electron_configuration),
+            csv_q(&atomic.frontier_orbitals),
+            chem_coupled.to_string(),
+            family_name(thermo.family).to_string(),
+            thermo.period.to_string(),
+            state_name(thermo.ambient_state_298k).to_string(),
+            state_name(state_273k).to_string(),
+            state_name(state_1000k).to_string(),
+            format!("{:.6}", thermo.molar_mass_g_mol),
+            format!("{:.6}", thermo.molar_mass_g_mol),
+            format!("{:.9}", mass_per_atom_kg),
+            format!("{:.6}", thermo.atomic_radius_pm),
+            format!("{:.6}", thermo.molar_volume_cm3_mol),
+            format!("{:.6}", volume_per_atom_ang3),
+            format!("{:.6}", molar_volume_stp_l_mol_if_gas),
+            format!("{:.6}", thermo.density_g_cm3),
+            format!("{:.6}", thermo.cohesive_energy_ev_per_atom),
+            format!("{:.6}", thermo.debye_temperature_k),
+            format!("{:.6}", thermo.latent_fusion_kj_mol),
+            format!("{:.6}", thermo.latent_vaporization_kj_mol),
+            format!("{:.6}", thermo.melting_temperature_k),
+            format!("{:.6}", thermo.boiling_temperature_k),
+            format!("{:.6}", thermo.vapor_pressure_pa_298k),
+            format!("{:.6}", thermo.bulk_modulus_gpa),
+            format!("{:.9}", thermo.thermal_expansion_1_per_k),
+            format!("{:.6}", thermo.cp_solid_j_mol_k),
+            format!("{:.6}", thermo.cp_liquid_j_mol_k),
+            format!("{:.6}", thermo.cp_gas_j_mol_k),
+            format!("{:.6}", delta_density),
+            format!("{:.6}", delta_melting),
+            format!("{:.6}", delta_boiling),
+            chem_diag_scf_iter.to_string(),
+            format!("{:.9}", chem_diag_scf_resid),
+            chem_diag_valence.to_string(),
+            format!("{:.6}", chem_diag_radius),
+            format!("{:.6}", chem_diag_ie),
+            format!("{:.6}", chem_diag_ea),
+            format!("{:.6}", chem_diag_chi),
+            format!("{:.6}", chem_diag_hardness),
+            format!("{:.6}", chem_diag_coupled_radius),
+            format!("{:.6}", chem_diag_frontier_cohesive),
+        ];
+        unified_csv.push_str(&row.join(","));
+        unified_csv.push('\n');
+        unified_rows += 1;
+    }
+    fs::write(out.join("element_unified_algebra_table.csv"), unified_csv)?;
+
+    let unified_mean_abs_density_delta = if unified_rows > 0 {
+        unified_abs_density_delta_sum / unified_rows as f64
+    } else {
+        0.0
+    };
+    let unified_mean_abs_melting_delta = if unified_rows > 0 {
+        unified_abs_melting_delta_sum / unified_rows as f64
+    } else {
+        0.0
+    };
+    let unified_mean_abs_boiling_delta = if unified_rows > 0 {
+        unified_abs_boiling_delta_sum / unified_rows as f64
+    } else {
+        0.0
+    };
+    let unified_summary_json = format!(
+        concat!(
+            "{{\n",
+            "  \"rows\": {},\n",
+            "  \"chem_coupled_mode\": {},\n",
+            "  \"density_clamp_saturation_count\": {},\n",
+            "  \"state_counts_298k_1bar\": {{\"solid\": {}, \"liquid\": {}, \"gas\": {}}},\n",
+            "  \"mean_abs_delta_vs_proxy\": {{\"density_g_cm3\": {:.9}, \"melting_temperature_k\": {:.9}, \"boiling_temperature_k\": {:.9}}}\n",
+            "}}\n"
+        ),
+        unified_rows,
+        chem_coupled,
+        unified_density_clamp_count,
+        unified_state_298k_solid,
+        unified_state_298k_liquid,
+        unified_state_298k_gas,
+        unified_mean_abs_density_delta,
+        unified_mean_abs_melting_delta,
+        unified_mean_abs_boiling_delta
+    );
+    fs::write(
+        out.join("element_unified_algebra_summary.json"),
+        unified_summary_json,
+    )?;
 
     // Tin diagnostics (magic-proton showcase): compare exact stable A-set.
     let mut tin_predicted_a: Vec<u16> = stable_like
@@ -1219,6 +1808,14 @@ fn main() -> anyhow::Result<()> {
     println!(
         "Wrote {}",
         out.join("stable_identity_confusion.csv").display()
+    );
+    println!(
+        "Wrote {}",
+        out.join("element_unified_algebra_table.csv").display()
+    );
+    println!(
+        "Wrote {}",
+        out.join("element_unified_algebra_summary.json").display()
     );
     println!("Appended {}", trend_path.display());
     Ok(())
