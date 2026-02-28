@@ -555,6 +555,20 @@ fn orbital_packing_hints_from_prefetch(p: &CoupledThermoPrefetch) -> OrbitalPack
     }
 }
 
+fn transition_4d_corridor_strength(
+    family: ChemicalFamily,
+    period: u8,
+    hints: OrbitalPackingHints,
+) -> f64 {
+    if family != ChemicalFamily::Transition || period != 5 {
+        return 0.0;
+    }
+    // Broad Nb-Pd corridor: early-to-late 4d filling still contracts metallic volumes.
+    let d_corridor = (1.0 - ((hints.d_fill - 0.55).abs() / 0.55)).clamp(0.0, 1.0);
+    let v_corridor = (1.0 - ((hints.valence_electrons as f64 - 7.0).abs() / 4.0)).clamp(0.0, 1.0);
+    (0.65 * d_corridor + 0.35 * v_corridor).clamp(0.0, 1.0)
+}
+
 fn crystal_packing_multiplier(
     family: ChemicalFamily,
     period: u8,
@@ -567,17 +581,15 @@ fn crystal_packing_multiplier(
     } else {
         0.0
     };
-    let d_band_cluster = if family == ChemicalFamily::Transition && period == 5 {
-        let valence_mid = (1.0 - ((hints.valence_electrons as f64 - 7.5).abs() / 3.5)).clamp(0.0, 1.0);
-        (d_cluster_4d * valence_mid).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
+    let d_band_cluster = transition_4d_corridor_strength(family, period, hints);
     let mut m = 1.0;
     if family == ChemicalFamily::Transition {
         m *= 1.0 + 0.24 * period_rel * hints.d_frac * (0.4 + 0.6 * d_half_fill_peak);
         m *= 1.0 + 0.20 * hints.d_frac * d_cluster_4d;
         m *= 1.0 + 0.35 * hints.d_frac * d_band_cluster;
+        // 4d transition row (Nb-Pd band-filling corridor) compacts more than orbital
+        // fraction-weighting alone captures; tie directly to d-band occupancy shape.
+        m *= 1.0 + 0.50 * d_band_cluster;
     }
     if family == ChemicalFamily::PostTransition && period >= 5 {
         // Heavy post-transition metals trend toward denser metallic packing.
@@ -604,7 +616,12 @@ fn allotropy_porosity_multiplier(
     let p_directionality = (hints.p_frac - 0.20 * hints.d_frac).max(0.0);
     // Open-network allotropes (graphitic layers, chains, rings) reduce packing efficiency.
     let period_bonus = if period <= 3 { 1.0 } else { 0.7 };
-    1.0 - 0.45 * period_bonus * p_directionality * topology_peak
+    let network_boost = if period <= 3 {
+        0.18 * topology_peak
+    } else {
+        0.08 * topology_peak
+    };
+    (1.0 - 0.58 * period_bonus * p_directionality * topology_peak - network_boost).clamp(0.20, 1.0)
 }
 
 fn crystal_radius_multiplier(
@@ -619,17 +636,13 @@ fn crystal_radius_multiplier(
     } else {
         0.0
     };
-    let d_band_cluster = if family == ChemicalFamily::Transition && period == 5 {
-        let valence_mid = (1.0 - ((hints.valence_electrons as f64 - 7.5).abs() / 3.5)).clamp(0.0, 1.0);
-        (d_cluster_4d * valence_mid).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
+    let d_band_cluster = transition_4d_corridor_strength(family, period, hints);
     let mut m = 1.0;
     if family == ChemicalFamily::Transition {
         m *= 1.0 - 0.14 * period_rel * hints.d_frac * (0.5 + 0.5 * d_half_fill_peak);
         m *= 1.0 - 0.16 * hints.d_frac * d_cluster_4d;
         m *= 1.0 - 0.28 * hints.d_frac * d_band_cluster;
+        m *= 1.0 - 0.40 * d_band_cluster;
     }
     if family == ChemicalFamily::PostTransition && period >= 5 {
         m *= 1.0 - 0.10 * period_rel * (0.55 * hints.p_frac + 0.45 * hints.f_frac);
@@ -651,7 +664,12 @@ fn allotropy_radius_multiplier(
     let topology_peak = (0.6 * sp2_peak + 0.4 * ring_peak).clamp(0.0, 1.0);
     let p_directionality = (hints.p_frac - 0.20 * hints.d_frac).max(0.0);
     let period_bonus = if period <= 3 { 1.0 } else { 0.7 };
-    1.0 + 0.22 * period_bonus * p_directionality * topology_peak
+    let network_boost = if period <= 3 {
+        0.14 * topology_peak
+    } else {
+        0.06 * topology_peak
+    };
+    (1.0 + 0.34 * period_bonus * p_directionality * topology_peak + network_boost).clamp(1.0, 1.8)
 }
 
 fn packing_fraction_from_hints(
@@ -975,9 +993,7 @@ pub fn predict_element_thermo_coupled_from_prefetch_calibrated(
     let radius_lower_scale = if family == ChemicalFamily::Actinide {
         cal.radius_lower_actinide
     } else if family == ChemicalFamily::Transition && period == 5 {
-        let d_cluster_4d = (1.0 - ((hints.d_fill - 0.65).abs() / 0.35)).clamp(0.0, 1.0);
-        let valence_mid = (1.0 - ((hints.valence_electrons as f64 - 7.5).abs() / 3.5)).clamp(0.0, 1.0);
-        let cluster = (d_cluster_4d * valence_mid).clamp(0.0, 1.0);
+        let cluster = transition_4d_corridor_strength(family, period, hints);
         (0.52 - 0.16 * cluster).clamp(0.34, 0.52)
     } else if hints.has_f_core && period >= 6 && family == ChemicalFamily::Transition {
         cal.radius_lower_transition_fcore
