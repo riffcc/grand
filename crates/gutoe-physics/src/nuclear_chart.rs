@@ -148,6 +148,9 @@ pub struct ShellParams {
     pub proton_magic_weight_cap: f64,
     pub neutron_magic_weight_coeff: f64,
     pub neutron_magic_weight_cap: f64,
+    // Structural attenuation on high shell-index closures.
+    // 0.0 disables attenuation; positive values damp higher closures.
+    pub closure_index_attenuation: f64,
     pub superheavy_proton_amplitude: f64,
     pub superheavy_proton_sigma: f64,
     pub superheavy_proton_gate_n_sigma: f64,
@@ -190,6 +193,7 @@ impl Default for ShellParams {
             proton_magic_weight_cap: 1.80,
             neutron_magic_weight_coeff: 3.0 * LAMBDA_QG,
             neutron_magic_weight_cap: 2.15,
+            closure_index_attenuation: 1.0 / 4.0,
             superheavy_proton_amplitude: 2.0,
             superheavy_proton_sigma: 5.0,
             superheavy_proton_gate_n_sigma: 24.0,
@@ -361,24 +365,44 @@ where
         .sum()
 }
 
-fn neutron_magic_weight(magic_n: u16, coeff: f64, cap: f64) -> f64 {
+fn rank_attenuation(rank: usize, coeff: f64) -> f64 {
+    if coeff <= 0.0 {
+        1.0
+    } else {
+        1.0 / (1.0 + coeff * rank as f64)
+    }
+}
+
+fn neutron_magic_weight(magic_n: u16, coeff: f64, cap: f64, atten_coeff: f64) -> f64 {
     if magic_n <= 28 {
         return 1.0;
     }
     // Cl(1,3)+Z3 correction hierarchy: heavier neutron closures require
     // stronger shell leverage to maintain observed S2n cliffs.
     let x = (magic_n as f64 - 28.0) / 28.0;
-    (1.0 + coeff * x * x).clamp(1.0, cap)
+    let boost = (1.0 + coeff * x * x).clamp(1.0, cap);
+    let rank = NEUTRON_MAGIC_NUMBERS
+        .iter()
+        .position(|&m| m == magic_n)
+        .unwrap_or(0)
+        .saturating_sub(4); // apply attenuation above N=50
+    boost * rank_attenuation(rank, atten_coeff)
 }
 
-fn proton_magic_weight(magic_z: u16, coeff: f64, cap: f64) -> f64 {
+fn proton_magic_weight(magic_z: u16, coeff: f64, cap: f64, atten_coeff: f64) -> f64 {
     if magic_z <= 20 {
         return 1.0;
     }
     // Keep proton-shell reinforcement milder than neutron reinforcement so
     // we shift beta-stable isobars near Z=50 without destabilizing light-Z fits.
     let x = (magic_z as f64 - 20.0) / 30.0;
-    (1.0 + coeff * x * x).clamp(1.0, cap)
+    let boost = (1.0 + coeff * x * x).clamp(1.0, cap);
+    let rank = PROTON_MAGIC_NUMBERS
+        .iter()
+        .position(|&m| m == magic_z)
+        .unwrap_or(0)
+        .saturating_sub(5); // apply attenuation above Z=82
+    boost * rank_attenuation(rank, atten_coeff)
 }
 
 fn z50_isovector_valley_term_mev(z: u16, n: u16, shell: ShellParams) -> f64 {
@@ -756,6 +780,7 @@ fn semf_binding_mev(
                 magic,
                 shell.proton_magic_weight_coeff,
                 shell.proton_magic_weight_cap,
+                shell.closure_index_attenuation,
             )
         },
     );
@@ -769,6 +794,7 @@ fn semf_binding_mev(
                 magic,
                 shell.neutron_magic_weight_coeff,
                 shell.neutron_magic_weight_cap,
+                shell.closure_index_attenuation,
             )
         },
     );

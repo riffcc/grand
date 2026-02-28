@@ -231,6 +231,10 @@ fn main() -> anyhow::Result<()> {
                 "GUTOE_NUCLEAR_NEUTRON_MAGIC_WEIGHT_CAP",
                 default_shell.neutron_magic_weight_cap,
             ),
+            closure_index_attenuation: env_f64(
+                "GUTOE_NUCLEAR_CLOSURE_INDEX_ATTENUATION",
+                default_shell.closure_index_attenuation,
+            ),
             superheavy_proton_amplitude: env_f64(
                 "GUTOE_NUCLEAR_SUPERHEAVY_PROTON_AMP",
                 default_shell.superheavy_proton_amplitude,

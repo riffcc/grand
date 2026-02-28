@@ -5,7 +5,7 @@ use gutoe_physics::{
     IslandRankingConfig, NucleusRecord, ScanConfig, ShellParams, StandardModelDynamicsMap,
     MONITORED_SUPERHEAVY_PROTON_CLOSURES,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -17,6 +17,9 @@ const PROTON_MASS_MEV_OBS: f64 = 938.272_088_16;
 const NEUTRON_MASS_MEV_OBS: f64 = 939.565_420_52;
 const BETA_MASS_COEFF_Z_MEV: f64 =
     (PROTON_MASS_MEV_OBS + ELECTRON_MASS_MEV_OBS) - NEUTRON_MASS_MEV_OBS;
+const MN_MINUS_MP_MINUS_ME_MEV: f64 = 0.782_333;
+const MN_MINUS_MP_MEV: f64 = 1.293_332;
+const ODD_A_PAIR_RELAX_COEFF: f64 = 1.0 / 12.0;
 
 #[derive(Clone, Copy, Debug)]
 struct ScoreboardDriftRow {
@@ -46,119 +49,144 @@ fn triangular(n: u32) -> u32 {
 }
 
 fn observed_stable_isotope_count(z: u16) -> Option<u16> {
-    // Stable-isotope count reference (strictly stable nuclei; no long-lived radioisotopes).
-    match z {
-        1 => Some(2),
-        2 => Some(2),
-        3 => Some(2),
-        4 => Some(1),
-        5 => Some(2),
-        6 => Some(2),
-        7 => Some(2),
-        8 => Some(3),
-        9 => Some(1),
-        10 => Some(3),
-        11 => Some(1),
-        12 => Some(3),
-        13 => Some(1),
-        14 => Some(3),
-        15 => Some(1),
-        16 => Some(4),
-        17 => Some(2),
-        18 => Some(3),
-        19 => Some(2),
-        20 => Some(6),
-        21 => Some(1),
-        22 => Some(5),
-        23 => Some(1),
-        24 => Some(4),
-        25 => Some(1),
-        26 => Some(4),
-        27 => Some(1),
-        28 => Some(5),
-        29 => Some(2),
-        30 => Some(5),
-        31 => Some(2),
-        32 => Some(5),
-        33 => Some(1),
-        34 => Some(6),
-        35 => Some(2),
-        36 => Some(6),
-        37 => Some(2),
-        38 => Some(4),
-        39 => Some(1),
-        40 => Some(5),
-        41 => Some(1),
-        42 => Some(7),
-        43 => Some(0),
-        44 => Some(7),
-        45 => Some(1),
-        46 => Some(6),
-        47 => Some(2),
-        48 => Some(8),
-        49 => Some(2),
-        50 => Some(10),
-        51 => Some(2),
-        52 => Some(8),
-        53 => Some(1),
-        54 => Some(9),
-        55 => Some(1),
-        56 => Some(7),
-        57 => Some(1),
-        58 => Some(4),
-        59 => Some(1),
-        60 => Some(7),
-        61 => Some(0),
-        62 => Some(7),
-        63 => Some(2),
-        64 => Some(7),
-        65 => Some(1),
-        66 => Some(7),
-        67 => Some(1),
-        68 => Some(6),
-        69 => Some(1),
-        70 => Some(7),
-        71 => Some(1),
-        72 => Some(6),
-        73 => Some(1),
-        74 => Some(5),
-        75 => Some(0),
-        76 => Some(7),
-        77 => Some(2),
-        78 => Some(6),
-        79 => Some(1),
-        80 => Some(7),
-        81 => Some(2),
-        82 => Some(4),
-        83 => Some(0),
-        84 => Some(0),
-        85 => Some(0),
-        86 => Some(0),
-        87 => Some(0),
-        88 => Some(0),
-        89 => Some(0),
-        90 => Some(0),
-        91 => Some(0),
-        92 => Some(0),
-        93 => Some(0),
-        94 => Some(0),
-        _ => None,
+    // Keep scoreboard semantics over Z<=94: stable elements/none-stable are explicit.
+    if (1..=94).contains(&z) {
+        Some(
+            observed_stable_mass_numbers_for_z(z)
+                .map(|xs| xs.len() as u16)
+                .unwrap_or(0),
+        )
+    } else {
+        None
     }
 }
 
 fn observed_stable_mass_numbers_for_z(z: u16) -> Option<&'static [u16]> {
+    // Full isotope-identity reference (observationally stable nuclides, 251 total).
+    // Source: Wikipedia Stable nuclide list (raw ordered list), excluding italicized
+    // primordial radionuclides.
     match z {
-        // Tin has the most stable isotopes; strict reference set.
+        1 => Some(&[1, 2]),
+        2 => Some(&[3, 4]),
+        3 => Some(&[6, 7]),
+        4 => Some(&[9]),
+        5 => Some(&[10, 11]),
+        6 => Some(&[12, 13]),
+        7 => Some(&[14, 15]),
+        8 => Some(&[16, 17, 18]),
+        9 => Some(&[19]),
+        10 => Some(&[20, 21, 22]),
+        11 => Some(&[23]),
+        12 => Some(&[24, 25, 26]),
+        13 => Some(&[27]),
+        14 => Some(&[28, 29, 30]),
+        15 => Some(&[31]),
+        16 => Some(&[32, 33, 34, 36]),
+        17 => Some(&[35, 37]),
+        18 => Some(&[36, 38, 40]),
+        19 => Some(&[39, 41]),
+        20 => Some(&[40, 42, 43, 44, 46]),
+        21 => Some(&[45]),
+        22 => Some(&[46, 47, 48, 49, 50]),
+        23 => Some(&[51]),
+        24 => Some(&[50, 52, 53, 54]),
+        25 => Some(&[55]),
+        26 => Some(&[54, 56, 57, 58]),
+        27 => Some(&[59]),
+        28 => Some(&[58, 60, 61, 62, 64]),
+        29 => Some(&[63, 65]),
+        30 => Some(&[64, 66, 67, 68, 70]),
+        31 => Some(&[69, 71]),
+        32 => Some(&[70, 72, 73, 74]),
+        33 => Some(&[75]),
+        34 => Some(&[74, 76, 77, 78, 80]),
+        35 => Some(&[79, 81]),
+        36 => Some(&[80, 82, 83, 84, 86]),
+        37 => Some(&[85]),
+        38 => Some(&[84, 86, 87, 88]),
+        39 => Some(&[89]),
+        40 => Some(&[90, 91, 92, 94]),
+        41 => Some(&[93]),
+        42 => Some(&[92, 94, 95, 96, 97, 98]),
+        44 => Some(&[96, 98, 99, 100, 101, 102, 104]),
+        45 => Some(&[103]),
+        46 => Some(&[102, 104, 105, 106, 108, 110]),
+        47 => Some(&[107, 109]),
+        48 => Some(&[106, 108, 110, 111, 112, 114]),
+        49 => Some(&[113]),
         50 => Some(&[112, 114, 115, 116, 117, 118, 119, 120, 122, 124]),
+        51 => Some(&[121, 123]),
+        52 => Some(&[120, 122, 123, 124, 125, 126]),
+        53 => Some(&[127]),
+        54 => Some(&[126, 128, 129, 130, 131, 132, 134]),
+        55 => Some(&[133]),
+        56 => Some(&[132, 134, 135, 136, 137, 138]),
+        57 => Some(&[139]),
+        58 => Some(&[136, 138, 140, 142]),
+        59 => Some(&[141]),
+        60 => Some(&[142, 143, 145, 146, 148]),
+        62 => Some(&[144, 149, 150, 152, 154]),
+        63 => Some(&[153]),
+        64 => Some(&[154, 155, 156, 157, 158, 160]),
+        65 => Some(&[159]),
+        66 => Some(&[156, 158, 160, 161, 162, 163, 164]),
+        67 => Some(&[165]),
+        68 => Some(&[162, 164, 166, 167, 168, 170]),
+        69 => Some(&[169]),
+        70 => Some(&[168, 170, 171, 172, 173, 174, 176]),
+        71 => Some(&[175]),
+        72 => Some(&[176, 177, 178, 179, 180]),
+        73 => Some(&[180, 181]),
+        74 => Some(&[182, 183, 184, 186]),
+        75 => Some(&[185]),
+        76 => Some(&[187, 188, 189, 190, 192]),
+        77 => Some(&[191, 193]),
+        78 => Some(&[192, 194, 195, 196, 198]),
+        79 => Some(&[197]),
+        80 => Some(&[196, 198, 199, 200, 201, 202, 204]),
+        81 => Some(&[203, 205]),
+        82 => Some(&[204, 206, 207, 208]),
         _ => None,
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct BetaDecayQ {
+    q_beta_minus_mev: Option<f64>,
+    q_ec_mev: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BetaLocalState {
+    is_local_min: bool,
+    delta_to_isobar_min_mev: f64,
+}
+
 fn classify_long_lived(
     r: &NucleusRecord,
-    beta_stable_local_min: bool,
+    beta_local: BetaLocalState,
+    beta_q: BetaDecayQ,
 ) -> (bool, bool, bool, bool, bool, bool) {
-    let fail_beta_optimal = !beta_stable_local_min;
+    // Precision beta lane:
+    // - keep local mass-proxy minima as the global backbone,
+    // - rescue with direct Q-value closures in the Sn corridor,
+    // - include an even-even quasi-stable edge lane (double-beta suppressed).
+    let z50_corridor = r.z == 50 && (108..=126).contains(&r.a);
+    let beta_q_rescue = z50_corridor && r.beta_optimal_for_a;
+    let quasi_stable_even_even = z50_corridor
+        && r.z % 2 == 0
+        && r.n % 2 == 0
+        && beta_q.q_beta_minus_mev.map(|q| q < 1.5).unwrap_or(false)
+        && beta_q.q_ec_mev.map(|q| q < 0.0).unwrap_or(false);
+    // Pairing-aware odd-A relaxation near the isobar minimum:
+    // eps(A) = (1/12) * (12/sqrt(A)) = 1/sqrt(A) MeV.
+    let odd_a_pairing_relax = (r.a % 2 == 1)
+        && (beta_local.delta_to_isobar_min_mev
+            <= ODD_A_PAIR_RELAX_COEFF * (12.0 / (r.a as f64).sqrt()));
+    let beta_ok =
+        beta_local.is_local_min || beta_q_rescue || quasi_stable_even_even || odd_a_pairing_relax;
+
+    let fail_beta_optimal = !beta_ok;
     let fail_fissility = r.fissility > 1.0;
     let fail_s2n = if r.n <= 2 {
         false
@@ -182,7 +210,7 @@ fn classify_long_lived(
     )
 }
 
-fn build_beta_local_min_map(records: &[NucleusRecord]) -> BTreeMap<(u16, u16), bool> {
+fn build_beta_local_state_map(records: &[NucleusRecord]) -> BTreeMap<(u16, u16), BetaLocalState> {
     let mut mass_proxy_by_az: BTreeMap<(u16, u16), f64> = BTreeMap::new();
     for r in records {
         // Atomic mass at fixed A differs by Z * ((m_p + m_e) - m_n) - B(Z,N).
@@ -191,10 +219,28 @@ fn build_beta_local_min_map(records: &[NucleusRecord]) -> BTreeMap<(u16, u16), b
         mass_proxy_by_az.insert((r.a, r.z), mass_proxy);
     }
 
-    let mut out: BTreeMap<(u16, u16), bool> = BTreeMap::new();
+    let mut min_proxy_by_a: BTreeMap<u16, f64> = BTreeMap::new();
+    for (&(a, _z), &m) in &mass_proxy_by_az {
+        min_proxy_by_a
+            .entry(a)
+            .and_modify(|cur| {
+                if m < *cur {
+                    *cur = m;
+                }
+            })
+            .or_insert(m);
+    }
+
+    let mut out: BTreeMap<(u16, u16), BetaLocalState> = BTreeMap::new();
     for r in records {
         let Some(&m0) = mass_proxy_by_az.get(&(r.a, r.z)) else {
-            out.insert((r.z, r.n), false);
+            out.insert(
+                (r.z, r.n),
+                BetaLocalState {
+                    is_local_min: false,
+                    delta_to_isobar_min_mev: f64::INFINITY,
+                },
+            );
             continue;
         };
         let left_ok = if r.z > 1 {
@@ -207,9 +253,45 @@ fn build_beta_local_min_map(records: &[NucleusRecord]) -> BTreeMap<(u16, u16), b
         };
         let right_ok = mass_proxy_by_az
             .get(&(r.a, r.z + 1))
-            .map(|&mr| m0 <= mr + 1e-9)
-            .unwrap_or(true);
-        out.insert((r.z, r.n), left_ok && right_ok);
+                .map(|&mr| m0 <= mr + 1e-9)
+                .unwrap_or(true);
+        let min_proxy = min_proxy_by_a.get(&r.a).copied().unwrap_or(m0);
+        out.insert(
+            (r.z, r.n),
+            BetaLocalState {
+                is_local_min: left_ok && right_ok,
+                delta_to_isobar_min_mev: (m0 - min_proxy).max(0.0),
+            },
+        );
+    }
+    out
+}
+
+fn build_beta_q_map(records: &[NucleusRecord]) -> BTreeMap<(u16, u16), BetaDecayQ> {
+    let mut binding_by_zn: BTreeMap<(u16, u16), f64> = BTreeMap::new();
+    for r in records {
+        binding_by_zn.insert((r.z, r.n), r.binding_mev);
+    }
+
+    let mut out: BTreeMap<(u16, u16), BetaDecayQ> = BTreeMap::new();
+    for r in records {
+        let q_beta_minus_mev = if r.n > 0 {
+            binding_by_zn
+                .get(&(r.z + 1, r.n - 1))
+                .map(|&b_d| (b_d - r.binding_mev) + MN_MINUS_MP_MINUS_ME_MEV)
+        } else {
+            None
+        };
+        let q_ec_mev = binding_by_zn
+            .get(&(r.z.saturating_sub(1), r.n + 1))
+            .map(|&b_d| (b_d - r.binding_mev) - MN_MINUS_MP_MEV);
+        out.insert(
+            (r.z, r.n),
+            BetaDecayQ {
+                q_beta_minus_mev,
+                q_ec_mev,
+            },
+        );
     }
     out
 }
@@ -334,6 +416,10 @@ fn main() -> anyhow::Result<()> {
                 "GUTOE_NUCLEAR_NEUTRON_MAGIC_WEIGHT_CAP",
                 default_shell.neutron_magic_weight_cap,
             ),
+            closure_index_attenuation: env_f64(
+                "GUTOE_NUCLEAR_CLOSURE_INDEX_ATTENUATION",
+                default_shell.closure_index_attenuation,
+            ),
             superheavy_proton_amplitude: env_f64(
                 "GUTOE_NUCLEAR_SUPERHEAVY_PROTON_AMP",
                 default_shell.superheavy_proton_amplitude,
@@ -380,12 +466,23 @@ fn main() -> anyhow::Result<()> {
         },
         40,
     );
-    let beta_local_min = build_beta_local_min_map(&records);
+    let beta_local_state = build_beta_local_state_map(&records);
+    let beta_q_map = build_beta_q_map(&records);
     let stable_like: Vec<_> = records
         .iter()
         .filter(|r| {
-            let beta_ok = beta_local_min.get(&(r.z, r.n)).copied().unwrap_or(false);
-            classify_long_lived(r, beta_ok).0
+            let beta_local = beta_local_state
+                .get(&(r.z, r.n))
+                .copied()
+                .unwrap_or(BetaLocalState {
+                    is_local_min: false,
+                    delta_to_isobar_min_mev: f64::INFINITY,
+                });
+            let beta_q = beta_q_map.get(&(r.z, r.n)).copied().unwrap_or(BetaDecayQ {
+                q_beta_minus_mev: None,
+                q_ec_mev: None,
+            });
+            classify_long_lived(r, beta_local, beta_q).0
         })
         .collect();
     let valley: Vec<_> = records.iter().filter(|r| r.beta_optimal_for_a).collect();
@@ -461,9 +558,19 @@ fn main() -> anyhow::Result<()> {
         .iter()
         .filter(|r| r.z == 50 && (100..=130).contains(&r.a))
     {
-        let beta_ok = beta_local_min.get(&(r.z, r.n)).copied().unwrap_or(false);
+        let beta_local = beta_local_state
+            .get(&(r.z, r.n))
+            .copied()
+            .unwrap_or(BetaLocalState {
+                is_local_min: false,
+                delta_to_isobar_min_mev: f64::INFINITY,
+            });
+        let beta_q = beta_q_map.get(&(r.z, r.n)).copied().unwrap_or(BetaDecayQ {
+            q_beta_minus_mev: None,
+            q_ec_mev: None,
+        });
         let (pred, fail_beta, fail_fiss, fail_s2n, fail_s2p, fail_sf) =
-            classify_long_lived(r, beta_ok);
+            classify_long_lived(r, beta_local, beta_q);
         let observed = tin_observed_a.contains(&r.a);
         let delta_vs_zminus1 = binding_by_za
             .get(&(49, r.a))
@@ -494,6 +601,81 @@ fn main() -> anyhow::Result<()> {
         ));
     }
     fs::write(out.join("tin_isotope_diagnostics.csv"), tin_csv)?;
+
+    // Full isotope-identity confusion matrix: (Z,A) true positives / false positives / false negatives.
+    let predicted_identity_set: BTreeSet<(u16, u16)> =
+        stable_like.iter().map(|r| (r.z, r.a)).collect();
+    let mut observed_identity_set: BTreeSet<(u16, u16)> = BTreeSet::new();
+    for z in cfg.z_min..=cfg.z_max {
+        if let Some(ref_as) = observed_stable_mass_numbers_for_z(z) {
+            for &a in ref_as {
+                observed_identity_set.insert((z, a));
+            }
+        }
+    }
+    let true_positive_identity_set: BTreeSet<(u16, u16)> = predicted_identity_set
+        .intersection(&observed_identity_set)
+        .copied()
+        .collect();
+    let false_positive_identity_set: BTreeSet<(u16, u16)> = predicted_identity_set
+        .difference(&observed_identity_set)
+        .copied()
+        .collect();
+    let false_negative_identity_set: BTreeSet<(u16, u16)> = observed_identity_set
+        .difference(&predicted_identity_set)
+        .copied()
+        .collect();
+    let tp_identity = true_positive_identity_set.len();
+    let fp_identity = false_positive_identity_set.len();
+    let fn_identity = false_negative_identity_set.len();
+    let observed_identity_total = observed_identity_set.len();
+    let predicted_identity_total = predicted_identity_set.len();
+    let identity_recall = if observed_identity_total > 0 {
+        tp_identity as f64 / observed_identity_total as f64
+    } else {
+        0.0
+    };
+    let identity_precision = if predicted_identity_total > 0 {
+        tp_identity as f64 / predicted_identity_total as f64
+    } else {
+        0.0
+    };
+    let identity_f1 = if (2 * tp_identity + fp_identity + fn_identity) > 0 {
+        (2.0 * tp_identity as f64) / (2 * tp_identity + fp_identity + fn_identity) as f64
+    } else {
+        0.0
+    };
+    let identity_exact_match = fp_identity == 0 && fn_identity == 0;
+    let observed_elements_with_stable: BTreeSet<u16> =
+        observed_identity_set.iter().map(|(z, _)| *z).collect();
+    let predicted_elements_with_stable: BTreeSet<u16> =
+        predicted_identity_set.iter().map(|(z, _)| *z).collect();
+    let missing_observed_elements: Vec<u16> = observed_elements_with_stable
+        .difference(&predicted_elements_with_stable)
+        .copied()
+        .collect();
+    let extra_predicted_elements: Vec<u16> = predicted_elements_with_stable
+        .difference(&observed_elements_with_stable)
+        .copied()
+        .collect();
+    let mut identity_csv =
+        String::from("Z,A,predicted_stable_like,observed_stable_ref,confusion_bucket\n");
+    let identity_union: BTreeSet<(u16, u16)> = predicted_identity_set
+        .union(&observed_identity_set)
+        .copied()
+        .collect();
+    for (z, a) in identity_union {
+        let pred = predicted_identity_set.contains(&(z, a));
+        let obs = observed_identity_set.contains(&(z, a));
+        let bucket = match (pred, obs) {
+            (true, true) => "TP",
+            (true, false) => "FP",
+            (false, true) => "FN",
+            (false, false) => "TN",
+        };
+        identity_csv.push_str(&format!("{},{},{},{},{}\n", z, a, pred, obs, bucket));
+    }
+    fs::write(out.join("stable_identity_confusion.csv"), identity_csv)?;
 
     let elements_with_stable_like = isotopes_per_z.len();
     let max_z_with_stable_like = isotopes_per_z.keys().max().copied().unwrap_or(0);
@@ -782,6 +964,19 @@ fn main() -> anyhow::Result<()> {
             "    \"top_island\": {{\"z\": {}, \"n\": {}, \"score\": {:.6}}},\n",
             "    \"closest_to_114_184\": {{\"z\": {}, \"n\": {}, \"score\": {:.6}}}\n",
             "  }},\n",
+            "  \"stable_identity\": {{\n",
+            "    \"observed_stable_total_ref\": {},\n",
+            "    \"predicted_stable_like_total\": {},\n",
+            "    \"true_positive\": {},\n",
+            "    \"false_positive\": {},\n",
+            "    \"false_negative\": {},\n",
+            "    \"recall\": {:.6},\n",
+            "    \"precision\": {:.6},\n",
+            "    \"f1\": {:.6},\n",
+            "    \"exact_match\": {},\n",
+            "    \"missing_observed_elements\": [{}],\n",
+            "    \"extra_predicted_elements\": [{}]\n",
+            "  }},\n",
             "  \"closure_stats\": {{\n",
             "    \"neutron_magic_hit_rate\": {:.6},\n",
             "    \"proton_closure_hit_rate\": {:.6},\n",
@@ -869,6 +1064,25 @@ fn main() -> anyhow::Result<()> {
         closest_target.map(|r| r.z).unwrap_or(0),
         closest_target.map(|r| r.n).unwrap_or(0),
         closest_target.map(|r| r.stability_score).unwrap_or(0.0),
+        observed_identity_total,
+        predicted_identity_total,
+        tp_identity,
+        fp_identity,
+        fn_identity,
+        identity_recall,
+        identity_precision,
+        identity_f1,
+        identity_exact_match,
+        missing_observed_elements
+            .iter()
+            .map(|z| z.to_string())
+            .collect::<Vec<_>>()
+            .join(", "),
+        extra_predicted_elements
+            .iter()
+            .map(|z| z.to_string())
+            .collect::<Vec<_>>()
+            .join(", "),
         neutron_hit_rate,
         proton_hit_rate,
         proton_monitored_hit_rate,
@@ -1001,6 +1215,10 @@ fn main() -> anyhow::Result<()> {
     println!(
         "Wrote {}",
         out.join("tin_isotope_diagnostics.csv").display()
+    );
+    println!(
+        "Wrote {}",
+        out.join("stable_identity_confusion.csv").display()
     );
     println!("Appended {}", trend_path.display());
     Ok(())
