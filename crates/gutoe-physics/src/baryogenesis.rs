@@ -11,11 +11,19 @@ use crate::constants::{
     lambda_micro_finite_mode_rescale, ALPHA_LEADING_ORDER, DARK_TO_VISIBLE_COUNT_RATIO, LAMBDA_QG,
 };
 use gutoe_em::{
-    ckm_from_clifford, ckm_from_textures, cp_violation_witness, CKM_CP_J_MIN, CP_PHASE_TOL_DEG,
+    ckm_from_clifford, ckm_from_textures, cp_violation_witness, pmns_theta23_sq_alpha2_corrected,
+    pmns_theta23_sq_direct, CKM_CP_J_MIN, CP_PHASE_TOL_DEG, PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL,
 };
 
 /// Planck-era baryon-to-photon ratio target.
 pub const ETA_B_OBSERVED: f64 = 6.12e-10;
+
+fn env_f64(name: &str, default: f64) -> f64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(default)
+}
 
 /// Structural survival factor for departure from thermal equilibrium.
 ///
@@ -36,6 +44,24 @@ pub fn baryogenesis_structural_prefactor() -> f64 {
 /// Quantitative baryon-to-photon prediction from a supplied Jarlskog source.
 pub fn eta_baryon_from_jarlskog(jarlskog: f64) -> f64 {
     jarlskog * baryogenesis_structural_prefactor()
+}
+
+/// PMNS-linked leptogenesis scalar from the θ23 α² correction lane.
+///
+/// Uses shared flavor definitions:
+///   scalar = sin²θ23_direct - sin²θ23_corrected
+/// For structural defaults (`c=137/4`, `α=1/137`) this is `1/548`.
+pub fn leptogenesis_pmns_theta23_scalar(c_alpha2: f64) -> f64 {
+    pmns_theta23_sq_direct() - pmns_theta23_sq_alpha2_corrected(c_alpha2)
+}
+
+/// Multiplicative leptogenesis enhancement/suppression term from PMNS θ23.
+///
+/// `multiplier = 1 + gain * scalar`
+/// - `gain=0` recovers legacy baryogenesis lane exactly.
+/// - default `gain=1` adds the structural first-order PMNS correction.
+pub fn leptogenesis_multiplier(c_alpha2: f64, gain: f64) -> f64 {
+    1.0 + gain * leptogenesis_pmns_theta23_scalar(c_alpha2)
 }
 
 /// Quantitative baryon-to-photon prediction from Clifford CKM observables.
@@ -72,6 +98,10 @@ impl Default for BaryogenesisWindows {
 pub struct BaryogenesisScorecard {
     pub jarlskog_ckm_direct: f64,
     pub jarlskog_ckm_texture: f64,
+    pub pmns_theta23_alpha2_c: f64,
+    pub leptogenesis_pmns_gain: f64,
+    pub leptogenesis_pmns_scalar: f64,
+    pub leptogenesis_multiplier: f64,
     pub eta_predicted: f64,
     pub eta_observed: f64,
     pub eta_rel_error: f64,
@@ -109,9 +139,17 @@ pub fn nonequilibrium_structural() -> bool {
 pub fn evaluate_baryogenesis_gate(windows: BaryogenesisWindows) -> BaryogenesisScorecard {
     let ckm_direct = ckm_from_clifford();
     let ckm_texture = ckm_from_textures();
+    let pmns_theta23_alpha2_c = env_f64(
+        "GUTOE_PMNS_TH23_ALPHA2_C",
+        PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL,
+    );
+    let leptogenesis_pmns_gain = env_f64("GUTOE_LEPTOGENESIS_PMNS_GAIN", 1.0);
+    let leptogenesis_pmns_scalar = leptogenesis_pmns_theta23_scalar(pmns_theta23_alpha2_c);
+    let leptogenesis_multiplier =
+        leptogenesis_multiplier(pmns_theta23_alpha2_c, leptogenesis_pmns_gain);
     // GRAND-348 uses the texture chain as the quantitative source:
     // Cl(1,3) -> textures -> diagonalization -> CKM -> J -> η_B.
-    let eta_predicted = eta_baryon_from_jarlskog(ckm_texture.jarlskog);
+    let eta_predicted = eta_baryon_from_jarlskog(ckm_texture.jarlskog) * leptogenesis_multiplier;
     let eta_rel_error = (eta_predicted - ETA_B_OBSERVED).abs() / ETA_B_OBSERVED;
 
     let cp_violation_ok = cp_violation_witness(ckm_texture, CKM_CP_J_MIN, CP_PHASE_TOL_DEG).is_ok();
@@ -122,6 +160,10 @@ pub fn evaluate_baryogenesis_gate(windows: BaryogenesisWindows) -> BaryogenesisS
     BaryogenesisScorecard {
         jarlskog_ckm_direct: ckm_direct.jarlskog,
         jarlskog_ckm_texture: ckm_texture.jarlskog,
+        pmns_theta23_alpha2_c,
+        leptogenesis_pmns_gain,
+        leptogenesis_pmns_scalar,
+        leptogenesis_multiplier,
         eta_predicted,
         eta_observed: ETA_B_OBSERVED,
         eta_rel_error,
@@ -135,6 +177,7 @@ pub fn evaluate_baryogenesis_gate(windows: BaryogenesisWindows) -> BaryogenesisS
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gutoe_em::PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL;
 
     #[test]
     fn structural_prefactor_is_positive() {
@@ -147,6 +190,26 @@ mod tests {
         assert!(eta > 0.0);
         let eta_tex = eta_baryon_from_texture_ckm();
         assert!(eta_tex > 0.0);
+    }
+
+    #[test]
+    fn pmns_leptogenesis_scalar_matches_structural_lane() {
+        let scalar = leptogenesis_pmns_theta23_scalar(PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL);
+        let expected = 1.0 / 548.0;
+        assert!(
+            (scalar - expected).abs() < 1.0e-12,
+            "pmns theta23 scalar mismatch: got={scalar:.15e}, expected={expected:.15e}"
+        );
+    }
+
+    #[test]
+    fn default_leptogenesis_multiplier_is_structural_enhancement() {
+        let mul = leptogenesis_multiplier(PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL, 1.0);
+        let expected = 549.0 / 548.0;
+        assert!(
+            (mul - expected).abs() < 1.0e-12,
+            "leptogenesis multiplier mismatch: got={mul:.15e}, expected={expected:.15e}"
+        );
     }
 
     #[test]

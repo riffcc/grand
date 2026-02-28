@@ -33,6 +33,30 @@ fn main() {
         score.jarlskog_ckm_texture
     )
     .expect("write");
+    writeln!(
+        txt,
+        "pmns_theta23_alpha2_c = {:.12e}",
+        score.pmns_theta23_alpha2_c
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "leptogenesis_pmns_gain = {:.12e}",
+        score.leptogenesis_pmns_gain
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "leptogenesis_pmns_scalar = {:.12e}",
+        score.leptogenesis_pmns_scalar
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "leptogenesis_multiplier = {:.12e}",
+        score.leptogenesis_multiplier
+    )
+    .expect("write");
     writeln!(txt, "prefactor = {:.12e}", pref).expect("write");
     writeln!(txt, "nonequilibrium_survival = {:.12e}", f_neq).expect("write");
     writeln!(txt, "eta_predicted = {:.12e}", score.eta_predicted).expect("write");
@@ -55,9 +79,13 @@ fn main() {
     let mut json = File::create(&json_path).expect("create json");
     writeln!(
         json,
-        "{{\n  \"jarlskog_ckm_direct\": {:.12e},\n  \"jarlskog_ckm_texture\": {:.12e},\n  \"prefactor\": {:.12e},\n  \"nonequilibrium_survival\": {:.12e},\n  \"eta_predicted\": {:.12e},\n  \"eta_observed\": {:.12e},\n  \"eta_rel_error\": {:.12},\n  \"windows\": {{\"eta_rel_error_max\": {:.12}}},\n  \"cp_violation_ok\": {},\n  \"baryon_violation_channel_ok\": {},\n  \"nonequilibrium_ok\": {},\n  \"eta_window_ok\": {},\n  \"sakharov_ok\": {},\n  \"passes_all\": {}\n}}",
+        "{{\n  \"jarlskog_ckm_direct\": {:.12e},\n  \"jarlskog_ckm_texture\": {:.12e},\n  \"pmns_theta23_alpha2_c\": {:.12e},\n  \"leptogenesis_pmns_gain\": {:.12e},\n  \"leptogenesis_pmns_scalar\": {:.12e},\n  \"leptogenesis_multiplier\": {:.12e},\n  \"prefactor\": {:.12e},\n  \"nonequilibrium_survival\": {:.12e},\n  \"eta_predicted\": {:.12e},\n  \"eta_observed\": {:.12e},\n  \"eta_rel_error\": {:.12},\n  \"windows\": {{\"eta_rel_error_max\": {:.12}}},\n  \"cp_violation_ok\": {},\n  \"baryon_violation_channel_ok\": {},\n  \"nonequilibrium_ok\": {},\n  \"eta_window_ok\": {},\n  \"sakharov_ok\": {},\n  \"passes_all\": {}\n}}",
         score.jarlskog_ckm_direct,
         score.jarlskog_ckm_texture,
+        score.pmns_theta23_alpha2_c,
+        score.leptogenesis_pmns_gain,
+        score.leptogenesis_pmns_scalar,
+        score.leptogenesis_multiplier,
         pref,
         f_neq,
         score.eta_predicted,

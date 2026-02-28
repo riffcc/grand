@@ -17,11 +17,15 @@ fn main() {
 
     writeln!(
         json,
-        "{{\n  \"overall_pass\": {},\n  \"eta_rel_error_max\": {:.12},\n  \"score\": {{\"jarlskog_ckm_direct\": {:.12e}, \"jarlskog_ckm_texture\": {:.12e}, \"eta_predicted\": {:.12e}, \"eta_observed\": {:.12e}, \"eta_rel_error\": {:.12}, \"cp_violation_ok\": {}, \"baryon_violation_channel_ok\": {}, \"nonequilibrium_ok\": {}, \"eta_window_ok\": {}, \"sakharov_ok\": {}, \"passes_all\": {}}}\n}}",
+        "{{\n  \"overall_pass\": {},\n  \"eta_rel_error_max\": {:.12},\n  \"score\": {{\"jarlskog_ckm_direct\": {:.12e}, \"jarlskog_ckm_texture\": {:.12e}, \"pmns_theta23_alpha2_c\": {:.12e}, \"leptogenesis_pmns_gain\": {:.12e}, \"leptogenesis_pmns_scalar\": {:.12e}, \"leptogenesis_multiplier\": {:.12e}, \"eta_predicted\": {:.12e}, \"eta_observed\": {:.12e}, \"eta_rel_error\": {:.12}, \"cp_violation_ok\": {}, \"baryon_violation_channel_ok\": {}, \"nonequilibrium_ok\": {}, \"eta_window_ok\": {}, \"sakharov_ok\": {}, \"passes_all\": {}}}\n}}",
         score.passes_all(),
         windows.eta_rel_error_max,
         score.jarlskog_ckm_direct,
         score.jarlskog_ckm_texture,
+        score.pmns_theta23_alpha2_c,
+        score.leptogenesis_pmns_gain,
+        score.leptogenesis_pmns_scalar,
+        score.leptogenesis_multiplier,
         score.eta_predicted,
         score.eta_observed,
         score.eta_rel_error,
