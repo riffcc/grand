@@ -114,6 +114,40 @@ theorem mZ_over_mW_from_z3 :
     mZ_over_mW_sq_from_z3
   exact congrArg Real.sqrt (by exact_mod_cast hq)
 
+/-!
+### Minimal structural EW bridge at M_Z
+
+Freeze the clean bridge as:
+  sin²θ_W(M_Z) = 3/13 + α² * (d/2)
+with α = 1/137 and d = 16, giving the shift 8/137².
+-/
+
+/-- Structural EW shift at M_Z: α² * (d/2) with d=16 and α=1/137. -/
+def weinbergMZStructuralShiftQ : ℚ :=
+  (1 / (alphaInverse 4 : ℚ)) ^ 2 * ((2 ^ 4 : ℚ) / 2)
+
+/-- Closed form of the structural EW shift: 8/137². -/
+theorem weinberg_mz_structural_shift_eq :
+    weinbergMZStructuralShiftQ = 8 / (137 ^ 2 : ℚ) := by
+  unfold weinbergMZStructuralShiftQ
+  rw [alpha_inverse_d4]
+  norm_num
+
+/-- Minimal structural M_Z bridge value for sin²θ_W. -/
+def weinbergMZStructuralQ : ℚ := (3 / 13 : ℚ) + weinbergMZStructuralShiftQ
+
+/-- Closed form: sin²θ_W(M_Z) = 3/13 + 8/137². -/
+theorem weinberg_mz_structural_eq :
+    weinbergMZStructuralQ = (3 / 13 : ℚ) + 8 / (137 ^ 2 : ℚ) := by
+  unfold weinbergMZStructuralQ
+  rw [weinberg_mz_structural_shift_eq]
+
+/-- Rational window used by the runtime CI lane: 0.23119 < sin²θ_W(M_Z) < 0.23120. -/
+theorem weinberg_mz_structural_window :
+    (23119 : ℚ) / 100000 < weinbergMZStructuralQ ∧
+    weinbergMZStructuralQ < (23120 : ℚ) / 100000 := by
+  native_decide
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Wilson loop area law → confinement (logical chain)
 -- ══════════════════════════════════════════════════════════════════════════════

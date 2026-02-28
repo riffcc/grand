@@ -33,12 +33,16 @@ pub use fcnc::{
 };
 pub use flavor::{
     ckm_from_clifford, ckm_from_textures, cp_violation_witness, neutrino_dirac_majorana_prediction,
-    neutrino_hierarchy_prediction, neutrino_majorana_symmetry_residual, neutrino_texture_eigenvalues,
-    pmns_from_clifford, pmns_from_clifford_theta23_alpha2, pmns_from_textures,
-    pmns_theta23_sq_alpha2_corrected, pmns_theta23_sq_direct, residuals, within_envelope,
-    MixingEnvelope, MixingObservables, MixingResiduals, MixingTargets, CKM_CP_J_MIN,
-    CKM_PDG_ENVELOPE, CKM_TARGET, CP_PHASE_TOL_DEG, PMNS_CP_J_MIN, PMNS_PDG_ENVELOPE, PMNS_TARGET,
-    PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL,
+    neutrino_splitting_ratio_from_exponent, solve_neutrino_exponent_for_ratio,
+    neutrino_hierarchy_exponent_structural, neutrino_hierarchy_prediction,
+    neutrino_majorana_symmetry_residual, neutrino_texture_eigenvalues,
+    triangulate_ew_shift_for_target, triangulate_neutrino_from_splittings,
+    neutrino_absolute_masses_from_texture, pmns_from_clifford, pmns_from_clifford_theta23_alpha2,
+    pmns_from_textures, pmns_theta23_sq_alpha2_corrected, pmns_theta23_sq_direct, residuals,
+    within_envelope, EwShiftTriangulatedSolution, MixingEnvelope, MixingObservables,
+    MixingResiduals, MixingTargets, NeutrinoAbsoluteMasses, NeutrinoTriangulatedSolution,
+    CKM_CP_J_MIN, CKM_PDG_ENVELOPE, CKM_TARGET, CP_PHASE_TOL_DEG, PMNS_CP_J_MIN,
+    PMNS_PDG_ENVELOPE, PMNS_TARGET, PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL,
 };
 pub use holonomy::{
     class_angle_from_trace, closed_loop_holonomy, enumerate_triangles, sample_holonomy_diagnostics,

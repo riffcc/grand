@@ -5,10 +5,9 @@
 //! - texture mass-character lane is structurally Dirac
 //! - absolute tiny-mass transduction remains nonzero and below observational caps
 
-use gutoe_em::alpha::ALPHA_INVERSE_PHYSICAL;
 use gutoe_em::{
-    electron_mass_from_proton_anchor, neutrino_dirac_majorana_prediction, neutrino_hierarchy_prediction,
-    neutrino_majorana_symmetry_residual, neutrino_texture_eigenvalues,
+    neutrino_absolute_masses_from_texture, neutrino_dirac_majorana_prediction,
+    neutrino_hierarchy_prediction, neutrino_majorana_symmetry_residual, neutrino_texture_eigenvalues,
 };
 use std::fs::{self, File};
 use std::io::Write;
@@ -27,16 +26,14 @@ fn main() {
     let majorana_symmetry_residual = neutrino_majorana_symmetry_residual();
 
     // Absolute tiny-mass transduction lane (same as neutrino_tiny_mass_report).
-    let mut raw = m_tex.map(|x| x.abs());
-    raw.sort_by(|a, b| a.total_cmp(b));
-    let alpha = 1.0 / ALPHA_INVERSE_PHYSICAL;
-    let me_ev = electron_mass_from_proton_anchor() * 1.0e6;
-    let m_scale_ev = me_ev * alpha.powi(4) * (60.0 / 11.0);
-    let raw_max = raw[2].max(1.0e-18);
-    let m1_ev = m_scale_ev * (raw[0] / raw_max);
-    let m2_ev = m_scale_ev * (raw[1] / raw_max);
-    let m3_ev = m_scale_ev;
-    let sum_ev = m1_ev + m2_ev + m3_ev;
+    let abs = neutrino_absolute_masses_from_texture();
+    let alpha = abs.alpha_physical;
+    let me_ev = abs.electron_mass_anchor_ev;
+    let m_scale_ev = abs.mass_scale_ev;
+    let m1_ev = abs.m1_ev;
+    let m2_ev = abs.m2_ev;
+    let m3_ev = abs.m3_ev;
+    let sum_ev = abs.sum_ev;
 
     let dm21 = m_tex[1] - m_tex[0];
     let dm31 = m_tex[2] - m_tex[0];

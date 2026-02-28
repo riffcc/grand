@@ -3,8 +3,9 @@
 //! Uses texture eigenvalue ordering from Cl(1,3) and a structural suppression
 //! scale from the electron lane to produce absolute eV-scale masses.
 
-use gutoe_em::alpha::ALPHA_INVERSE_PHYSICAL;
-use gutoe_em::{electron_mass_from_proton_anchor, neutrino_hierarchy_prediction, neutrino_texture_eigenvalues};
+use gutoe_em::{
+    neutrino_absolute_masses_from_texture, neutrino_hierarchy_prediction,
+};
 use std::fs::{self, File};
 use std::io::Write;
 
@@ -13,26 +14,17 @@ fn main() {
         .unwrap_or_else(|_| "/tmp/bh_renders/neutrino_tiny_mass_report".to_string());
     let _ = fs::create_dir_all(&out_dir);
 
-    // Texture lane (dimensionless shape/eigen-ordering).
-    let mut raw = neutrino_texture_eigenvalues().map(|x| x.abs());
-    raw.sort_by(|a, b| a.total_cmp(b));
     let hierarchy = neutrino_hierarchy_prediction();
-
-    // Structural absolute scale:
-    // m_scale = m_e * α^4 * (60/11), using shared dark/visible geometric factor.
-    let alpha = 1.0 / ALPHA_INVERSE_PHYSICAL;
-    let me_ev = electron_mass_from_proton_anchor() * 1.0e6;
-    let m_scale_ev = me_ev * alpha.powi(4) * (60.0 / 11.0);
-
-    // Normalize to the largest texture eigenvalue, then apply structural scale.
-    let raw_max = raw[2];
-    let m1_ev = m_scale_ev * (raw[0] / raw_max);
-    let m2_ev = m_scale_ev * (raw[1] / raw_max);
-    let m3_ev = m_scale_ev;
-
-    let sum_ev = m1_ev + m2_ev + m3_ev;
-    let dm21_ev2 = m2_ev * m2_ev - m1_ev * m1_ev;
-    let dm31_ev2 = m3_ev * m3_ev - m1_ev * m1_ev;
+    let abs = neutrino_absolute_masses_from_texture();
+    let alpha = abs.alpha_physical;
+    let me_ev = abs.electron_mass_anchor_ev;
+    let m_scale_ev = abs.mass_scale_ev;
+    let m1_ev = abs.m1_ev;
+    let m2_ev = abs.m2_ev;
+    let m3_ev = abs.m3_ev;
+    let sum_ev = abs.sum_ev;
+    let dm21_ev2 = abs.dm21_ev2;
+    let dm31_ev2 = abs.dm31_ev2;
 
     let katrin_cap_ev = 0.8;
     let cosmology_sum_cap_ev = 0.12;
@@ -93,8 +85,7 @@ fn main() {
     println!("wrote {txt_path}");
     println!("wrote {json_path}");
     println!(
-        "neutrino tiny masses: overall_pass={} (m3={:.3e} eV, sum={:.3e} eV)",
-        overall_pass, m3_ev, sum_ev
+        "neutrino tiny masses: overall_pass={} (m3={:.3e} eV, sum={:.3e} eV, hierarchy_exp={:.3})",
+        overall_pass, m3_ev, sum_ev, abs.hierarchy_exponent
     );
 }
-

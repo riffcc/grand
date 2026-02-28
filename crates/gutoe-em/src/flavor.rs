@@ -12,7 +12,7 @@
 //   grade2_dim = 6
 //   complement_dim = clifford_dim - su2_dim = 13
 
-use crate::alpha::ALPHA_INVERSE_STRUCTURAL;
+use crate::alpha::{ALPHA_INVERSE_PHYSICAL, ALPHA_INVERSE_STRUCTURAL};
 use num_complex::Complex64;
 use serde::Serialize;
 use std::f64::consts::PI;
@@ -55,6 +55,55 @@ pub struct MixingResiduals {
     pub d_theta13_deg: f64,
     pub d_delta_deg: f64,
     pub d_jarlskog: f64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct NeutrinoAbsoluteMasses {
+    pub alpha_physical: f64,
+    pub electron_mass_anchor_ev: f64,
+    pub mass_scale_ev: f64,
+    pub hierarchy_exponent: f64,
+    pub m1_ev: f64,
+    pub m2_ev: f64,
+    pub m3_ev: f64,
+    pub sum_ev: f64,
+    pub dm21_ev2: f64,
+    pub dm32_ev2: f64,
+    pub dm31_ev2: f64,
+    pub splitting_ratio_32_over_21: f64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct NeutrinoTriangulatedSolution {
+    pub r1: f64,
+    pub r2: f64,
+    pub p_triangulated: f64,
+    pub ratio_target: f64,
+    pub ratio_fit: f64,
+    pub ratio_fit_rel_err: f64,
+    pub kappa_dm21: f64,
+    pub kappa_dm32: f64,
+    pub kappa_geo: f64,
+    pub kappa_consistency_rel: f64,
+    pub mass_scale_ev: f64,
+    pub m1_ev: f64,
+    pub m2_ev: f64,
+    pub m3_ev: f64,
+    pub dm21_ev2: f64,
+    pub dm32_ev2: f64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct EwShiftTriangulatedSolution {
+    pub alpha: f64,
+    pub sin2_structural: f64,
+    pub sin2_target_mz: f64,
+    pub shift_structural: f64,
+    pub coeff_structural: f64,
+    pub coeff_required: f64,
+    pub coeff_rel_delta: f64,
+    pub sin2_structural_mz: f64,
+    pub sin2_structural_abs_err: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -173,6 +222,155 @@ fn c_conj_transpose(m: &CMat3) -> CMat3 {
 
 fn clamp_unit(x: f64) -> f64 {
     x.clamp(-1.0, 1.0)
+}
+
+/// Oscillation splitting ratio model from texture eigenvalue ratios and exponent.
+///
+/// Let `r1 = |λ1|/|λ3|`, `r2 = |λ2|/|λ3|`, and `m_i ∝ r_i^p` (with `m3` anchor).
+/// Then:
+///   Δm²21 ∝ r2^(2p) - r1^(2p)
+///   Δm²32 ∝ 1 - r2^(2p)
+///   R = Δm²32 / Δm²21 = (1 - r2^(2p)) / (r2^(2p) - r1^(2p))
+pub fn neutrino_splitting_ratio_from_exponent(r1: f64, r2: f64, exponent: f64) -> f64 {
+    let x = r1.powf(2.0 * exponent);
+    let y = r2.powf(2.0 * exponent);
+    let denom = y - x;
+    if denom.abs() < 1.0e-30 {
+        return f64::INFINITY;
+    }
+    (1.0 - y) / denom
+}
+
+/// Solve exponent `p` from target splitting ratio using log-space minimization.
+///
+/// Returns `(p_best, ratio_fit, signed_rel_err)`.
+pub fn solve_neutrino_exponent_for_ratio(
+    target_ratio: f64,
+    r1: f64,
+    r2: f64,
+) -> (f64, f64, f64) {
+    let mut low = 0.05f64;
+    let mut high = 80.0f64;
+    let mut best_p = neutrino_hierarchy_exponent_structural();
+    let mut best_ratio = neutrino_splitting_ratio_from_exponent(r1, r2, best_p);
+    let mut best_err = if best_ratio.is_finite() && best_ratio > 0.0 {
+        (best_ratio.ln() - target_ratio.ln()).abs()
+    } else {
+        f64::INFINITY
+    };
+
+    for _ in 0..4 {
+        let steps = 40_000usize;
+        let span = high - low;
+        for i in 0..=steps {
+            let p = low + span * (i as f64 / steps as f64);
+            let ratio = neutrino_splitting_ratio_from_exponent(r1, r2, p);
+            if !(ratio.is_finite() && ratio > 0.0) {
+                continue;
+            }
+            let err = (ratio.ln() - target_ratio.ln()).abs();
+            if err < best_err {
+                best_err = err;
+                best_p = p;
+                best_ratio = ratio;
+            }
+        }
+
+        let window = (span / steps as f64) * 100.0;
+        low = (best_p - window).max(1.0e-6);
+        high = best_p + window;
+    }
+
+    let signed_rel_err = (best_ratio - target_ratio) / target_ratio;
+    (best_p, best_ratio, signed_rel_err)
+}
+
+/// Triangulate neutrino exponent + mass normalization from oscillation anchors.
+///
+/// This is a forced-parameter diagnostic lane; it does not claim zero-parameter closure.
+pub fn triangulate_neutrino_from_splittings(
+    dm21_target_ev2: f64,
+    dm32_target_ev2: f64,
+) -> NeutrinoTriangulatedSolution {
+    let mut raw = neutrino_texture_eigenvalues().map(|x| x.abs());
+    raw.sort_by(|a, b| a.total_cmp(b));
+    let raw_max = raw[2].max(1.0e-18);
+    let r1 = raw[0] / raw_max;
+    let r2 = raw[1] / raw_max;
+
+    let ratio_target = dm32_target_ev2 / dm21_target_ev2;
+    let (p_triangulated, ratio_fit, ratio_fit_rel_err) =
+        solve_neutrino_exponent_for_ratio(ratio_target, r1, r2);
+
+    let y1 = r1.powf(2.0 * p_triangulated);
+    let y2 = r2.powf(2.0 * p_triangulated);
+    let s21 = (y2 - y1).max(1.0e-30);
+    let s32 = (1.0 - y2).max(1.0e-30);
+
+    let alpha = 1.0 / ALPHA_INVERSE_PHYSICAL;
+    let electron_mass_anchor_ev = crate::weak::electron_mass_from_proton_anchor() * 1.0e6;
+    let alpha4 = alpha.powi(4);
+
+    let mass_scale_dm21 = (dm21_target_ev2 / s21).sqrt();
+    let mass_scale_dm32 = (dm32_target_ev2 / s32).sqrt();
+    let kappa_dm21 = mass_scale_dm21 / (electron_mass_anchor_ev * alpha4);
+    let kappa_dm32 = mass_scale_dm32 / (electron_mass_anchor_ev * alpha4);
+    let kappa_geo = (kappa_dm21 * kappa_dm32).sqrt();
+    let kappa_consistency_rel = if kappa_geo > 0.0 {
+        (kappa_dm32 - kappa_dm21) / kappa_geo
+    } else {
+        f64::INFINITY
+    };
+
+    let mass_scale_ev = electron_mass_anchor_ev * alpha4 * kappa_geo;
+    let m1_ev = mass_scale_ev * r1.powf(p_triangulated);
+    let m2_ev = mass_scale_ev * r2.powf(p_triangulated);
+    let m3_ev = mass_scale_ev;
+    let dm21_ev2 = m2_ev * m2_ev - m1_ev * m1_ev;
+    let dm32_ev2 = m3_ev * m3_ev - m2_ev * m2_ev;
+
+    NeutrinoTriangulatedSolution {
+        r1,
+        r2,
+        p_triangulated,
+        ratio_target,
+        ratio_fit,
+        ratio_fit_rel_err,
+        kappa_dm21,
+        kappa_dm32,
+        kappa_geo,
+        kappa_consistency_rel,
+        mass_scale_ev,
+        m1_ev,
+        m2_ev,
+        m3_ev,
+        dm21_ev2,
+        dm32_ev2,
+    }
+}
+
+/// Triangulate the EW M_Z bridge coefficient from observed `sin²θ_W(M_Z)`.
+pub fn triangulate_ew_shift_for_target(sin2_target_mz: f64) -> EwShiftTriangulatedSolution {
+    let alpha = 1.0 / ALPHA_INVERSE_STRUCTURAL;
+    let sin2_structural = crate::weak::sin2_weinberg();
+    let coeff_structural = CLIFFORD_DIM / 2.0; // d/2 = 8
+    let shift_structural = alpha * alpha * coeff_structural;
+    let sin2_structural_mz = sin2_structural + shift_structural;
+    let coeff_required = (sin2_target_mz - sin2_structural) / (alpha * alpha);
+    let coeff_rel_delta = (coeff_required - coeff_structural) / coeff_structural;
+    let sin2_structural_abs_err = (sin2_structural_mz - sin2_target_mz).abs();
+
+    EwShiftTriangulatedSolution {
+        alpha,
+        sin2_structural,
+        sin2_target_mz,
+        shift_structural,
+        coeff_structural,
+        coeff_required,
+        coeff_rel_delta,
+        sin2_structural_mz,
+        sin2_structural_abs_err,
+    }
 }
 
 fn angles_from_unitary(v: &CMat3) -> (f64, f64, f64) {
@@ -407,6 +605,56 @@ pub fn neutrino_texture_eigenvalues() -> [f64; 3] {
     let (_ml, mnu) = pmns_mass_textures_from_clifford();
     let (evals, _un) = jacobi_eigen_hermitian(mnu);
     evals
+}
+
+/// Structural hierarchy exponent from Cl(1,3) counts.
+///
+/// `p = α^{-1} / (|grade₁| + |grade₂|) = 137 / 10`.
+pub fn neutrino_hierarchy_exponent_structural() -> f64 {
+    ALPHA_INVERSE_STRUCTURAL / (GRADE1_DIM + GRADE2_DIM)
+}
+
+/// Absolute neutrino masses (eV) from texture lane + structural suppression.
+///
+/// Mass scale:
+/// `m_scale = m_e * α^4 * (60/11)`.
+///
+/// Hierarchy mapping:
+/// `m_i = m_scale * (|λ_i|/|λ_max|)^p`, `p = 137/10`, with `m_3 = m_scale`.
+pub fn neutrino_absolute_masses_from_texture() -> NeutrinoAbsoluteMasses {
+    let mut raw = neutrino_texture_eigenvalues().map(|x| x.abs());
+    raw.sort_by(|a, b| a.total_cmp(b));
+
+    let alpha_physical = 1.0 / ALPHA_INVERSE_PHYSICAL;
+    let electron_mass_anchor_ev = crate::weak::electron_mass_from_proton_anchor() * 1.0e6;
+    let mass_scale_ev = electron_mass_anchor_ev * alpha_physical.powi(4) * (60.0 / 11.0);
+    let hierarchy_exponent = neutrino_hierarchy_exponent_structural();
+    let raw_max = raw[2].max(1.0e-18);
+
+    let m1_ev = mass_scale_ev * (raw[0] / raw_max).powf(hierarchy_exponent);
+    let m2_ev = mass_scale_ev * (raw[1] / raw_max).powf(hierarchy_exponent);
+    let m3_ev = mass_scale_ev;
+    let sum_ev = m1_ev + m2_ev + m3_ev;
+
+    let dm21_ev2 = m2_ev * m2_ev - m1_ev * m1_ev;
+    let dm32_ev2 = m3_ev * m3_ev - m2_ev * m2_ev;
+    let dm31_ev2 = m3_ev * m3_ev - m1_ev * m1_ev;
+    let splitting_ratio_32_over_21 = dm32_ev2.abs() / dm21_ev2.abs().max(1.0e-30);
+
+    NeutrinoAbsoluteMasses {
+        alpha_physical,
+        electron_mass_anchor_ev,
+        mass_scale_ev,
+        hierarchy_exponent,
+        m1_ev,
+        m2_ev,
+        m3_ev,
+        sum_ev,
+        dm21_ev2,
+        dm32_ev2,
+        dm31_ev2,
+        splitting_ratio_32_over_21,
+    }
 }
 
 /// Hierarchy prediction from the texture eigenvalue ordering.
@@ -794,5 +1042,62 @@ mod tests {
             "majorana residual too small for Dirac lane claim: {resid:.12e}"
         );
         assert_eq!(neutrino_dirac_majorana_prediction(), "dirac");
+    }
+
+    #[test]
+    fn neutrino_hierarchy_exponent_is_structural_137_over_10() {
+        let p = neutrino_hierarchy_exponent_structural();
+        assert!((p - 13.7).abs() < 1e-12, "unexpected hierarchy exponent: {p:.12}");
+    }
+
+    #[test]
+    fn neutrino_structural_splitting_ratio_is_close_to_oscillation_target() {
+        let abs = neutrino_absolute_masses_from_texture();
+        let target = 2.453e-3 / 7.53e-5;
+        let rel_err = (abs.splitting_ratio_32_over_21 - target) / target;
+        assert!(
+            rel_err.abs() < 0.05,
+            "structural splitting-ratio drift too large: got {:.9}, target {:.9}, rel_err {:.6}",
+            abs.splitting_ratio_32_over_21,
+            target,
+            rel_err
+        );
+    }
+
+    #[test]
+    fn triangulated_exponent_solves_ratio_to_machine_precision() {
+        let tri = triangulate_neutrino_from_splittings(7.53e-5, 2.453e-3);
+        assert!(
+            tri.ratio_fit_rel_err.abs() < 1e-9,
+            "triangulated ratio not closed: fit={} target={} rel_err={:.3e}",
+            tri.ratio_fit,
+            tri.ratio_target,
+            tri.ratio_fit_rel_err
+        );
+    }
+
+    #[test]
+    fn triangulated_mass_scale_reconstructs_absolute_splittings() {
+        let tri = triangulate_neutrino_from_splittings(7.53e-5, 2.453e-3);
+        let dm21_rel = (tri.dm21_ev2 - 7.53e-5) / 7.53e-5;
+        let dm32_rel = (tri.dm32_ev2 - 2.453e-3) / 2.453e-3;
+        assert!(
+            dm21_rel.abs() < 1e-9 && dm32_rel.abs() < 1e-9,
+            "triangulated absolute closure drift: dm21_rel={:.3e} dm32_rel={:.3e}",
+            dm21_rel,
+            dm32_rel
+        );
+    }
+
+    #[test]
+    fn ew_shift_triangulation_exposes_required_uplift_over_structural() {
+        let ew = triangulate_ew_shift_for_target(0.23122);
+        assert!(ew.coeff_required > ew.coeff_structural);
+        assert!(ew.coeff_rel_delta > 0.0);
+        assert!(
+            (ew.coeff_required - 8.460487692308).abs() < 1e-9,
+            "unexpected EW required coeff: {:.12}",
+            ew.coeff_required
+        );
     }
 }
