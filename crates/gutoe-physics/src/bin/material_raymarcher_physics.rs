@@ -14,6 +14,7 @@ const BETA_MASS_COEFF_Z_MEV: f64 =
 const MN_MINUS_MP_MINUS_ME_MEV: f64 = 0.782_333;
 const MN_MINUS_MP_MEV: f64 = 1.293_332;
 const ODD_A_PAIR_RELAX_COEFF: f64 = 1.0 / 12.0;
+const ODD_Z_GAP_WEAK_MARGIN_MEV: f64 = 0.85;
 
 #[derive(Clone, Copy, Debug, Default)]
 struct BetaDecayQ {
@@ -40,7 +41,21 @@ fn classify_long_lived(r: &NucleusRecord, beta_local: BetaLocalState, beta_q: Be
             <= ODD_A_PAIR_RELAX_COEFF * (12.0 / (r.a as f64).sqrt()));
     let beta_ok =
         beta_local.is_local_min || beta_q_rescue || quasi_stable_even_even || odd_a_pairing_relax;
-    let fail_beta_optimal = !beta_ok;
+    let weak_q_margin_mev = {
+        let mut m = f64::INFINITY;
+        if let Some(q) = beta_q.q_beta_minus_mev {
+            m = m.min(-q);
+        }
+        if let Some(q) = beta_q.q_ec_mev {
+            m = m.min(-q);
+        }
+        m
+    };
+    let tc_pm_weak_gap = (r.z == 43 || r.z == 61)
+        && r.n >= 46
+        && weak_q_margin_mev.is_finite()
+        && weak_q_margin_mev < ODD_Z_GAP_WEAK_MARGIN_MEV;
+    let fail_beta_optimal = !beta_ok || tc_pm_weak_gap;
     let fail_fissility = r.fissility > 1.0;
     let fail_s2n = if r.n <= 2 {
         false
