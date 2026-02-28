@@ -4,7 +4,7 @@
  * AGPL-3.0-or-later
  *
  * First formal transfer step beyond emissivity-only rendering:
- *   - covariant redshift scaling for emissivity/absorption proxies
+ *   - covariant redshift scaling for emissivity/absorption coefficients
  *   - single-step radiative transfer map
  *   - positivity and interval bounds (no vacuous theorems)
  *
@@ -18,13 +18,15 @@ namespace Gutoe.SynchrotronTransfer
 
 open Real
 
-/-- Covariant emissivity proxy: `j_obs = j_loc * g^3`, with `g = ν_obs/ν_em`. -/
+/-- Covariant emissivity scaling from the GR invariant `j_ν / ν^2`:
+`j_obs = j_em * g^2`, with `g = ν_obs/ν_em`. -/
 noncomputable def covariantEmissivity (jLocal g : ℝ) : ℝ :=
-  jLocal * g ^ 3
+  jLocal * g ^ 2
 
-/-- Covariant absorption proxy: `α_obs = α_loc * g`. -/
+/-- Covariant absorption scaling from the GR invariant `α_ν * ν`:
+`α_obs = α_em / g`. -/
 noncomputable def covariantAbsorption (alphaLocal g : ℝ) : ℝ :=
-  alphaLocal * g
+  alphaLocal / g
 
 /-- One-zone transfer update:
 `I_out = I_in * exp(-τ) + S * (1 - exp(-τ))` where `S = j/α` (source function). -/
@@ -52,14 +54,14 @@ theorem covariantEmissivity_nonneg {jLocal g : ℝ}
     (hj : 0 ≤ jLocal) (hg : 0 ≤ g) :
     0 ≤ covariantEmissivity jLocal g := by
   unfold covariantEmissivity
-  exact mul_nonneg hj (pow_nonneg hg 3)
+  exact mul_nonneg hj (pow_nonneg hg 2)
 
 /-- Covariant absorption stays nonnegative when local absorption and redshift are nonnegative. -/
 theorem covariantAbsorption_nonneg {alphaLocal g : ℝ}
-    (ha : 0 ≤ alphaLocal) (hg : 0 ≤ g) :
+    (ha : 0 ≤ alphaLocal) (hg : 0 < g) :
     0 ≤ covariantAbsorption alphaLocal g := by
   unfold covariantAbsorption
-  exact mul_nonneg ha hg
+  exact div_nonneg ha (le_of_lt hg)
 
 /-- Transfer step preserves nonnegativity for nonnegative inputs and optical depth. -/
 theorem transferStep_nonneg {iIn source tau : ℝ}
@@ -108,4 +110,3 @@ theorem transferStep_in_interval {iIn source tau : ℝ}
   exact ⟨transferStep_ge_input hIS htau, transferStep_le_source hIS htau⟩
 
 end Gutoe.SynchrotronTransfer
-
