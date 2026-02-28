@@ -17,3 +17,13 @@ thiserror.workspace = true
 anyhow = "1"
 serde_json = "1"
 image = { version = "0.25", default-features = false, features = ["png"] }
+memmap2 = "0.9"
+rusqlite = { version = "0.31", features = ["bundled"] }
+blake3 = "1"
+ratatui = "0.29"
+crossterm = "0.28"
+wgpu = "22"
+winit = "0.30"
+bytemuck = { version = "1", features = ["derive"] }
+pollster = "0.3"
+env_logger = "0.11"
