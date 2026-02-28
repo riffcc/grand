@@ -7,8 +7,9 @@ use gutoe_physics::cmb_class::{
 };
 use gutoe_physics::bbn::eta10_from_baryogenesis;
 use gutoe_physics::cmb_reionization::derive_tau_reio;
-use gutoe_physics::constants::{lambda_cosmological_full_candidate, C};
+use gutoe_physics::constants::{lambda_cosmological_full_candidate, ALPHA_LEADING_ORDER, C};
 use gutoe_physics::dark_matter_falsification::OMEGA_BARYON_OBS;
+use gutoe_physics::dynamics_map::StandardModelDynamicsMap;
 use gutoe_physics::inflation::{inflation_hubble_ratio_structural, scalar_amplitude};
 use gutoe_physics::microphysics::MicrophysicsAssumptions;
 use gutoe_physics::{evaluate_bbn_gate, evaluate_inflation_gate, BbnWindows, InflationWindows};
@@ -21,6 +22,16 @@ const SIGMA8_TARGET_PLANCK: f64 = 0.811;
 const AS_PLANCK_REF: f64 = 2.10e-9;
 const DELTA_STRUCT: f64 = 2.5;
 const C_INF_STRUCT: f64 = 1.0 + 1.0 / 66.0;
+
+fn env_enabled(var: &str, default: bool) -> bool {
+    match std::env::var(var) {
+        Ok(v) => {
+            let s = v.trim().to_ascii_lowercase();
+            !matches!(s.as_str(), "0" | "false" | "off" | "no")
+        }
+        Err(_) => default,
+    }
+}
 
 fn h0_from_lambda_and_omega_lambda(lambda: f64, omega_lambda: f64) -> f64 {
     let meter_per_mpc = 3.085_677_581_491_367e22;
@@ -226,7 +237,18 @@ fn main() {
     let _ = fs::create_dir_all(&out);
 
     let base_inputs = derived_inputs(0.054);
-    let tau = derive_tau(base_inputs).unwrap_or(0.054);
+    let tau_base = derive_tau(base_inputs).unwrap_or(0.054);
+    let sm = StandardModelDynamicsMap::from_clifford_z3();
+    let sin2_mz_coupled = sm.sin2_theta_w_at_mz();
+    let sin2_mz_legacy =
+        (3.0 / 13.0) + ALPHA_LEADING_ORDER.powi(2) * (sm.clifford_dim as f64 / 2.0);
+    let enable_ew_coupling = env_enabled("GUTOE_EW_CMB_COUPLING", true);
+    let ew_cmb_coupling = if enable_ew_coupling {
+        sin2_mz_coupled / sin2_mz_legacy
+    } else {
+        1.0
+    };
+    let tau = tau_base * ew_cmb_coupling;
     let derived = derived_inputs(tau);
     let om0 = (derived.omega_b + derived.omega_cdm) / (derived.h * derived.h);
 
@@ -270,7 +292,7 @@ fn main() {
     let mut f = File::create(&report).expect("create report");
     writeln!(
         f,
-        "{{\n  \"inputs\": {{\"class_bin\": \"{}\", \"h\": {:.12}, \"omega_b\": {:.12}, \"omega_cdm\": {:.12}, \"omega_m0\": {:.12}, \"n_s\": {:.12}, \"A_s_derived\": {:.12e}, \"tau_reio\": {:.12}}},\n  \"derived\": {{\"chi2\": {:.12}, \"reduced_chi2\": {:.12}, \"sigma8\": {:.12}, \"S8\": {:.12}, \"cl_path\": \"{}\", \"pk_path\": \"{}\"}},\n  \"decomposition\": {{\"sigma8_target_planck\": {:.12}, \"A_s_planck_ref\": {:.12e}, \"sigma8_at_A_s_planck_ref\": {:.12}, \"A_s_for_sigma8_target_fixed_shape\": {:.12e}, \"sigma8_target_check\": {:.12}, \"normalization_piece_sigma8\": {:.12}, \"shape_piece_sigma8\": {:.12}}}\n}}",
+        "{{\n  \"inputs\": {{\"class_bin\": \"{}\", \"h\": {:.12}, \"omega_b\": {:.12}, \"omega_cdm\": {:.12}, \"omega_m0\": {:.12}, \"n_s\": {:.12}, \"A_s_derived\": {:.12e}, \"tau_reio\": {:.12}, \"tau_reio_base\": {:.12}, \"ew_cmb_coupling\": {:.12}, \"sin2_theta_w_mz_coupled\": {:.12}, \"sin2_theta_w_mz_legacy\": {:.12}}},\n  \"derived\": {{\"chi2\": {:.12}, \"reduced_chi2\": {:.12}, \"sigma8\": {:.12}, \"S8\": {:.12}, \"cl_path\": \"{}\", \"pk_path\": \"{}\"}},\n  \"decomposition\": {{\"sigma8_target_planck\": {:.12}, \"A_s_planck_ref\": {:.12e}, \"sigma8_at_A_s_planck_ref\": {:.12}, \"A_s_for_sigma8_target_fixed_shape\": {:.12e}, \"sigma8_target_check\": {:.12}, \"normalization_piece_sigma8\": {:.12}, \"shape_piece_sigma8\": {:.12}}}\n}}",
         class_bin,
         derived.h,
         derived.omega_b,
@@ -279,6 +301,10 @@ fn main() {
         derived.n_s,
         derived.a_s,
         derived.tau_reio,
+        tau_base,
+        ew_cmb_coupling,
+        sin2_mz_coupled,
+        sin2_mz_legacy,
         chi2,
         red,
         sigma8,

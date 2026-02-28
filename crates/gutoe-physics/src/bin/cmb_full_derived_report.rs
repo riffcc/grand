@@ -8,6 +8,7 @@ use gutoe_physics::constants::{
     lambda_cosmological_full_candidate, ALPHA_LEADING_ORDER, C, LAMBDA_QG, PLANCK_MASS,
 };
 use gutoe_physics::dark_matter_falsification::OMEGA_BARYON_OBS;
+use gutoe_physics::dynamics_map::StandardModelDynamicsMap;
 use gutoe_physics::inflation::{
     evaluate_inflation_gate, inflation_hubble_ratio_structural, scalar_amplitude, InflationWindows,
 };
@@ -152,6 +153,16 @@ fn fit_channel(pred: &[ClassTtPoint], binned: &[PlanckTtPoint], full: &[PlanckTt
     })
 }
 
+fn env_enabled(var: &str, default: bool) -> bool {
+    match std::env::var(var) {
+        Ok(v) => {
+            let s = v.trim().to_ascii_lowercase();
+            !matches!(s.as_str(), "0" | "false" | "off" | "no")
+        }
+        Err(_) => default,
+    }
+}
+
 fn electron_mass_pred_flagged_mev() -> f64 {
     let planck_mev = PLANCK_MASS * KG_TO_MEV;
     let ratio = (60.0 - DELTA_STRUCT) / 11.0; // corrected 115/22
@@ -162,7 +173,8 @@ fn electron_mass_pred_flagged_mev() -> f64 {
         * LAMBDA_QG.powi(-3)
 }
 
-fn build_full_inputs() -> Result<(ClassRunInputs, f64, f64, f64, f64, String, f64), String> {
+fn build_full_inputs() -> Result<(ClassRunInputs, f64, f64, f64, f64, String, f64, f64, f64), String>
+{
     let infl = evaluate_inflation_gate(InflationWindows::default());
     let bbn = evaluate_bbn_gate(BbnWindows::default());
 
@@ -200,6 +212,17 @@ fn build_full_inputs() -> Result<(ClassRunInputs, f64, f64, f64, f64, String, f6
         eta10: bbn.eta10,
     };
     let reion = derive_tau_reio(micro, eta10_from_baryogenesis())?;
+    let sm = StandardModelDynamicsMap::from_clifford_z3();
+    let sin2_mz_coupled = sm.sin2_theta_w_at_mz();
+    let sin2_mz_legacy = (3.0 / 13.0) + ALPHA_LEADING_ORDER.powi(2) * (sm.clifford_dim as f64 / 2.0);
+    let enable_ew_coupling = env_enabled("GUTOE_EW_CMB_COUPLING", true);
+    // Structural coupling from the coupled EW bridge into reionization optics.
+    let ew_cmb_coupling = if enable_ew_coupling {
+        sin2_mz_coupled / sin2_mz_legacy
+    } else {
+        1.0
+    };
+    let tau_reio_coupled = reion.tau_reio * ew_cmb_coupling;
 
     Ok((
         ClassRunInputs {
@@ -210,14 +233,16 @@ fn build_full_inputs() -> Result<(ClassRunInputs, f64, f64, f64, f64, String, f6
             omega_lambda: omega_lambda0,
             n_s: infl.n_s,
             a_s: a_s_corr,
-            tau_reio: reion.tau_reio,
+            tau_reio: tau_reio_coupled,
         },
         ratio,
         a_s_corr,
-        reion.tau_reio,
+        tau_reio_coupled,
         reion.z_reion_structural,
         hook,
         hook_scale,
+        ew_cmb_coupling,
+        sin2_mz_coupled,
     ))
 }
 
@@ -266,7 +291,7 @@ fn main() {
     .filter(|p| p.ell >= 2 && p.ell <= 2_500)
     .collect();
 
-    let (inputs, ratio, a_s_corr, tau, z_reion, hook, hook_scale) =
+    let (inputs, ratio, a_s_corr, tau, z_reion, hook, hook_scale, ew_cmb_coupling, sin2_mz_coupled) =
         build_full_inputs().expect("build inputs");
 
     let stamp = SystemTime::now()
@@ -316,7 +341,7 @@ fn main() {
     let mut json = File::create(&json_path).expect("create json");
     writeln!(
         json,
-        "{{\n  \"inputs\": {{\"delta\": {:.12}, \"c_inf\": {:.12}, \"ratio_corrected\": {:.12}, \"h\": {:.12}, \"omega_b\": {:.12}, \"omega_cdm\": {:.12}, \"n_s\": {:.12}, \"A_s\": {:.12e}, \"tau_reio\": {:.12}, \"z_reion_structural\": {:.12}, \"electron_scale_hook\": \"{}\", \"electron_hook_scale\": {:.12}}},\n  \"tt\": {{\"full_red\": {:.12}}},\n  \"te\": {{\"full_red\": {:.12}}},\n  \"ee\": {{\"full_red\": {:.12}}},\n  \"sigma8\": {{\"value\": {:.12}}}\n}}",
+        "{{\n  \"inputs\": {{\"delta\": {:.12}, \"c_inf\": {:.12}, \"ratio_corrected\": {:.12}, \"h\": {:.12}, \"omega_b\": {:.12}, \"omega_cdm\": {:.12}, \"n_s\": {:.12}, \"A_s\": {:.12e}, \"tau_reio\": {:.12}, \"z_reion_structural\": {:.12}, \"electron_scale_hook\": \"{}\", \"electron_hook_scale\": {:.12}, \"ew_cmb_coupling\": {:.12}, \"sin2_theta_w_mz_coupled\": {:.12}}},\n  \"tt\": {{\"full_red\": {:.12}}},\n  \"te\": {{\"full_red\": {:.12}}},\n  \"ee\": {{\"full_red\": {:.12}}},\n  \"sigma8\": {{\"value\": {:.12}}}\n}}",
         DELTA_STRUCT,
         C_INF_STRUCT,
         ratio,
@@ -329,6 +354,8 @@ fn main() {
         z_reion,
         hook,
         hook_scale,
+        ew_cmb_coupling,
+        sin2_mz_coupled,
         base_tt.full_red,
         base_te.full_red,
         base_ee.full_red,
