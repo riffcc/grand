@@ -26,8 +26,11 @@
 //! - Dispersion: ω² = v² k² - λ_QG l_P² k⁴
 
 pub mod abiogenesis;
+pub mod antibiotic_resistance;
 pub mod baryogenesis;
 pub mod bbn;
+pub mod cardiovascular_binding;
+pub mod cannabinoid_panel;
 pub mod chemical_thermo;
 pub mod chiral_symmetry_breaking;
 pub mod cmb_class;
@@ -52,6 +55,10 @@ pub mod lithium7_stellar_depletion;
 pub mod mass_gap;
 pub mod microphysics;
 pub mod multi_zone;
+pub mod neuro_thc;
+pub mod ms_autoimmunity;
+pub mod ms_boundary_shift;
+pub mod ms_cyclosporine_pk;
 pub mod phage_host_matching;
 pub mod nuclear_chart;
 pub mod nuclear_first_principles;
@@ -67,8 +74,11 @@ pub mod uncertainty;
 pub mod universe;
 
 pub use abiogenesis::*;
+pub use antibiotic_resistance::*;
 pub use baryogenesis::*;
 pub use bbn::*;
+pub use cardiovascular_binding::*;
+pub use cannabinoid_panel::*;
 pub use chemical_thermo::*;
 pub use chiral_symmetry_breaking::*;
 pub use cmb_class::*;
@@ -93,6 +103,10 @@ pub use lithium7_stellar_depletion::*;
 pub use mass_gap::*;
 pub use microphysics::*;
 pub use multi_zone::*;
+pub use neuro_thc::*;
+pub use ms_autoimmunity::*;
+pub use ms_boundary_shift::*;
+pub use ms_cyclosporine_pk::*;
 pub use phage_host_matching::*;
 pub use nuclear_chart::*;
 pub use nuclear_first_principles::*;

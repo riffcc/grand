@@ -195,6 +195,62 @@ fn main() {
         eprintln!("global_gate: entropy_progression_ci_gate failed: {e}");
         std::process::exit(2);
     }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "cardiovascular_binding_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: cardiovascular_binding_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "ms_localized_dual_compartment_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: ms_localized_dual_compartment_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "antibiotic_resistance_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: antibiotic_resistance_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "phage_host_matching_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: phage_host_matching_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
 
     run_or_exit(
         "baryogenesis_report[gain=0]",
@@ -291,6 +347,12 @@ fn main() {
         read_json("/tmp/bh_renders/abiogenesis_ci_gate.json").expect("abiogenesis json");
     let entropy_progression = read_json("/tmp/bh_renders/entropy_progression_ci_gate.json")
         .expect("entropy progression json");
+    let ms_localized = read_json("/tmp/bh_renders/ms_localized_dual_compartment_ci_gate.json")
+        .expect("ms localized dual-compartment gate json");
+    let antibiotic_resistance = read_json("/tmp/bh_renders/antibiotic_resistance_ci_gate.json")
+        .expect("antibiotic resistance gate json");
+    let phage_host_matching = read_json("/tmp/bh_renders/phage_host_matching_ci_gate.json")
+        .expect("phage host matching gate json");
     let sigma = read_json("/tmp/bh_renders/sigma8_decomposition/sigma8_decomposition_report.json")
         .expect("sigma json");
 
@@ -378,6 +440,50 @@ fn main() {
         v_f64(&entropy_progression, &["summary", "local_maxima_count"]).unwrap();
     let entropy_progression_minima =
         v_f64(&entropy_progression, &["summary", "local_minima_count"]).unwrap();
+    let ms_localized_pass = v_bool(&ms_localized, &["overall_pass"]).unwrap();
+    let ms_localized_efficacy_pass = v_bool(&ms_localized, &["gate", "efficacy_pass"]).unwrap();
+    let ms_localized_safety_pass = v_bool(&ms_localized, &["gate", "safety_pass"]).unwrap();
+    let ms_localized_arr_reduction_2y =
+        v_f64(&ms_localized, &["score", "arr_reduction_2y"]).unwrap();
+    let ms_localized_lesion_reduction_10y =
+        v_f64(&ms_localized, &["score", "lesion_reduction_10y"]).unwrap();
+    let ms_localized_prob_above_renal_high =
+        v_f64(&ms_localized, &["score", "prob_above_renal_high"]).unwrap();
+    let ms_localized_prob_in_target_zone =
+        v_f64(&ms_localized, &["score", "prob_in_target_zone"]).unwrap();
+    let ms_localized_localization_factor =
+        v_f64(&ms_localized, &["controls", "localization_factor"]).unwrap();
+    let ms_localized_transduction_efficiency =
+        v_f64(&ms_localized, &["controls", "transduction_efficiency"]).unwrap();
+    let antibiotic_resistance_pass = v_bool(&antibiotic_resistance, &["overall_pass"]).unwrap();
+    let antibiotic_resistance_pair_count =
+        v_f64(&antibiotic_resistance, &["summary", "pair_count"]).unwrap();
+    let antibiotic_resistance_mean_abs_log10_error = v_f64(
+        &antibiotic_resistance,
+        &["summary", "mean_abs_log10_error_pred_vs_anchor"],
+    )
+    .unwrap();
+    let antibiotic_resistance_ndm_occ_1um = v_f64(
+        &antibiotic_resistance,
+        &["summary", "ndm_max_predicted_occupancy_at_1uM"],
+    )
+    .unwrap();
+    let antibiotic_resistance_tem_winner =
+        v_str(&antibiotic_resistance, &["summary", "tem_predicted_winner"]).unwrap();
+    let antibiotic_resistance_kpc_winner =
+        v_str(&antibiotic_resistance, &["summary", "kpc_predicted_winner"]).unwrap();
+    let phage_host_matching_pass = v_bool(&phage_host_matching, &["overall_pass"]).unwrap();
+    let phage_host_matching_pair_count =
+        v_f64(&phage_host_matching, &["summary", "pair_count"]).unwrap();
+    let phage_host_matching_mean_best_lysis =
+        v_f64(&phage_host_matching, &["summary", "mean_best_lysis_score"]).unwrap();
+    let phage_host_matching_probe_delta = v_f64(
+        &phage_host_matching,
+        &["summary", "resistance_independence_probe_abs_delta"],
+    )
+    .unwrap();
+    let phage_host_matching_ndm_best =
+        v_str(&phage_host_matching, &["summary", "ndm_best_phage"]).unwrap();
 
     let cmb_pass = tt <= 1.30 && te <= 1.20 && ee <= 1.10;
 
@@ -396,6 +502,9 @@ fn main() {
         && degeneracy_pass
         && abiogenesis_pass
         && entropy_progression_pass
+        && ms_localized_pass
+        && antibiotic_resistance_pass
+        && phage_host_matching_pass
         && cmb_pass
         && sigma8_pass;
 
@@ -524,6 +633,111 @@ fn main() {
         entropy_progression_pass
     )
     .ok();
+    writeln!(
+        txt,
+        "ms_localized_localization_factor = {:.6}",
+        ms_localized_localization_factor
+    )
+    .ok();
+    writeln!(
+        txt,
+        "ms_localized_transduction_efficiency = {:.6}",
+        ms_localized_transduction_efficiency
+    )
+    .ok();
+    writeln!(
+        txt,
+        "ms_localized_arr_reduction_2y = {:.12}",
+        ms_localized_arr_reduction_2y
+    )
+    .ok();
+    writeln!(
+        txt,
+        "ms_localized_lesion_reduction_10y = {:.12}",
+        ms_localized_lesion_reduction_10y
+    )
+    .ok();
+    writeln!(
+        txt,
+        "ms_localized_prob_above_renal_high = {:.12e}",
+        ms_localized_prob_above_renal_high
+    )
+    .ok();
+    writeln!(
+        txt,
+        "ms_localized_prob_in_target_zone = {:.12}",
+        ms_localized_prob_in_target_zone
+    )
+    .ok();
+    writeln!(
+        txt,
+        "ms_localized_efficacy_pass = {}",
+        ms_localized_efficacy_pass
+    )
+    .ok();
+    writeln!(txt, "ms_localized_safety_pass = {}", ms_localized_safety_pass).ok();
+    writeln!(txt, "ms_localized_pass = {}", ms_localized_pass).ok();
+    writeln!(
+        txt,
+        "antibiotic_resistance_pair_count = {:.0}",
+        antibiotic_resistance_pair_count
+    )
+    .ok();
+    writeln!(
+        txt,
+        "antibiotic_resistance_mean_abs_log10_error = {:.12}",
+        antibiotic_resistance_mean_abs_log10_error
+    )
+    .ok();
+    writeln!(
+        txt,
+        "antibiotic_resistance_ndm_max_occ_1uM = {:.12}",
+        antibiotic_resistance_ndm_occ_1um
+    )
+    .ok();
+    writeln!(
+        txt,
+        "antibiotic_resistance_tem_predicted_winner = {}",
+        antibiotic_resistance_tem_winner
+    )
+    .ok();
+    writeln!(
+        txt,
+        "antibiotic_resistance_kpc_predicted_winner = {}",
+        antibiotic_resistance_kpc_winner
+    )
+    .ok();
+    writeln!(
+        txt,
+        "antibiotic_resistance_pass = {}",
+        antibiotic_resistance_pass
+    )
+    .ok();
+    writeln!(
+        txt,
+        "phage_host_matching_pair_count = {:.0}",
+        phage_host_matching_pair_count
+    )
+    .ok();
+    writeln!(
+        txt,
+        "phage_host_matching_mean_best_lysis_score = {:.12}",
+        phage_host_matching_mean_best_lysis
+    )
+    .ok();
+    writeln!(
+        txt,
+        "phage_host_matching_probe_abs_delta = {:.12e}",
+        phage_host_matching_probe_delta
+    )
+    .ok();
+    writeln!(
+        txt,
+        "phage_host_matching_ndm_best_phage = {}",
+        phage_host_matching_ndm_best
+    )
+    .ok();
+    writeln!(txt, "phage_host_matching_pass = {}", phage_host_matching_pass).ok();
     writeln!(txt, "cmb_tt_red = {:.12}", tt).ok();
     writeln!(txt, "cmb_te_red = {:.12}", te).ok();
     writeln!(txt, "cmb_ee_red = {:.12}", ee).ok();
@@ -608,6 +822,32 @@ fn main() {
             "local_maxima_count": entropy_progression_maxima,
             "local_minima_count": entropy_progression_minima,
             "pass": entropy_progression_pass
+        },
+        "ms_localized_dual_compartment": {
+            "localization_factor": ms_localized_localization_factor,
+            "transduction_efficiency": ms_localized_transduction_efficiency,
+            "arr_reduction_2y": ms_localized_arr_reduction_2y,
+            "lesion_reduction_10y": ms_localized_lesion_reduction_10y,
+            "prob_above_renal_high": ms_localized_prob_above_renal_high,
+            "prob_in_target_zone": ms_localized_prob_in_target_zone,
+            "efficacy_pass": ms_localized_efficacy_pass,
+            "safety_pass": ms_localized_safety_pass,
+            "pass": ms_localized_pass
+        },
+        "antibiotic_resistance": {
+            "pair_count": antibiotic_resistance_pair_count,
+            "mean_abs_log10_error_pred_vs_anchor": antibiotic_resistance_mean_abs_log10_error,
+            "ndm_max_predicted_occupancy_at_1uM": antibiotic_resistance_ndm_occ_1um,
+            "tem_predicted_winner": antibiotic_resistance_tem_winner,
+            "kpc_predicted_winner": antibiotic_resistance_kpc_winner,
+            "pass": antibiotic_resistance_pass
+        },
+        "phage_host_matching": {
+            "pair_count": phage_host_matching_pair_count,
+            "mean_best_lysis_score": phage_host_matching_mean_best_lysis,
+            "resistance_independence_probe_abs_delta": phage_host_matching_probe_delta,
+            "ndm_best_phage": phage_host_matching_ndm_best,
+            "pass": phage_host_matching_pass
         },
         "cmb": {
             "tt_full_red": tt,
