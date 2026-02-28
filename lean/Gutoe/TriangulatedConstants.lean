@@ -106,4 +106,21 @@ theorem ew_coeff_candidate_close_to_frozen :
   rw [ew_coeff_candidate_closed_form]
   native_decide
 
+/-- Coupled EW prediction at M_Z:
+    `sin²θ_W(M_Z) = 3/13 + α² * ewCoeffCandidateQ`. -/
+def sin2ThetaWMzCoupledQ : ℚ :=
+  (3 / 13 : ℚ) + (1 / (137 * 137 : ℚ)) * ewCoeffCandidateQ
+
+theorem sin2_theta_w_mz_coupled_closed_form :
+    sin2ThetaWMzCoupledQ =
+      (3 / 13 : ℚ) + (1 / (137 * 137 : ℚ)) * ((8 : ℚ) + 6 / 13 - 1 / (7 * 136 : ℚ)) := by
+  unfold sin2ThetaWMzCoupledQ
+  rw [ew_coeff_candidate_closed_form]
+
+/-- Coupled EW bridge lands on the 0.23122 target at sub-1e-9 absolute error. -/
+theorem sin2_theta_w_mz_coupled_near_target :
+    |sin2ThetaWMzCoupledQ - (23122 / 100000 : ℚ)| < 1 / 1000000000 := by
+  rw [sin2_theta_w_mz_coupled_closed_form]
+  native_decide
+
 end Gutoe.TriangulatedConstants

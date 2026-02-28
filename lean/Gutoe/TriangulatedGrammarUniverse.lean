@@ -623,4 +623,58 @@ theorem ew_infinite_elimination_xl_complete
   exact ew_xl_bounds_and_index_select_candidate hm hb hc
     (ew_near_forces_index_exact hnear)
 
+/-!
+Native coupled closure:
+
+All three triangulated constants are coupled in one Lean theorem: if each lane
+is near its anchor under XL structural bounds, the tuple triple is forced to
+the unique canonical candidates.
+-/
+
+theorem coupled_triangulation_xl_complete
+    {ap bp ak bk ck aew bew cew : ℤ}
+    (hap : ap ∈ zBandXL)
+    (hbp : bp ∈ zBandXL)
+    (hak : ak ∈ zBandXL)
+    (hbk : bk ∈ zBandXL)
+    (hck : ck ∈ zBandXL)
+    (haew : aew ∈ zBandBaseXL)
+    (hbew : bew ∈ zBandEwXL)
+    (hcew : cew ∈ zBandEwXL)
+    (hpnear : |pExprQ (ap, bp) - pFrozenQ| < pTolQ)
+    (hknear : |kappaExprQ (ak, (bk, ck)) - kappaFrozenQ| < kappaTolQ)
+    (henear : |ewExprQ (aew, (bew, cew)) - ewCoeffFrozenQ| < ewTolQ) :
+    (ap, bp) = pCandidateTuple ∧
+    (ak, (bk, ck)) = kappaCandidateTuple ∧
+    (aew, (bew, cew)) = ewCandidateTuple := by
+  constructor
+  · exact p_infinite_elimination_xl_complete hap hbp hpnear
+  · constructor
+    · exact kappa_infinite_elimination_xl_complete hak hbk hck hknear
+    · exact ew_infinite_elimination_xl_complete haew hbew hcew henear
+
+theorem coupled_triangulation_values_xl
+    {ap bp ak bk ck aew bew cew : ℤ}
+    (hap : ap ∈ zBandXL)
+    (hbp : bp ∈ zBandXL)
+    (hak : ak ∈ zBandXL)
+    (hbk : bk ∈ zBandXL)
+    (hck : ck ∈ zBandXL)
+    (haew : aew ∈ zBandBaseXL)
+    (hbew : bew ∈ zBandEwXL)
+    (hcew : cew ∈ zBandEwXL)
+    (hpnear : |pExprQ (ap, bp) - pFrozenQ| < pTolQ)
+    (hknear : |kappaExprQ (ak, (bk, ck)) - kappaFrozenQ| < kappaTolQ)
+    (henear : |ewExprQ (aew, (bew, cew)) - ewCoeffFrozenQ| < ewTolQ) :
+    pExprQ (ap, bp) = pCandidateQ ∧
+    kappaExprQ (ak, (bk, ck)) = kappaCandidateQ ∧
+    ewExprQ (aew, (bew, cew)) = ewCoeffCandidateQ := by
+  rcases coupled_triangulation_xl_complete hap hbp hak hbk hck haew hbew hcew hpnear hknear henear with
+    ⟨hp, hk, he⟩
+  constructor
+  · simpa [hp] using p_expr_candidate_eq
+  · constructor
+    · simpa [hk] using kappa_expr_candidate_eq
+    · simpa [he] using ew_expr_candidate_eq
+
 end Gutoe.TriangulatedGrammarUniverse
