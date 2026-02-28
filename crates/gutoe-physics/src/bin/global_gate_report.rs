@@ -265,6 +265,76 @@ fn main() {
         eprintln!("global_gate: phage_host_matching_ci_gate failed: {e}");
         std::process::exit(2);
     }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "blind_prediction_register",
+        ],
+    ) {
+        eprintln!("global_gate: blind_prediction_register failed: {e}");
+        std::process::exit(2);
+    }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "blind_prediction_register_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: blind_prediction_register_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "triangulation_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: triangulation_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "triangulation_clifford_candidates_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: triangulation_clifford_candidates_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "five_lock_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: five_lock_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
 
     run_or_exit(
         "baryogenesis_report[gain=0]",
@@ -369,6 +439,12 @@ fn main() {
         .expect("antibiotic resistance gate json");
     let phage_host_matching = read_json("/tmp/bh_renders/phage_host_matching_ci_gate.json")
         .expect("phage host matching gate json");
+    let blind_register_gate = read_json("/tmp/bh_renders/blind_prediction_register_ci_gate.json")
+        .expect("blind prediction register gate json");
+    let blind_register = read_json("/tmp/bh_renders/blind_prediction_register/blind_prediction_register.json")
+        .expect("blind prediction register json");
+    let five_lock = read_json("/tmp/bh_renders/five_lock_ci_gate.json")
+        .expect("five lock gate json");
     let sigma = read_json("/tmp/bh_renders/sigma8_decomposition/sigma8_decomposition_report.json")
         .expect("sigma json");
 
@@ -507,6 +583,29 @@ fn main() {
     .unwrap();
     let phage_host_matching_ndm_best =
         v_str(&phage_host_matching, &["summary", "ndm_best_phage"]).unwrap();
+    let blind_register_pass = v_bool(&blind_register_gate, &["overall_pass"]).unwrap();
+    let blind_hierarchy = v_str(&blind_register, &["prediction", "hierarchy_prediction"]).unwrap();
+    let blind_mass_character =
+        v_str(&blind_register, &["prediction", "mass_character_prediction"]).unwrap();
+    let blind_majorana_residual =
+        v_f64(&blind_register, &["prediction", "majorana_symmetry_residual"]).unwrap();
+    let blind_sum_ev = v_f64(&blind_register, &["absolute_lane", "sum_ev"]).unwrap();
+    let five_lock_pass = v_bool(&five_lock, &["overall_pass"]).unwrap();
+    let five_lock_rge_pass = v_bool(&five_lock, &["locks", "rge_lock", "pass"]).unwrap();
+    let five_lock_rge_spread =
+        v_f64(&five_lock, &["locks", "rge_lock", "best_spread_inv"]).unwrap();
+    let five_lock_neutrino_pass =
+        v_bool(&five_lock, &["locks", "neutrino_triple_lock", "pass"]).unwrap();
+    let five_lock_lepton_pass =
+        v_bool(&five_lock, &["locks", "charged_lepton_hierarchy_lock", "pass"]).unwrap();
+    let five_lock_g2_pass = v_bool(&five_lock, &["locks", "g2_dual_lock", "pass"]).unwrap();
+    let five_lock_bbn3_pass =
+        v_bool(&five_lock, &["locks", "bbn_three_isotope_lock", "pass"]).unwrap();
+    let five_lock_neutrino_sum_ev = v_f64(
+        &five_lock,
+        &["locks", "neutrino_triple_lock", "triangulated", "sum_ev"],
+    )
+    .unwrap();
 
     let cmb_pass = tt <= 1.30 && te <= 1.20 && ee <= 1.10;
 
@@ -529,6 +628,8 @@ fn main() {
         && ms_localized_pass
         && antibiotic_resistance_pass
         && phage_host_matching_pass
+        && blind_register_pass
+        && five_lock_pass
         && cmb_pass
         && sigma8_pass;
 
@@ -796,6 +897,39 @@ fn main() {
         phage_host_matching_pass
     )
     .ok();
+    writeln!(txt, "blind_prediction_hierarchy = {}", blind_hierarchy).ok();
+    writeln!(txt, "blind_prediction_mass_character = {}", blind_mass_character).ok();
+    writeln!(
+        txt,
+        "blind_prediction_majorana_symmetry_residual = {:.12e}",
+        blind_majorana_residual
+    )
+    .ok();
+    writeln!(txt, "blind_prediction_sum_ev = {:.12e}", blind_sum_ev).ok();
+    writeln!(txt, "blind_prediction_pass = {}", blind_register_pass).ok();
+    writeln!(txt, "five_lock_rge_pass = {}", five_lock_rge_pass).ok();
+    writeln!(
+        txt,
+        "five_lock_rge_best_spread_inv = {:.12}",
+        five_lock_rge_spread
+    )
+    .ok();
+    writeln!(
+        txt,
+        "five_lock_neutrino_pass = {}",
+        five_lock_neutrino_pass
+    )
+    .ok();
+    writeln!(
+        txt,
+        "five_lock_neutrino_sum_ev = {:.12e}",
+        five_lock_neutrino_sum_ev
+    )
+    .ok();
+    writeln!(txt, "five_lock_lepton_pass = {}", five_lock_lepton_pass).ok();
+    writeln!(txt, "five_lock_g2_pass = {}", five_lock_g2_pass).ok();
+    writeln!(txt, "five_lock_bbn3_pass = {}", five_lock_bbn3_pass).ok();
+    writeln!(txt, "five_lock_pass = {}", five_lock_pass).ok();
     writeln!(txt, "cmb_tt_red = {:.12}", tt).ok();
     writeln!(txt, "cmb_te_red = {:.12}", te).ok();
     writeln!(txt, "cmb_ee_red = {:.12}", ee).ok();
@@ -912,6 +1046,24 @@ fn main() {
             "resistance_independence_probe_abs_delta": phage_host_matching_probe_delta,
             "ndm_best_phage": phage_host_matching_ndm_best,
             "pass": phage_host_matching_pass
+        },
+        "blind_prediction_register": {
+            "id": "BLIND-NEUTRINO-001",
+            "hierarchy_prediction": blind_hierarchy,
+            "mass_character_prediction": blind_mass_character,
+            "majorana_symmetry_residual": blind_majorana_residual,
+            "sum_ev": blind_sum_ev,
+            "pass": blind_register_pass
+        },
+        "five_lock": {
+            "rge_pass": five_lock_rge_pass,
+            "rge_best_spread_inv": five_lock_rge_spread,
+            "neutrino_pass": five_lock_neutrino_pass,
+            "neutrino_sum_ev": five_lock_neutrino_sum_ev,
+            "lepton_pass": five_lock_lepton_pass,
+            "g2_pass": five_lock_g2_pass,
+            "bbn3_pass": five_lock_bbn3_pass,
+            "pass": five_lock_pass
         },
         "cmb": {
             "tt_full_red": tt,

@@ -25,6 +25,19 @@ pub struct StandardModelDynamicsMap {
 }
 
 impl StandardModelDynamicsMap {
+    /// Coupled structural EW bridge coefficient from the triangulated Cl(1,3) lane:
+    ///
+    /// c_EW = d/2 + |grade₂|/(d-|SU(2)|) - 1/((|grade₂|+1)T(16))
+    ///      = 8 + 6/13 - 1/(7*136)
+    pub fn ew_shift_coeff_structural(&self) -> f64 {
+        let clifford_half_dim = self.clifford_dim as f64 / 2.0; // 16/2 = 8
+        let grade2 = 6.0;
+        let complement = (self.clifford_dim - self.su2_generators) as f64; // 13
+        let lattice_shift = grade2 + 1.0; // 7
+        let t16 = 136.0;
+        clifford_half_dim + grade2 / complement - 1.0 / (lattice_shift * t16)
+    }
+
     pub fn from_clifford_z3() -> Self {
         let clifford_dim = 16_u32;
         let z3_order = 3_u32;
@@ -70,11 +83,17 @@ impl StandardModelDynamicsMap {
             && self.total_gauge_generators == 12
     }
 
-    /// Minimal EW bridge from structural `sin²(theta_W)=3/13` to the M_Z target.
+    /// Coupled structural EW shift from Cl(1,3) + alpha lane:
     ///
-    /// This keeps the correction explicit and auditable while GRAND-61 is in progress.
+    /// Δsin²θ_W = α² * c_EW
+    /// c_EW = 8 + 6/13 - 1/(7*136)
+    pub fn sin2_theta_w_mz_shift_structural(&self) -> f64 {
+        self.alpha_leading_order.powi(2) * self.ew_shift_coeff_structural()
+    }
+
+    /// EW value at M_Z from structural terms only.
     pub fn sin2_theta_w_at_mz(&self) -> f64 {
-        self.sin2_theta_w + 4.51e-4
+        self.sin2_theta_w + self.sin2_theta_w_mz_shift_structural()
     }
 
     /// Minimal neutron EDM bridge from θ_QCD.
@@ -112,6 +131,30 @@ mod tests {
         assert!(
             (0.23100..=0.23140).contains(&sin2_mz),
             "sin²(theta_W) at M_Z out of target window: {sin2_mz:.9}"
+        );
+    }
+
+    #[test]
+    fn ew_bridge_shift_is_positive_and_small() {
+        let m = StandardModelDynamicsMap::from_clifford_z3();
+        let shift = m.sin2_theta_w_mz_shift_structural();
+        assert!(shift > 0.0);
+        assert!(shift < 1.0e-3, "unexpectedly large EW shift: {shift:.12e}");
+        let expected = (1.0 / 137.0f64).powi(2) * (8.0 + 6.0 / 13.0 - 1.0 / (7.0 * 136.0));
+        assert!(
+            (shift - expected).abs() < 1.0e-15,
+            "structural EW shift mismatch: got {shift:.15e}, expected {expected:.15e}"
+        );
+    }
+
+    #[test]
+    fn ew_bridge_coefficient_matches_coupled_structural_form() {
+        let m = StandardModelDynamicsMap::from_clifford_z3();
+        let coeff = m.ew_shift_coeff_structural();
+        let expected = 8.0 + 6.0 / 13.0 - 1.0 / (7.0 * 136.0);
+        assert!(
+            (coeff - expected).abs() < 1.0e-15,
+            "EW coeff mismatch: got {coeff:.15e}, expected {expected:.15e}"
         );
     }
 

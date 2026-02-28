@@ -51,6 +51,14 @@ GUTOE (Grand Unifying Theory of Everything) is a zero-free-parameter physics the
 
 ---
 
+## TODO
+
+- **Load `/mnt/riffcastle/gaia_dr3.mvl` and calculate the entire galaxy** 🌌
+  Gaia DR3 full source catalog. Use `gaia_dr3_life_map.rs` as the starting point.
+  Goal: run GUTOE Great Filter + life probability across every resolved star.
+
+---
+
 ## Communication Style
 
 - Be direct and blunt about quality
