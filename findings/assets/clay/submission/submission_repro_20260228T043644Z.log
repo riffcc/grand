@@ -1,0 +1,617 @@
+Clay submission reproducibility bundle
+timestamp_utc: 20260228T043644Z
+root: /mnt/riffcastle/castle/garage/grand-2026
+
+[1/3] Lean builds
+>>> lake build Gutoe.YangMillsContinuumLimit
+⚠ [8016/8027] Replayed Gutoe.YangMillsStructuralGap
+warning: Gutoe/YangMillsStructuralGap.lean:506:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8020/8027] Replayed Gutoe.YangMillsWilsonBridge
+warning: Gutoe/YangMillsWilsonBridge.lean:68:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:113:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:186:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:196:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:276:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:412:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:502:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8021/8027] Replayed Gutoe.HaarBridgeScaffold
+warning: Gutoe/HaarBridgeScaffold.lean:80:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8022/8027] Replayed Gutoe.HaarMeasureHooks
+warning: Gutoe/HaarMeasureHooks.lean:42:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.haar_measure_is_haar`:
+  [LocallyCompactSpace G]
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [LocallyCompactSpace G] [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:47:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.canonical_haar_is_haar`:
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:55:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.left_invariant_measure_eq_smul_canonical_haar`:
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:88:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.quotient_measure_unique_from_preimage`:
+  [TopologicalSpace G]
+  [BorelSpace G]
+  [IsTopologicalGroup G]
+  [LocallyCompactSpace G]
+  [PolishSpace G]
+  [Γ.Normal]
+  [Countable ↥Γ]
+  [T2Space (G ⧸ Γ)]
+  [SecondCountableTopology (G ⧸ Γ)]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [TopologicalSpace
+  G] [BorelSpace
+  G] [IsTopologicalGroup
+  G] [LocallyCompactSpace
+  G] [PolishSpace G] [Γ.Normal] [Countable ↥Γ] [T2Space (G ⧸ Γ)] [SecondCountableTopology (G ⧸ Γ)] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:107:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.integral_unfolding_over_quotient`:
+  [LocallyCompactSpace G]
+  [Γ.Normal]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [LocallyCompactSpace G] [Γ.Normal] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+⚠ [8024/8027] Replayed Gutoe.HaarFiberCollapse
+warning: Gutoe/HaarFiberCollapse.lean:179:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+Build completed successfully (8027 jobs).
+>>> lake build Gutoe.YangMillsOSEndToEnd
+⚠ [8016/8031] Replayed Gutoe.YangMillsStructuralGap
+warning: Gutoe/YangMillsStructuralGap.lean:506:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8020/8031] Replayed Gutoe.YangMillsWilsonBridge
+warning: Gutoe/YangMillsWilsonBridge.lean:68:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:113:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:186:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:196:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:276:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:412:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:502:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8021/8031] Replayed Gutoe.HaarBridgeScaffold
+warning: Gutoe/HaarBridgeScaffold.lean:80:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8022/8031] Replayed Gutoe.HaarMeasureHooks
+warning: Gutoe/HaarMeasureHooks.lean:42:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.haar_measure_is_haar`:
+  [LocallyCompactSpace G]
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [LocallyCompactSpace G] [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:47:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.canonical_haar_is_haar`:
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:55:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.left_invariant_measure_eq_smul_canonical_haar`:
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:88:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.quotient_measure_unique_from_preimage`:
+  [TopologicalSpace G]
+  [BorelSpace G]
+  [IsTopologicalGroup G]
+  [LocallyCompactSpace G]
+  [PolishSpace G]
+  [Γ.Normal]
+  [Countable ↥Γ]
+  [T2Space (G ⧸ Γ)]
+  [SecondCountableTopology (G ⧸ Γ)]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [TopologicalSpace
+  G] [BorelSpace
+  G] [IsTopologicalGroup
+  G] [LocallyCompactSpace
+  G] [PolishSpace G] [Γ.Normal] [Countable ↥Γ] [T2Space (G ⧸ Γ)] [SecondCountableTopology (G ⧸ Γ)] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:107:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.integral_unfolding_over_quotient`:
+  [LocallyCompactSpace G]
+  [Γ.Normal]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [LocallyCompactSpace G] [Γ.Normal] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+⚠ [8024/8031] Replayed Gutoe.HaarFiberCollapse
+warning: Gutoe/HaarFiberCollapse.lean:179:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8029/8031] Replayed Gutoe.YangMillsOSTextbook
+warning: Gutoe/YangMillsOSTextbook.lean:142:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8030/8031] Replayed Gutoe.YangMillsOSCompletion
+warning: Gutoe/YangMillsOSCompletion.lean:69:8: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsOSCompletion.lean:85:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsOSCompletion.lean:252:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8031/8031] Replayed Gutoe.YangMillsOSEndToEnd
+warning: Gutoe/YangMillsOSEndToEnd.lean:83:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+Build completed successfully (8031 jobs).
+>>> lake build Gutoe.YangMillsWilsonEquivalence
+⚠ [8016/8025] Replayed Gutoe.YangMillsStructuralGap
+warning: Gutoe/YangMillsStructuralGap.lean:506:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8020/8025] Replayed Gutoe.YangMillsWilsonBridge
+warning: Gutoe/YangMillsWilsonBridge.lean:68:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:113:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:186:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:196:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:276:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:412:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:502:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8021/8025] Replayed Gutoe.HaarBridgeScaffold
+warning: Gutoe/HaarBridgeScaffold.lean:80:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8022/8025] Replayed Gutoe.HaarMeasureHooks
+warning: Gutoe/HaarMeasureHooks.lean:42:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.haar_measure_is_haar`:
+  [LocallyCompactSpace G]
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [LocallyCompactSpace G] [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:47:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.canonical_haar_is_haar`:
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:55:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.left_invariant_measure_eq_smul_canonical_haar`:
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:88:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.quotient_measure_unique_from_preimage`:
+  [TopologicalSpace G]
+  [BorelSpace G]
+  [IsTopologicalGroup G]
+  [LocallyCompactSpace G]
+  [PolishSpace G]
+  [Γ.Normal]
+  [Countable ↥Γ]
+  [T2Space (G ⧸ Γ)]
+  [SecondCountableTopology (G ⧸ Γ)]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [TopologicalSpace
+  G] [BorelSpace
+  G] [IsTopologicalGroup
+  G] [LocallyCompactSpace
+  G] [PolishSpace G] [Γ.Normal] [Countable ↥Γ] [T2Space (G ⧸ Γ)] [SecondCountableTopology (G ⧸ Γ)] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:107:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.integral_unfolding_over_quotient`:
+  [LocallyCompactSpace G]
+  [Γ.Normal]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [LocallyCompactSpace G] [Γ.Normal] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+⚠ [8024/8025] Replayed Gutoe.HaarFiberCollapse
+warning: Gutoe/HaarFiberCollapse.lean:179:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+Build completed successfully (8025 jobs).
+>>> lake build Gutoe.YangMillsOSCompletion
+⚠ [8016/8029] Replayed Gutoe.YangMillsStructuralGap
+warning: Gutoe/YangMillsStructuralGap.lean:506:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8020/8029] Replayed Gutoe.YangMillsWilsonBridge
+warning: Gutoe/YangMillsWilsonBridge.lean:68:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:113:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:186:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:196:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:276:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:412:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:502:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8021/8029] Replayed Gutoe.HaarBridgeScaffold
+warning: Gutoe/HaarBridgeScaffold.lean:80:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8022/8029] Replayed Gutoe.HaarMeasureHooks
+warning: Gutoe/HaarMeasureHooks.lean:42:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.haar_measure_is_haar`:
+  [LocallyCompactSpace G]
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [LocallyCompactSpace G] [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:47:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.canonical_haar_is_haar`:
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:55:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.left_invariant_measure_eq_smul_canonical_haar`:
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:88:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.quotient_measure_unique_from_preimage`:
+  [TopologicalSpace G]
+  [BorelSpace G]
+  [IsTopologicalGroup G]
+  [LocallyCompactSpace G]
+  [PolishSpace G]
+  [Γ.Normal]
+  [Countable ↥Γ]
+  [T2Space (G ⧸ Γ)]
+  [SecondCountableTopology (G ⧸ Γ)]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [TopologicalSpace
+  G] [BorelSpace
+  G] [IsTopologicalGroup
+  G] [LocallyCompactSpace
+  G] [PolishSpace G] [Γ.Normal] [Countable ↥Γ] [T2Space (G ⧸ Γ)] [SecondCountableTopology (G ⧸ Γ)] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:107:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.integral_unfolding_over_quotient`:
+  [LocallyCompactSpace G]
+  [Γ.Normal]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [LocallyCompactSpace G] [Γ.Normal] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+⚠ [8024/8029] Replayed Gutoe.HaarFiberCollapse
+warning: Gutoe/HaarFiberCollapse.lean:179:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8028/8029] Replayed Gutoe.YangMillsOSTextbook
+warning: Gutoe/YangMillsOSTextbook.lean:142:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8029/8029] Replayed Gutoe.YangMillsOSCompletion
+warning: Gutoe/YangMillsOSCompletion.lean:69:8: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsOSCompletion.lean:85:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsOSCompletion.lean:252:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+Build completed successfully (8029 jobs).
+>>> lake build Gutoe
+⚠ [8023/8123] Replayed Gutoe.VoidRearFace
+warning: Gutoe/VoidRearFace.lean:66:18: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/VoidRearFace.lean:66:18: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/VoidRearFace.lean:71:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/VoidRearFace.lean:121:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8059/8123] Replayed Gutoe.EinsteinFromLattice
+warning: Gutoe/EinsteinFromLattice.lean:94:39: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/EinsteinFromLattice.lean:506:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/EinsteinFromLattice.lean:774:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/EinsteinFromLattice.lean:862:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8063/8123] Replayed Gutoe.YangMillsStructuralGap
+warning: Gutoe/YangMillsStructuralGap.lean:506:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8066/8123] Replayed Gutoe.YangMillsWilsonBridge
+warning: Gutoe/YangMillsWilsonBridge.lean:68:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:113:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:186:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:196:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:276:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:412:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsWilsonBridge.lean:502:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8075/8123] Replayed Gutoe.KerrReferenceFrame
+warning: Gutoe/KerrReferenceFrame.lean:108:5: unused variable `rObs`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+⚠ [8077/8123] Replayed Gutoe.SynchrotronGRMHD
+warning: Gutoe/SynchrotronGRMHD.lean:109:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/SynchrotronGRMHD.lean:163:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/SynchrotronGRMHD.lean:175:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8080/8123] Replayed Gutoe.StrongCPPathIntegral
+warning: Gutoe/StrongCPPathIntegral.lean:50:12: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/StrongCPPathIntegral.lean:50:29: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8082/8123] Replayed Gutoe.StrongCPEmergence
+warning: Gutoe/StrongCPEmergence.lean:255:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8088/8123] Replayed Gutoe.LatticeDiffraction
+warning: Gutoe/LatticeDiffraction.lean:79:43: unused variable `hv`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: Gutoe/LatticeDiffraction.lean:108:42: unused variable `hv`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: Gutoe/LatticeDiffraction.lean:119:51: unused variable `hv`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: Gutoe/LatticeDiffraction.lean:119:64: unused variable `hk`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: Gutoe/LatticeDiffraction.lean:151:62: unused variable `hv`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: Gutoe/LatticeDiffraction.lean:152:5: unused variable `hsmall`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: Gutoe/LatticeDiffraction.lean:246:36: unused variable `hc`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+⚠ [8089/8123] Replayed Gutoe.HaarBridgeScaffold
+warning: Gutoe/HaarBridgeScaffold.lean:80:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8090/8123] Replayed Gutoe.HaarMeasureHooks
+warning: Gutoe/HaarMeasureHooks.lean:42:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.haar_measure_is_haar`:
+  [LocallyCompactSpace G]
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [LocallyCompactSpace G] [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:47:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.canonical_haar_is_haar`:
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:55:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.left_invariant_measure_eq_smul_canonical_haar`:
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:88:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.quotient_measure_unique_from_preimage`:
+  [TopologicalSpace G]
+  [BorelSpace G]
+  [IsTopologicalGroup G]
+  [LocallyCompactSpace G]
+  [PolishSpace G]
+  [Γ.Normal]
+  [Countable ↥Γ]
+  [T2Space (G ⧸ Γ)]
+  [SecondCountableTopology (G ⧸ Γ)]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [TopologicalSpace
+  G] [BorelSpace
+  G] [IsTopologicalGroup
+  G] [LocallyCompactSpace
+  G] [PolishSpace G] [Γ.Normal] [Countable ↥Γ] [T2Space (G ⧸ Γ)] [SecondCountableTopology (G ⧸ Γ)] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/HaarMeasureHooks.lean:107:0: automatically included section variable(s) unused in theorem `Gutoe.HaarMeasureHooks.integral_unfolding_over_quotient`:
+  [LocallyCompactSpace G]
+  [Γ.Normal]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [LocallyCompactSpace G] [Γ.Normal] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+⚠ [8092/8123] Replayed Gutoe.HaarFiberCollapse
+warning: Gutoe/HaarFiberCollapse.lean:179:10: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8106/8123] Replayed Gutoe.Inflation
+warning: Gutoe/Inflation.lean:212:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8115/8123] Replayed Gutoe.YangMillsGaugeScope
+warning: Gutoe/YangMillsGaugeScope.lean:42:0: automatically included section variable(s) unused in theorem `Gutoe.YangMillsGaugeScope.finite_center_implies_countable_center`:
+  [TopologicalSpace G]
+  [MeasurableSpace G]
+  [BorelSpace G]
+  [IsTopologicalGroup G]
+  [LocallyCompactSpace G]
+  [PolishSpace G]
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [TopologicalSpace
+  G] [MeasurableSpace
+  G] [BorelSpace G] [IsTopologicalGroup G] [LocallyCompactSpace G] [PolishSpace G] [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/YangMillsGaugeScope.lean:48:0: automatically included section variable(s) unused in theorem `Gutoe.YangMillsGaugeScope.compact_group_has_haar`:
+  [PolishSpace G]
+  [T2Space G]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [PolishSpace G] [T2Space G] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+⚠ [8116/8123] Replayed Gutoe.YangMillsFullStateLift
+warning: Gutoe/YangMillsFullStateLift.lean:84:0: automatically included section variable(s) unused in theorem `Gutoe.YangMillsFullStateLift.liftDiagonalOperator_diag`:
+  [Fintype F]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Fintype F] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/YangMillsFullStateLift.lean:90:0: automatically included section variable(s) unused in theorem `Gutoe.YangMillsFullStateLift.liftDiagonalOperator_offdiag`:
+  [Fintype F]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Fintype F] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/YangMillsFullStateLift.lean:100:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsFullStateLift.lean:96:0: automatically included section variable(s) unused in theorem `Gutoe.YangMillsFullStateLift.liftObservable_fiber_constant`:
+  [Fintype F]
+  [DecidableEq F]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Fintype F] [DecidableEq F] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: Gutoe/YangMillsFullStateLift.lean:143:52: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsFullStateLift.lean:178:52: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsFullStateLift.lean:640:47: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsFullStateLift.lean:759:49: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8119/8123] Replayed Gutoe.YangMillsContinuumLimitKolmogorov
+warning: Gutoe/YangMillsContinuumLimitKolmogorov.lean:107:15: unused variable `n`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: Gutoe/YangMillsContinuumLimitKolmogorov.lean:134:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsContinuumLimitKolmogorov.lean:135:8: This simp argument is unused:
+  hprob
+
+Hint: Omit it from the simp argument list.
+  simp ̵[̵h̵p̵r̵o̵b̵]̵
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+⚠ [8120/8123] Replayed Gutoe.YangMillsOSTextbook
+warning: Gutoe/YangMillsOSTextbook.lean:142:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8121/8123] Replayed Gutoe.YangMillsOSCompletion
+warning: Gutoe/YangMillsOSCompletion.lean:69:8: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsOSCompletion.lean:85:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: Gutoe/YangMillsOSCompletion.lean:252:2: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8122/8123] Replayed Gutoe.YangMillsOSEndToEnd
+warning: Gutoe/YangMillsOSEndToEnd.lean:83:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+Build completed successfully (8123 jobs).
+
+[2/3] Theorem presence checks
+OK: lean/Gutoe/YangMillsContinuumLimit.lean :: 288:theorem constructive_schwinger_family_exists
+OK: lean/Gutoe/YangMillsOSEndToEnd.lean :: 56:theorem grand331_end_to_end_os_reconstruction_of_domain
+OK: lean/Gutoe/YangMillsWilsonEquivalence.lean :: 151:theorem theorem_c_wilson_equivalence_domain_limits
+OK: lean/Gutoe/YangMillsOSCompletion.lean :: 297:theorem osGenerator_uniform_gap_floor_of_domain
+
+[3/3] No-sorry checks (target files)
+FOUND_SORRY: lean/Gutoe/YangMillsContinuumLimit.lean

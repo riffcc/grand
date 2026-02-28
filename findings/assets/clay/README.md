@@ -8,3 +8,5 @@ Artifacts:
 
 - `repro_<timestamp>.log`: full build and theorem-presence run log.
 - `theorem_presence_<timestamp>.txt`: one-line declaration hits for core Clay-lane theorems.
+- `submission/`: GRAND-330 reviewer package (`cover_letter.md`, `theorem_map.md`,
+  `reviewer_guide.md`) plus submission-specific repro artifacts.
