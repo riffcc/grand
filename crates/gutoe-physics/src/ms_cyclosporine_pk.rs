@@ -130,7 +130,9 @@ fn quantile(sorted: &[f64], q: f64) -> f64 {
     sorted[idx.min(sorted.len() - 1)]
 }
 
-pub fn simulate_cyclosporine_pk_bridge(input: CyclosporinePkBridgeInput) -> CyclosporinePkBridgeEnsemble {
+pub fn simulate_cyclosporine_pk_bridge(
+    input: CyclosporinePkBridgeInput,
+) -> CyclosporinePkBridgeEnsemble {
     let mut rng = StdRng::seed_from_u64(input.seed);
     let n = input.samples.max(64);
     let median = input.blood_to_site_gain_median.max(1.0e-6);
@@ -156,7 +158,9 @@ pub fn simulate_cyclosporine_pk_bridge(input: CyclosporinePkBridgeInput) -> Cycl
     }
 }
 
-pub fn summarize_cyclosporine_pk_bridge(ensemble: &CyclosporinePkBridgeEnsemble) -> CyclosporinePkBridgeSummary {
+pub fn summarize_cyclosporine_pk_bridge(
+    ensemble: &CyclosporinePkBridgeEnsemble,
+) -> CyclosporinePkBridgeSummary {
     let mut nms = ensemble.blood_concentration_nanomolar.clone();
     let mut ngs = ensemble.blood_concentration_ng_ml.clone();
     nms.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -183,7 +187,10 @@ pub fn summarize_cyclosporine_pk_bridge(ensemble: &CyclosporinePkBridgeEnsemble)
     }
 }
 
-pub fn probability_above_ng_ml(ensemble: &CyclosporinePkBridgeEnsemble, threshold_ng_ml: f64) -> f64 {
+pub fn probability_above_ng_ml(
+    ensemble: &CyclosporinePkBridgeEnsemble,
+    threshold_ng_ml: f64,
+) -> f64 {
     if ensemble.blood_concentration_ng_ml.is_empty() {
         return f64::NAN;
     }

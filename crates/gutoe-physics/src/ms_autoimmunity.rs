@@ -275,8 +275,10 @@ pub fn evaluate_interface_energy(
 }
 
 pub fn evaluate_molecular_mimicry(input: MolecularMimicryInput) -> MolecularMimicryScore {
-    let self_energy = evaluate_interface_energy(input.self_epitope_electro, input.self_epitope_residual);
-    let mimic_energy = evaluate_interface_energy(input.mimic_epitope_electro, input.mimic_epitope_residual);
+    let self_energy =
+        evaluate_interface_energy(input.self_epitope_electro, input.self_epitope_residual);
+    let mimic_energy =
+        evaluate_interface_energy(input.mimic_epitope_electro, input.mimic_epitope_residual);
 
     let self_binding = self_energy.total_delta_g_kj_mol;
     let mimic_binding = mimic_energy.total_delta_g_kj_mol;
@@ -303,11 +305,19 @@ pub fn evaluate_therapy_effect(
     ocrelizumab: TherapyProxyInput,
     natalizumab: TherapyProxyInput,
 ) -> CombinedTherapyScore {
-    let occ_o = occupancy_fraction(ocrelizumab.concentration_nanomolar, ocrelizumab.ki_nanomolar);
-    let eff_o = (ocrelizumab.max_drive_reduction_fraction.max(0.0).min(1.0) * occ_o).clamp(0.0, 1.0);
+    let occ_o = occupancy_fraction(
+        ocrelizumab.concentration_nanomolar,
+        ocrelizumab.ki_nanomolar,
+    );
+    let eff_o =
+        (ocrelizumab.max_drive_reduction_fraction.max(0.0).min(1.0) * occ_o).clamp(0.0, 1.0);
 
-    let occ_n = occupancy_fraction(natalizumab.concentration_nanomolar, natalizumab.ki_nanomolar);
-    let eff_n = (natalizumab.max_drive_reduction_fraction.max(0.0).min(1.0) * occ_n).clamp(0.0, 1.0);
+    let occ_n = occupancy_fraction(
+        natalizumab.concentration_nanomolar,
+        natalizumab.ki_nanomolar,
+    );
+    let eff_n =
+        (natalizumab.max_drive_reduction_fraction.max(0.0).min(1.0) * occ_n).clamp(0.0, 1.0);
 
     let residual = baseline_drive_index.max(0.0) * (1.0 - eff_o) * (1.0 - eff_n);
     let relative_reduction = if baseline_drive_index > 0.0 {
@@ -339,7 +349,8 @@ pub fn evaluate_targeted_blocker(
 ) -> TargetedBlockerScore {
     let occ = occupancy_fraction(blocker.concentration_nanomolar, blocker.ki_nanomolar);
     let achieved_shift = blocker.max_energy_shift_kj_mol.max(0.0) * occ;
-    let required_shift = (activation_excess_kj_mol.max(0.0) + blocker.safety_buffer_kj_mol.max(0.0)).max(0.0);
+    let required_shift =
+        (activation_excess_kj_mol.max(0.0) + blocker.safety_buffer_kj_mol.max(0.0)).max(0.0);
     let required_occ = if blocker.max_energy_shift_kj_mol > 0.0 {
         (required_shift / blocker.max_energy_shift_kj_mol).clamp(0.0, 1.5)
     } else {
@@ -360,11 +371,18 @@ pub fn evaluate_targeted_blocker_candidate(
     activation_excess_kj_mol: f64,
     candidate: TargetedBlockerCandidateInput,
 ) -> TargetedBlockerCandidateScore {
-    let target_occ = occupancy_fraction(candidate.concentration_nanomolar, candidate.target_ki_nanomolar);
-    let off_occ = occupancy_fraction(candidate.concentration_nanomolar, candidate.off_target_ki_nanomolar);
+    let target_occ = occupancy_fraction(
+        candidate.concentration_nanomolar,
+        candidate.target_ki_nanomolar,
+    );
+    let off_occ = occupancy_fraction(
+        candidate.concentration_nanomolar,
+        candidate.off_target_ki_nanomolar,
+    );
     let selectivity_ratio = target_occ / off_occ.max(1.0e-9);
 
-    let required = (activation_excess_kj_mol.max(0.0) + candidate.safety_buffer_kj_mol.max(0.0)).max(0.0);
+    let required =
+        (activation_excess_kj_mol.max(0.0) + candidate.safety_buffer_kj_mol.max(0.0)).max(0.0);
     let achieved = candidate.max_energy_shift_kj_mol.max(0.0) * target_occ;
     let margin = achieved - required;
     let feasible = margin >= 0.0;
@@ -424,7 +442,10 @@ mod tests {
     #[test]
     fn targeted_blocker_can_be_feasible_in_default_lane() {
         let mim = evaluate_molecular_mimicry(default_ms_mimicry_input());
-        let b = evaluate_targeted_blocker(mim.activation_excess_kj_mol, default_targeted_blocker_input());
+        let b = evaluate_targeted_blocker(
+            mim.activation_excess_kj_mol,
+            default_targeted_blocker_input(),
+        );
         assert!(b.required_occupancy_fraction <= 1.0);
         assert!(b.feasible_at_given_concentration);
     }

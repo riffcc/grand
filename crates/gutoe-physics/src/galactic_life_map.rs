@@ -429,8 +429,8 @@ pub fn habitability_score(seed: GalacticLifeSeed) -> f64 {
     let metal_low = (seed.metallicity / 0.008).clamp(0.0, 1.2);
     let metal_high = (1.0 - ((seed.metallicity - 0.03).max(0.0) / 0.03)).clamp(0.2, 1.0);
     let metal_w = (metal_low * metal_high).clamp(0.0, 1.2);
-    let radial_band = (-((seed.galactic_radius_ly - SOLAR_GALACTIC_RADIUS_LY) / 12_500.0).powi(2))
-        .exp();
+    let radial_band =
+        (-((seed.galactic_radius_ly - SOLAR_GALACTIC_RADIUS_LY) / 12_500.0).powi(2)).exp();
     let inner_hazard_suppression =
         1.0 / (1.0 + ((14_000.0 - seed.galactic_radius_ly) / 2_300.0).exp());
     let age_w = ((seed.age_gyr - 0.4) / 8.0).clamp(0.0, 1.0);
@@ -438,7 +438,10 @@ pub fn habitability_score(seed: GalacticLifeSeed) -> f64 {
         / seed.main_sequence_lifetime_gyr)
         .clamp(0.0, 1.0);
 
-    0.24 * mass_w + 0.22 * metal_w + 0.26 * radial_band * inner_hazard_suppression + 0.16 * age_w
+    0.24 * mass_w
+        + 0.22 * metal_w
+        + 0.26 * radial_band * inner_hazard_suppression
+        + 0.16 * age_w
         + 0.12 * remaining
 }
 
@@ -529,7 +532,8 @@ pub fn evaluate_galactic_life_map(config: GalacticLifeMapConfig) -> GalacticLife
     } else {
         0.0
     };
-    let predicted_signal_count_milky_way_present = signal_fraction * MILKY_WAY_STELLAR_COUNT_ESTIMATE;
+    let predicted_signal_count_milky_way_present =
+        signal_fraction * MILKY_WAY_STELLAR_COUNT_ESTIMATE;
 
     let mut forecasts = Vec::with_capacity(config.forecast_offsets_gyr.len());
     for dt in config.forecast_offsets_gyr {

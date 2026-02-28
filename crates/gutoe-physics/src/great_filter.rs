@@ -132,19 +132,16 @@ fn derive_risk_baselines(input: GreatFilterCivilizationInput) -> DerivedRiskBase
         1_550.0 / (metal.powf(0.72) * (1.0 + 0.20 * entropy) * (1.0 + 0.08 * stage_adv));
 
     // Atmosphere/climate damage window before irreversible lock-in.
-    let atmosphere_window_years = 1_350.0
-        * hab.powf(0.60)
-        * (1.0 + 0.23 * metal.sqrt())
+    let atmosphere_window_years = 1_350.0 * hab.powf(0.60) * (1.0 + 0.23 * metal.sqrt())
         / input.mass_solar.max(0.2).powf(0.34);
 
     // Governance response window against capability growth.
-    let governance_window_years = 420.0 * (1.0 + 0.56 * age_norm + 0.18 * hab)
-        / (1.0 + 0.14 * stage_adv + 0.12 * entropy);
+    let governance_window_years =
+        420.0 * (1.0 + 0.56 * age_norm + 0.18 * hab) / (1.0 + 0.14 * stage_adv + 0.12 * entropy);
 
     // Conflict pressure from scarcity and extraction burden.
-    let resource_pressure = 1.05 / metal.powf(0.40)
-        + 0.23 * (input.mass_solar - 1.0).abs()
-        + 0.43 * (1.0 - hab);
+    let resource_pressure =
+        1.05 / metal.powf(0.40) + 0.23 * (input.mass_solar - 1.0).abs() + 0.43 * (1.0 - hab);
 
     // Capability pressure from tech stack and energy-density access.
     let weapons_pressure = 0.82 + 0.24 * stage_adv + 0.17 * closure + 0.11 * entropy;
@@ -180,14 +177,17 @@ fn derive_risk_baselines(input: GreatFilterCivilizationInput) -> DerivedRiskBase
 
     // Orbital architecture proxy with gas-giant shielding vs migration penalty.
     let bodyguard_prob = 1.0 - (-0.95 * metal.powf(0.80)).exp();
-    let migration_penalty = ((metal / 2.35).powi(2) / (1.0 + (metal / 2.35).powi(2))).clamp(0.0, 1.0);
+    let migration_penalty =
+        ((metal / 2.35).powi(2) / (1.0 + (metal / 2.35).powi(2))).clamp(0.0, 1.0);
     let orbital_architecture =
         ((0.36 + 0.64 * bodyguard_prob) * (1.0 - 0.60 * migration_penalty)).clamp(0.02, 1.0);
 
     // Galactic environment hazard: center + plane exposure.
     let center_hazard = (12_000.0 / (radius + 2_000.0)).powf(1.2).clamp(0.05, 3.0);
     let plane_hazard = (-(zabs / 850.0)).exp().clamp(0.0, 1.0);
-    let galactic_environment = (-(0.38 * center_hazard + 0.24 * plane_hazard)).exp().clamp(0.02, 1.0);
+    let galactic_environment = (-(0.38 * center_hazard + 0.24 * plane_hazard))
+        .exp()
+        .clamp(0.02, 1.0);
 
     DerivedRiskBaselines {
         transition_years: transition_years.clamp(80.0, 12_000.0),
@@ -229,11 +229,18 @@ pub fn evaluate_great_filter(
     let mut survival_like_sum = 0.0;
 
     for _ in 0..trials {
-        let dt_transition = sample_lognormal(base.transition_years, windows.transition_sigma, &mut rng);
-        let dt_atmosphere =
-            sample_lognormal(base.atmosphere_window_years, windows.atmosphere_sigma, &mut rng);
-        let dt_governance =
-            sample_lognormal(base.governance_window_years, windows.governance_sigma, &mut rng);
+        let dt_transition =
+            sample_lognormal(base.transition_years, windows.transition_sigma, &mut rng);
+        let dt_atmosphere = sample_lognormal(
+            base.atmosphere_window_years,
+            windows.atmosphere_sigma,
+            &mut rng,
+        );
+        let dt_governance = sample_lognormal(
+            base.governance_window_years,
+            windows.governance_sigma,
+            &mut rng,
+        );
 
         let resource_pressure = (base.resource_pressure
             + windows.pressure_sigma * standard_normal(&mut rng))
@@ -270,7 +277,9 @@ pub fn evaluate_great_filter(
         let transition_like = logistic(
             2.4 * (dt_atmosphere / dt_transition.max(1.0)).ln()
                 + 1.7 * (windows.threshold_conflict - conflict_metric)
-                + 1.5 * (windows.environment_guard_multiplier - env_metric / resilience_capacity.max(1.0e-6)),
+                + 1.5
+                    * (windows.environment_guard_multiplier
+                        - env_metric / resilience_capacity.max(1.0e-6)),
         )
         .clamp(0.0, 1.0);
         let self_like = logistic(

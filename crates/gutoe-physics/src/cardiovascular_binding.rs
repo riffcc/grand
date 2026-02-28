@@ -182,15 +182,14 @@ pub fn decompose_non_electrostatic_residual(
     target_residual_kj_mol: f64,
     proxy: ResidualProxyInput,
 ) -> ResidualEnergyBreakdown {
-    let hydrophobic =
-        -(proxy.effective_hydrophobic_area_a2.max(0.0) * proxy.hydrophobic_coeff_kj_per_a2.max(0.0));
-    let aromatic = -(proxy.aromatic_contact_count.max(0.0)
-        * proxy.aromatic_contact_stabilization_kj.max(0.0));
-    let water = -(proxy.released_water_count.max(0.0) * proxy.water_release_stabilization_kj.max(0.0));
+    let hydrophobic = -(proxy.effective_hydrophobic_area_a2.max(0.0)
+        * proxy.hydrophobic_coeff_kj_per_a2.max(0.0));
+    let aromatic =
+        -(proxy.aromatic_contact_count.max(0.0) * proxy.aromatic_contact_stabilization_kj.max(0.0));
+    let water =
+        -(proxy.released_water_count.max(0.0) * proxy.water_release_stabilization_kj.max(0.0));
     let entropy = proxy.constrained_rotatable_bonds.max(0.0)
-        * proxy
-            .conformational_entropy_penalty_per_rotor_kj
-            .max(0.0);
+        * proxy.conformational_entropy_penalty_per_rotor_kj.max(0.0);
     let desolvation =
         proxy.polar_desolvated_contact_count.max(0.0) * proxy.polar_desolvation_penalty_kj.max(0.0);
     let strain = proxy.ligand_strain_penalty_kj.max(0.0);
@@ -228,13 +227,18 @@ mod tests {
         let far = qed_contact_energy_kj_mol(1.0, 0.60, 20.0);
         let screened = qed_contact_energy_kj_mol(1.0, 0.30, 40.0);
         assert!(near < far, "near contact should be more stabilizing");
-        assert!(near < screened, "lower dielectric should strengthen attraction");
+        assert!(
+            near < screened,
+            "lower dielectric should strengthen attraction"
+        );
     }
 
     #[test]
     fn atorvastatin_decomposition_is_physically_ordered() {
-        let score =
-            evaluate_atorvastatin_hmgcr_binding(BindingBenchmarkInput::default(), ElectrostaticProxyInput::default());
+        let score = evaluate_atorvastatin_hmgcr_binding(
+            BindingBenchmarkInput::default(),
+            ElectrostaticProxyInput::default(),
+        );
         assert!(score.experimental_delta_g_kj_mol < 0.0);
         assert!(score.qed_floor_total_kj_mol < 0.0);
         assert!(score.explained_fraction_of_abs_delta_g > 0.5);
@@ -260,8 +264,10 @@ mod tests {
             BindingBenchmarkInput::default(),
             ElectrostaticProxyInput::default(),
         );
-        let residual =
-            decompose_non_electrostatic_residual(score.residual_required_kj_mol, ResidualProxyInput::default());
+        let residual = decompose_non_electrostatic_residual(
+            score.residual_required_kj_mol,
+            ResidualProxyInput::default(),
+        );
         assert!(
             residual.closure_error_kj_mol.abs() < 2.0,
             "residual proxy should be close-order accurate: {residual:?}"

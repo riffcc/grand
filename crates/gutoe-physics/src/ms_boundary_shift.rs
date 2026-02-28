@@ -65,9 +65,8 @@ pub fn default_ms_sim_params() -> MsSimParams {
 pub fn boundary_shift_score(input: MsBoundaryShiftInput) -> MsBoundaryShiftScore {
     let eff = input.transduction_efficiency.clamp(0.0, 1.0);
     let effective_shift = input.achieved_shift_kj_mol.max(0.0) * eff;
-    let off_target_penalty = 0.15_f64
-        * input.off_target_penalty_scale.max(0.0)
-        * input.off_target_occupancy.max(0.0);
+    let off_target_penalty =
+        0.15_f64 * input.off_target_penalty_scale.max(0.0) * input.off_target_occupancy.max(0.0);
 
     let activation_after = (input.activation_excess_kj_mol.max(0.0)
         - effective_shift

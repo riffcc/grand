@@ -214,15 +214,14 @@ pub fn decompose_thc_cb1_non_electrostatic_residual(
     target_residual_kj_mol: f64,
     proxy: ThcResidualProxyInput,
 ) -> ThcResidualBreakdown {
-    let hydrophobic =
-        -(proxy.effective_hydrophobic_area_a2.max(0.0) * proxy.hydrophobic_coeff_kj_per_a2.max(0.0));
-    let aromatic = -(proxy.aromatic_contact_count.max(0.0)
-        * proxy.aromatic_contact_stabilization_kj.max(0.0));
-    let water = -(proxy.released_water_count.max(0.0) * proxy.water_release_stabilization_kj.max(0.0));
+    let hydrophobic = -(proxy.effective_hydrophobic_area_a2.max(0.0)
+        * proxy.hydrophobic_coeff_kj_per_a2.max(0.0));
+    let aromatic =
+        -(proxy.aromatic_contact_count.max(0.0) * proxy.aromatic_contact_stabilization_kj.max(0.0));
+    let water =
+        -(proxy.released_water_count.max(0.0) * proxy.water_release_stabilization_kj.max(0.0));
     let entropy = proxy.constrained_rotatable_bonds.max(0.0)
-        * proxy
-            .conformational_entropy_penalty_per_rotor_kj
-            .max(0.0);
+        * proxy.conformational_entropy_penalty_per_rotor_kj.max(0.0);
     let desolvation =
         proxy.polar_desolvated_contact_count.max(0.0) * proxy.polar_desolvation_penalty_kj.max(0.0);
     let strain = proxy.ligand_strain_penalty_kj.max(0.0);
@@ -262,12 +261,12 @@ pub fn simulate_thc_cb1_neuron_response(
                 thc_cb1_occupancy_fraction(c_nm, binding.ki_nanomolar, coupling.hill_coefficient);
             let activation = (occupancy * coupling.intrinsic_efficacy).clamp(0.0, 1.0);
 
-            let release_scale =
-                (1.0 - coupling.max_release_inhibition_fraction.clamp(0.0, 1.0) * activation)
-                    .clamp(0.0, 1.0);
-            let firing_scale =
-                (1.0 - coupling.max_firing_suppression_fraction.clamp(0.0, 1.0) * activation)
-                    .clamp(0.0, 1.0);
+            let release_scale = (1.0
+                - coupling.max_release_inhibition_fraction.clamp(0.0, 1.0) * activation)
+                .clamp(0.0, 1.0);
+            let firing_scale = (1.0
+                - coupling.max_firing_suppression_fraction.clamp(0.0, 1.0) * activation)
+                .clamp(0.0, 1.0);
 
             NeuronResponsePoint {
                 concentration_nanomolar: c_nm.max(0.0),

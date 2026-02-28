@@ -466,8 +466,10 @@ pub fn evaluate_cannabinoid_panel(
                 temperature_k,
             };
             let score = evaluate_cb1_ligand_binding(binding, spec.electro);
-            let residual =
-                decompose_cb1_non_electrostatic_residual(score.residual_required_kj_mol, spec.residual);
+            let residual = decompose_cb1_non_electrostatic_residual(
+                score.residual_required_kj_mol,
+                spec.residual,
+            );
 
             let mut coupling = coupling_template;
             coupling.intrinsic_efficacy = spec.intrinsic_efficacy_cb1;

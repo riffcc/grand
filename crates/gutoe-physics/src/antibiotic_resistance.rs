@@ -429,28 +429,31 @@ fn pair_result(
         );
     let qed_total = ionic_floor + hbond_floor;
 
-    let residual = -c.serine_trap_kj * inhibitor.serine_trap_strength.max(0.0) * enzyme.serine_drive
-        - c.boronate_serine_kj
-            * inhibitor.boronate_reversible_strength.max(0.0)
-            * enzyme.boronate_drive
-        - c.zinc_match_kj * inhibitor.zinc_chelation_strength.max(0.0) * enzyme.zinc_drive
-        + c.zinc_mismatch_penalty_kj
-            * enzyme.zinc_drive
-            * (1.0 - inhibitor.zinc_chelation_strength.max(0.0)).clamp(0.0, 1.0)
-        - c.hydrophobic_coeff_kj_per_a2
-            * inhibitor.hydrophobic_surface_a2.max(0.0)
-            * enzyme.steric_openness.max(0.0)
-        + c.entropy_coeff_kj * inhibitor.flexibility_penalty.max(0.0)
-        + c.desolv_coeff_kj * inhibitor.polar_desolvation_penalty.max(0.0)
-        + match enzyme.class {
-            BetaLactamaseClass::SerineClassA => c.offset_serine_class_kj,
-            BetaLactamaseClass::MetalloClassB => c.offset_metallo_class_kj,
-        };
+    let residual =
+        -c.serine_trap_kj * inhibitor.serine_trap_strength.max(0.0) * enzyme.serine_drive
+            - c.boronate_serine_kj
+                * inhibitor.boronate_reversible_strength.max(0.0)
+                * enzyme.boronate_drive
+            - c.zinc_match_kj * inhibitor.zinc_chelation_strength.max(0.0) * enzyme.zinc_drive
+            + c.zinc_mismatch_penalty_kj
+                * enzyme.zinc_drive
+                * (1.0 - inhibitor.zinc_chelation_strength.max(0.0)).clamp(0.0, 1.0)
+            - c.hydrophobic_coeff_kj_per_a2
+                * inhibitor.hydrophobic_surface_a2.max(0.0)
+                * enzyme.steric_openness.max(0.0)
+            + c.entropy_coeff_kj * inhibitor.flexibility_penalty.max(0.0)
+            + c.desolv_coeff_kj * inhibitor.polar_desolvation_penalty.max(0.0)
+            + match enzyme.class {
+                BetaLactamaseClass::SerineClassA => c.offset_serine_class_kj,
+                BetaLactamaseClass::MetalloClassB => c.offset_metallo_class_kj,
+            };
 
     let predicted_delta_g = qed_total + residual;
-    let predicted_nanomolar = potency_nanomolar_from_delta_g(predicted_delta_g, temperature_k).max(1.0e-9);
+    let predicted_nanomolar =
+        potency_nanomolar_from_delta_g(predicted_delta_g, temperature_k).max(1.0e-9);
     let anchor_delta_g = delta_g_from_potency_nanomolar(anchor.anchor_nanomolar, temperature_k);
-    let log10_error = (predicted_nanomolar.log10() - anchor.anchor_nanomolar.max(1.0e-12).log10()).abs();
+    let log10_error =
+        (predicted_nanomolar.log10() - anchor.anchor_nanomolar.max(1.0e-12).log10()).abs();
 
     PairwiseResistanceResult {
         inhibitor_name: inhibitor.name,
@@ -575,8 +578,16 @@ mod tests {
     #[test]
     fn tem_and_kpc_anchor_winners_are_avibactam() {
         let panel = default_antibiotic_resistance_panel(310.15);
-        let tem = panel.best_by_enzyme.iter().find(|r| r.enzyme_name == "TEM-1").unwrap();
-        let kpc = panel.best_by_enzyme.iter().find(|r| r.enzyme_name == "KPC").unwrap();
+        let tem = panel
+            .best_by_enzyme
+            .iter()
+            .find(|r| r.enzyme_name == "TEM-1")
+            .unwrap();
+        let kpc = panel
+            .best_by_enzyme
+            .iter()
+            .find(|r| r.enzyme_name == "KPC")
+            .unwrap();
         assert_eq!(tem.by_anchor_inhibitor, "avibactam");
         assert_eq!(kpc.by_anchor_inhibitor, "avibactam");
     }

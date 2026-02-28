@@ -168,12 +168,11 @@ fn pairwise_score(
         );
     let qed_total = ionic_floor + hbond_floor;
 
-    let residual = -c.hydrophobic_coeff_kj_per_a2
-        * phage.hydrophobic_area_a2.max(0.0)
-        * match_score
-        + c.mismatch_penalty_kj * (1.0 - match_score)
-        + phage.conformational_entropy_penalty.max(0.0)
-        + c.baseline_offset_kj;
+    let residual =
+        -c.hydrophobic_coeff_kj_per_a2 * phage.hydrophobic_area_a2.max(0.0) * match_score
+            + c.mismatch_penalty_kj * (1.0 - match_score)
+            + phage.conformational_entropy_penalty.max(0.0)
+            + c.baseline_offset_kj;
 
     let predicted_delta_g = qed_total + residual;
     let kd_nanomolar = kd_nanomolar_from_delta_g(predicted_delta_g, temperature_k).max(1.0e-9);
@@ -272,7 +271,9 @@ fn find_col(headers: &[String], aliases: &[&str]) -> Option<usize> {
         .iter()
         .map(|a| normalize_header(a))
         .collect::<Vec<_>>();
-    headers.iter().position(|h| aliases_norm.iter().any(|a| a == h))
+    headers
+        .iter()
+        .position(|h| aliases_norm.iter().any(|a| a == h))
 }
 
 fn get_required_cell<'a>(row: &'a [String], idx: usize, label: &str) -> Result<&'a str, String> {
@@ -363,7 +364,8 @@ pub fn load_phages_from_json_str(data: &str) -> Result<Vec<PhageSpec>, String> {
 
     let mut out = Vec::with_capacity(arr.len());
     for (i, row) in arr.iter().enumerate() {
-        let primary = v_required_str(row, "primary_receptor").map_err(|e| format!("row {i}: {e}"))?;
+        let primary =
+            v_required_str(row, "primary_receptor").map_err(|e| format!("row {i}: {e}"))?;
         let secondary = row
             .get("secondary_receptor")
             .and_then(Value::as_str)
@@ -374,8 +376,7 @@ pub fn load_phages_from_json_str(data: &str) -> Result<Vec<PhageSpec>, String> {
         let phage = PhageSpec {
             name: v_required_str(row, "name").map_err(|e| format!("row {i}: {e}"))?,
             family: v_required_str(row, "family").map_err(|e| format!("row {i}: {e}"))?,
-            primary_receptor: parse_receptor_kind(&primary)
-                .map_err(|e| format!("row {i}: {e}"))?,
+            primary_receptor: parse_receptor_kind(&primary).map_err(|e| format!("row {i}: {e}"))?,
             secondary_receptor: secondary,
             secondary_weight: v_required_f64(row, "secondary_weight")
                 .map_err(|e| format!("row {i}: {e}"))?,
@@ -397,22 +398,25 @@ pub fn load_phages_from_json_str(data: &str) -> Result<Vec<PhageSpec>, String> {
 
 pub fn load_strains_from_csv_str(data: &str) -> Result<Vec<BacterialStrainSpec>, String> {
     let rows = csv_rows(data)?;
-    let headers = rows[0].iter().map(|h| normalize_header(h)).collect::<Vec<_>>();
+    let headers = rows[0]
+        .iter()
+        .map(|h| normalize_header(h))
+        .collect::<Vec<_>>();
 
-    let idx_name = find_col(&headers, &["name"])
-        .ok_or_else(|| "missing 'name' column".to_string())?;
-    let idx_species = find_col(&headers, &["species"])
-        .ok_or_else(|| "missing 'species' column".to_string())?;
+    let idx_name =
+        find_col(&headers, &["name"]).ok_or_else(|| "missing 'name' column".to_string())?;
+    let idx_species =
+        find_col(&headers, &["species"]).ok_or_else(|| "missing 'species' column".to_string())?;
     let idx_res = find_col(&headers, &["resistance_marker", "resistance"])
         .ok_or_else(|| "missing 'resistance_marker' column".to_string())?;
-    let idx_lamb = find_col(&headers, &["lamb"])
-        .ok_or_else(|| "missing 'lamb' column".to_string())?;
-    let idx_ompk35 = find_col(&headers, &["ompk35"])
-        .ok_or_else(|| "missing 'ompk35' column".to_string())?;
-    let idx_ompk36 = find_col(&headers, &["ompk36"])
-        .ok_or_else(|| "missing 'ompk36' column".to_string())?;
-    let idx_fhua = find_col(&headers, &["fhua"])
-        .ok_or_else(|| "missing 'fhua' column".to_string())?;
+    let idx_lamb =
+        find_col(&headers, &["lamb"]).ok_or_else(|| "missing 'lamb' column".to_string())?;
+    let idx_ompk35 =
+        find_col(&headers, &["ompk35"]).ok_or_else(|| "missing 'ompk35' column".to_string())?;
+    let idx_ompk36 =
+        find_col(&headers, &["ompk36"]).ok_or_else(|| "missing 'ompk36' column".to_string())?;
+    let idx_fhua =
+        find_col(&headers, &["fhua"]).ok_or_else(|| "missing 'fhua' column".to_string())?;
     let idx_lps = find_col(&headers, &["lps_core", "lpscore"])
         .ok_or_else(|| "missing 'lps_core' column".to_string())?;
     let idx_pilus = find_col(&headers, &["type_iv_pilus", "typeivpilus"])
@@ -422,7 +426,9 @@ pub fn load_strains_from_csv_str(data: &str) -> Result<Vec<BacterialStrainSpec>,
     for (line_idx, row) in rows.iter().enumerate().skip(1) {
         let mk_err = |e: String| format!("line {}: {}", line_idx + 1, e);
         out.push(BacterialStrainSpec {
-            name: get_required_cell(row, idx_name, "name").map_err(mk_err.clone())?.to_string(),
+            name: get_required_cell(row, idx_name, "name")
+                .map_err(mk_err.clone())?
+                .to_string(),
             species: get_required_cell(row, idx_species, "species")
                 .map_err(mk_err.clone())?
                 .to_string(),
@@ -444,12 +450,15 @@ pub fn load_strains_from_csv_str(data: &str) -> Result<Vec<BacterialStrainSpec>,
 
 pub fn load_phages_from_csv_str(data: &str) -> Result<Vec<PhageSpec>, String> {
     let rows = csv_rows(data)?;
-    let headers = rows[0].iter().map(|h| normalize_header(h)).collect::<Vec<_>>();
+    let headers = rows[0]
+        .iter()
+        .map(|h| normalize_header(h))
+        .collect::<Vec<_>>();
 
-    let idx_name = find_col(&headers, &["name"])
-        .ok_or_else(|| "missing 'name' column".to_string())?;
-    let idx_family = find_col(&headers, &["family"])
-        .ok_or_else(|| "missing 'family' column".to_string())?;
+    let idx_name =
+        find_col(&headers, &["name"]).ok_or_else(|| "missing 'name' column".to_string())?;
+    let idx_family =
+        find_col(&headers, &["family"]).ok_or_else(|| "missing 'family' column".to_string())?;
     let idx_pr = find_col(&headers, &["primary_receptor"])
         .ok_or_else(|| "missing 'primary_receptor' column".to_string())?;
     let idx_sr = find_col(&headers, &["secondary_receptor"])
@@ -470,7 +479,8 @@ pub fn load_phages_from_csv_str(data: &str) -> Result<Vec<PhageSpec>, String> {
     let mut out = Vec::new();
     for (line_idx, row) in rows.iter().enumerate().skip(1) {
         let mk_err = |e: String| format!("line {}: {}", line_idx + 1, e);
-        let primary_raw = get_required_cell(row, idx_pr, "primary_receptor").map_err(mk_err.clone())?;
+        let primary_raw =
+            get_required_cell(row, idx_pr, "primary_receptor").map_err(mk_err.clone())?;
         let secondary_raw = row
             .get(idx_sr)
             .map(|s| s.trim())
@@ -478,18 +488,26 @@ pub fn load_phages_from_csv_str(data: &str) -> Result<Vec<PhageSpec>, String> {
             .unwrap_or("");
 
         out.push(PhageSpec {
-            name: get_required_cell(row, idx_name, "name").map_err(mk_err.clone())?.to_string(),
-            family: get_required_cell(row, idx_family, "family").map_err(mk_err.clone())?.to_string(),
+            name: get_required_cell(row, idx_name, "name")
+                .map_err(mk_err.clone())?
+                .to_string(),
+            family: get_required_cell(row, idx_family, "family")
+                .map_err(mk_err.clone())?
+                .to_string(),
             primary_receptor: parse_receptor_kind(primary_raw).map_err(mk_err.clone())?,
             secondary_receptor: if secondary_raw.is_empty() {
                 None
             } else {
                 Some(parse_receptor_kind(secondary_raw).map_err(mk_err.clone())?)
             },
-            secondary_weight: get_f64_cell(row, idx_sw, "secondary_weight").map_err(mk_err.clone())?,
-            ionic_contact_count: get_f64_cell(row, idx_ic, "ionic_contact_count").map_err(mk_err.clone())?,
-            hbond_contact_count: get_f64_cell(row, idx_hc, "hbond_contact_count").map_err(mk_err.clone())?,
-            hydrophobic_area_a2: get_f64_cell(row, idx_ha, "hydrophobic_area_a2").map_err(mk_err.clone())?,
+            secondary_weight: get_f64_cell(row, idx_sw, "secondary_weight")
+                .map_err(mk_err.clone())?,
+            ionic_contact_count: get_f64_cell(row, idx_ic, "ionic_contact_count")
+                .map_err(mk_err.clone())?,
+            hbond_contact_count: get_f64_cell(row, idx_hc, "hbond_contact_count")
+                .map_err(mk_err.clone())?,
+            hydrophobic_area_a2: get_f64_cell(row, idx_ha, "hydrophobic_area_a2")
+                .map_err(mk_err.clone())?,
             conformational_entropy_penalty: get_f64_cell(
                 row,
                 idx_ce,
@@ -771,7 +789,8 @@ mod tests {
 
     #[test]
     fn csv_ingest_parses_minimal_payload() {
-        let strains_csv = "name,species,resistance_marker,lamb,ompk35,ompk36,fhua,lps_core,type_iv_pilus\n\
+        let strains_csv =
+            "name,species,resistance_marker,lamb,ompk35,ompk36,fhua,lps_core,type_iv_pilus\n\
 s1,Klebsiella pneumoniae,NDM-1,0.1,0.7,0.8,0.2,0.9,0.1\n";
         let phages_csv = "name,family,primary_receptor,secondary_receptor,secondary_weight,ionic_contact_count,hbond_contact_count,hydrophobic_area_a2,conformational_entropy_penalty,host_takeover_efficiency\n\
 p1,myoviridae_like,OmpK36,OmpK35,0.5,2.0,3.0,300.0,2.0,0.8\n";
