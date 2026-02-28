@@ -153,6 +153,41 @@ theorem unified_budget_dark_to_visible_ratio_eq :
     unifiedBudgetDarkToVisibleRatio = 60 / 11 := by
   exact geometric_dark_to_visible_ratio_eq
 
+/-- Structural finite-closure subtraction on the shared dark budget:
+    subtract half of the dark candidate count (`δ = |dark|/2`). -/
+def geometricDarkBudgetDeltaQ : ℚ :=
+  (darkSectorCandidates.card : ℚ) / 2
+
+/-- The structural subtraction is exactly `5/2`. -/
+theorem geometric_dark_budget_delta_eq :
+    geometricDarkBudgetDeltaQ = 5 / 2 := by
+  unfold geometricDarkBudgetDeltaQ
+  rcases visible_dark_state_count_split with ⟨_, hDark, _, _⟩
+  rw [hDark]
+  norm_num
+
+/-- Shared geometric budget after finite-closure subtraction:
+    `(60 - δ) / 11` with `δ = |dark|/2`. -/
+def correctedUnifiedBudgetDarkToVisibleRatio : ℚ :=
+  geometricDarkToVisibleRatio - geometricDarkBudgetDeltaQ / (visibleSectorStates.card : ℚ)
+
+/-- Equivalent form: corrected shared ratio is
+    `dark/visible * (amplification - 1/2)`. -/
+theorem corrected_unified_budget_ratio_factorized :
+    correctedUnifiedBudgetDarkToVisibleRatio
+      = darkToVisibleCountRatio * (geometricDarkAmplificationQ - (1 / 2 : ℚ)) := by
+  unfold correctedUnifiedBudgetDarkToVisibleRatio geometricDarkToVisibleRatio
+  unfold geometricDarkBudgetDeltaQ darkToVisibleCountRatio
+  ring
+
+/-- Exact corrected shared ratio from the same Cl(1,3) primitives:
+    `115/22 = (60 - 5/2)/11`. -/
+theorem corrected_unified_budget_dark_to_visible_ratio_eq :
+    correctedUnifiedBudgetDarkToVisibleRatio = 115 / 22 := by
+  rw [corrected_unified_budget_ratio_factorized]
+  rw [dark_to_visible_count_ratio_eq, geometric_dark_amplification_eq]
+  norm_num
+
 /-- Unified local ratio (where): particle-like local clustering modulated by `κ`. -/
 noncomputable def unifiedLocalDarkToVisibleRatio (kappa : ℝ) : ℝ :=
   (5 / 11 : ℝ) * kappa

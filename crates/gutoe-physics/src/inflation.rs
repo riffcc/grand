@@ -42,11 +42,22 @@ pub fn inflation_efolds_structural() -> f64 {
 /// - `(3/6) = 1/2` timelike-spacelike/grade-2 split
 /// - `1/sqrt(486)` micro-mode dilution
 pub fn inflation_hubble_ratio_structural() -> f64 {
+    inflation_hubble_ratio_structural_with_correction(1.0)
+}
+
+/// Structural Hubble-scale ratio with an explicit multiplicative correction
+/// factor `c_inf` (default lane uses `c_inf = 1`).
+pub fn inflation_hubble_ratio_structural_with_correction(c_inf: f64) -> f64 {
     let geometric_budget = DARK_TO_VISIBLE_GEOMETRIC_RATIO;
     let survival = 1.0 - LAMBDA_QG;
     let signature_split = 3.0 / 6.0;
     let micro_dilution = 1.0 / 486.0_f64.sqrt();
-    ALPHA_LEADING_ORDER.powi(2) * geometric_budget * survival * signature_split * micro_dilution
+    c_inf
+        * ALPHA_LEADING_ORDER.powi(2)
+        * geometric_budget
+        * survival
+        * signature_split
+        * micro_dilution
 }
 
 /// Slow-roll epsilon for plateau-like structural lane.

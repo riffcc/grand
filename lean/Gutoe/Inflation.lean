@@ -51,6 +51,11 @@ noncomputable def inflationHubbleRatio : ℝ :=
     * ((magneticTriplet.card : ℝ) / ((Nat.choose 4 2 : ℕ) : ℝ))
     * (1 / Real.sqrt (baryoMicroModeCount : ℝ))
 
+/-- Structural inflation micro-correction candidate from shared finite counts:
+    `C_inf = 1 + 1/(|grade-2| * |visible|) = 1 + 1/(6*11)`. -/
+noncomputable def inflationCorrectionCInf : ℝ :=
+  1 + 1 / (((Nat.choose 4 2 : ℕ) : ℝ) * (visibleSectorStates.card : ℝ))
+
 /-- Scalar amplitude from slow-roll relation:
     `A_s = (H/M_pl)^2 / (8π² ε)`. -/
 noncomputable def scalarAmplitude : ℝ :=
@@ -113,6 +118,51 @@ theorem inflation_hubble_ratio_eq :
   rw [hs]
   rw [h20]
   norm_num [baryo_micro_mode_count_eq_486]
+
+/-- Inflation Hubble ratio with the corrected shared dark budget
+    `115/22 = (60 - 5/2)/11`, keeping all other structural factors unchanged. -/
+theorem inflation_hubble_ratio_with_corrected_budget_eq :
+    alphaLeadingOrder ^ 2
+      * (correctedUnifiedBudgetDarkToVisibleRatio : ℝ)
+      * (1 - lambda_qg)
+      * ((magneticTriplet.card : ℝ) / ((Nat.choose 4 2 : ℕ) : ℝ))
+      * (1 / Real.sqrt (baryoMicroModeCount : ℝ))
+      = ((1 : ℝ) / 137) ^ 2
+          * ((115 : ℝ) / 22)
+          * ((11 : ℝ) / 12)
+          * ((3 : ℝ) / 6)
+          * (1 / Real.sqrt 486) := by
+  rw [alpha_leading_order_eq]
+  have hcorr : (correctedUnifiedBudgetDarkToVisibleRatio : ℝ) = (115 : ℝ) / 22 := by
+    norm_num [corrected_unified_budget_dark_to_visible_ratio_eq]
+  rw [hcorr]
+  have hLam : lambda_qg = (1 : ℝ) / 12 := by
+    unfold lambda_qg
+    norm_num
+  rw [hLam]
+  have hs : magneticTriplet.card = 3 := su2_dim
+  have h20 : (Nat.choose 4 2 : ℕ) = 6 := by native_decide
+  rw [hs, h20]
+  norm_num [baryo_micro_mode_count_eq_486]
+
+/-- Exact structural inflation correction from shared counts:
+    `C_inf = 1 + 1/(6*11) = 67/66`. -/
+theorem inflation_cinf_eq :
+    inflationCorrectionCInf
+      = 1 + 1 / ((6 : ℝ) * 11) := by
+  unfold inflationCorrectionCInf
+  have hvis : visibleSectorStates.card = 11 := by
+    rcases visible_dark_state_count_split with ⟨hVis, _, _, _⟩
+    exact hVis
+  have hchoose : (Nat.choose 4 2 : ℕ) = 6 := by
+    native_decide
+  rw [hchoose]
+  norm_num [hvis]
+
+theorem inflation_cinf_eq_67_over_66 :
+    inflationCorrectionCInf = (67 : ℝ) / 66 := by
+  rw [inflation_cinf_eq]
+  norm_num
 
 theorem inflation_hubble_ratio_pos :
     0 < inflationHubbleRatio := by
