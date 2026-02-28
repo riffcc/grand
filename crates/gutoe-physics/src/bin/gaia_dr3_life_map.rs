@@ -94,10 +94,17 @@ struct SignalTarget {
     entropy_multiplier: f64,
     local_n_times_p: f64,
     survival_fraction: f64,
+    strict_pass_fraction: f64,
     energy_pass_fraction: f64,
     conflict_pass_fraction: f64,
     self_destruction_pass_fraction: f64,
     environment_pass_fraction: f64,
+    stellar_stability_likelihood: f64,
+    orbital_architecture_likelihood: f64,
+    metallicity_band_likelihood: f64,
+    galactic_environment_likelihood: f64,
+    transition_likelihood: f64,
+    self_destruction_likelihood: f64,
 }
 
 fn normalize_header(s: &str) -> String {
@@ -504,7 +511,7 @@ fn main() {
         let mut w = BufWriter::new(File::create(&all_signals_path).expect("create all signal csv"));
         writeln!(
             w,
-            "source_id,ra_deg,dec_deg,distance_ly,x_ly,y_ly,z_ly,stage,habitability_score,entropy_multiplier,local_n_times_p,survival_fraction,energy_pass_fraction,conflict_pass_fraction,self_destruction_pass_fraction,environment_pass_fraction"
+            "source_id,ra_deg,dec_deg,distance_ly,x_ly,y_ly,z_ly,stage,habitability_score,entropy_multiplier,local_n_times_p,survival_fraction,strict_pass_fraction,energy_pass_fraction,conflict_pass_fraction,self_destruction_pass_fraction,environment_pass_fraction,stellar_stability_likelihood,orbital_architecture_likelihood,metallicity_band_likelihood,galactic_environment_likelihood,transition_likelihood,self_destruction_likelihood"
         )
         .expect("write all signal header");
         Some(w)
@@ -519,10 +526,17 @@ fn main() {
     let mut skipped_bad_physics = 0usize;
     let mut gf_signal_count = 0usize;
     let mut gf_survival_sum = 0.0;
+    let mut gf_strict_sum = 0.0;
     let mut gf_energy_sum = 0.0;
     let mut gf_conflict_sum = 0.0;
     let mut gf_self_sum = 0.0;
     let mut gf_env_sum = 0.0;
+    let mut gf_stellar_sum = 0.0;
+    let mut gf_orbital_sum = 0.0;
+    let mut gf_metal_band_sum = 0.0;
+    let mut gf_galactic_sum = 0.0;
+    let mut gf_transition_sum = 0.0;
+    let mut gf_self_likelihood_sum = 0.0;
 
     let mut line = String::new();
     loop {
@@ -697,21 +711,30 @@ fn main() {
                     habitability_score: star.habitability_score,
                     entropy_multiplier: star.entropy_multiplier,
                     local_n_times_p: star.local_n_times_p,
+                    galactic_radius_ly: star.seed.galactic_radius_ly,
+                    galactic_z_ly: star.seed.z_ly,
                 },
                 gf_windows,
                 star.source_id ^ gf_seed_salt,
             );
             gf_signal_count += 1;
             gf_survival_sum += gf.survival_fraction;
+            gf_strict_sum += gf.strict_pass_fraction;
             gf_energy_sum += gf.energy_pass_fraction;
             gf_conflict_sum += gf.conflict_pass_fraction;
             gf_self_sum += gf.self_destruction_pass_fraction;
             gf_env_sum += gf.environment_pass_fraction;
+            gf_stellar_sum += gf.stellar_stability_likelihood;
+            gf_orbital_sum += gf.orbital_architecture_likelihood;
+            gf_metal_band_sum += gf.metallicity_band_likelihood;
+            gf_galactic_sum += gf.galactic_environment_likelihood;
+            gf_transition_sum += gf.transition_likelihood;
+            gf_self_likelihood_sum += gf.self_destruction_likelihood;
 
             if let Some(w) = &mut all_signals_writer {
                 writeln!(
                     w,
-                    "{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9}",
+                    "{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9}",
                     star.source_id,
                     star.ra_deg,
                     star.dec_deg,
@@ -724,10 +747,17 @@ fn main() {
                     star.entropy_multiplier,
                     star.local_n_times_p,
                     gf.survival_fraction,
+                    gf.strict_pass_fraction,
                     gf.energy_pass_fraction,
                     gf.conflict_pass_fraction,
                     gf.self_destruction_pass_fraction,
-                    gf.environment_pass_fraction
+                    gf.environment_pass_fraction,
+                    gf.stellar_stability_likelihood,
+                    gf.orbital_architecture_likelihood,
+                    gf.metallicity_band_likelihood,
+                    gf.galactic_environment_likelihood,
+                    gf.transition_likelihood,
+                    gf.self_destruction_likelihood
                 )
                 .expect("write all signals row");
             }
@@ -750,10 +780,17 @@ fn main() {
                     entropy_multiplier: star.entropy_multiplier,
                     local_n_times_p: star.local_n_times_p,
                     survival_fraction: gf.survival_fraction,
+                    strict_pass_fraction: gf.strict_pass_fraction,
                     energy_pass_fraction: gf.energy_pass_fraction,
                     conflict_pass_fraction: gf.conflict_pass_fraction,
                     self_destruction_pass_fraction: gf.self_destruction_pass_fraction,
                     environment_pass_fraction: gf.environment_pass_fraction,
+                    stellar_stability_likelihood: gf.stellar_stability_likelihood,
+                    orbital_architecture_likelihood: gf.orbital_architecture_likelihood,
+                    metallicity_band_likelihood: gf.metallicity_band_likelihood,
+                    galactic_environment_likelihood: gf.galactic_environment_likelihood,
+                    transition_likelihood: gf.transition_likelihood,
+                    self_destruction_likelihood: gf.self_destruction_likelihood,
                 },
                 nearest_k,
             );
@@ -774,13 +811,13 @@ fn main() {
     let mut target_csv = BufWriter::new(File::create(&targets_csv_path).expect("create targets csv"));
     writeln!(
         target_csv,
-        "source_id,distance_from_sun_ly,ra_deg,dec_deg,x_ly,y_ly,z_ly,stage,habitability_score,entropy_multiplier,local_n_times_p,survival_fraction,energy_pass_fraction,conflict_pass_fraction,self_destruction_pass_fraction,environment_pass_fraction"
+        "source_id,distance_from_sun_ly,ra_deg,dec_deg,x_ly,y_ly,z_ly,stage,habitability_score,entropy_multiplier,local_n_times_p,survival_fraction,strict_pass_fraction,energy_pass_fraction,conflict_pass_fraction,self_destruction_pass_fraction,environment_pass_fraction,stellar_stability_likelihood,orbital_architecture_likelihood,metallicity_band_likelihood,galactic_environment_likelihood,transition_likelihood,self_destruction_likelihood"
     )
     .expect("targets header");
     for t in &nearest_targets {
         writeln!(
             target_csv,
-            "{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9}",
+            "{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9}",
             t.source_id,
             t.distance_from_sun_ly,
             t.ra_deg,
@@ -793,10 +830,17 @@ fn main() {
             t.entropy_multiplier,
             t.local_n_times_p,
             t.survival_fraction,
+            t.strict_pass_fraction,
             t.energy_pass_fraction,
             t.conflict_pass_fraction,
             t.self_destruction_pass_fraction,
-            t.environment_pass_fraction
+            t.environment_pass_fraction,
+            t.stellar_stability_likelihood,
+            t.orbital_architecture_likelihood,
+            t.metallicity_band_likelihood,
+            t.galactic_environment_likelihood,
+            t.transition_likelihood,
+            t.self_destruction_likelihood
         )
         .expect("targets row");
     }
@@ -813,6 +857,11 @@ fn main() {
     let predicted_signal_count_milky_way_present = signal_fraction * MILKY_WAY_STELLAR_COUNT_ESTIMATE;
     let gf_survival_fraction_conditional = if gf_signal_count > 0 {
         gf_survival_sum / gf_signal_count as f64
+    } else {
+        0.0
+    };
+    let gf_strict_pass_mean = if gf_signal_count > 0 {
+        gf_strict_sum / gf_signal_count as f64
     } else {
         0.0
     };
@@ -833,6 +882,36 @@ fn main() {
     };
     let gf_environment_pass_mean = if gf_signal_count > 0 {
         gf_env_sum / gf_signal_count as f64
+    } else {
+        0.0
+    };
+    let gf_stellar_likelihood_mean = if gf_signal_count > 0 {
+        gf_stellar_sum / gf_signal_count as f64
+    } else {
+        0.0
+    };
+    let gf_orbital_likelihood_mean = if gf_signal_count > 0 {
+        gf_orbital_sum / gf_signal_count as f64
+    } else {
+        0.0
+    };
+    let gf_metal_band_likelihood_mean = if gf_signal_count > 0 {
+        gf_metal_band_sum / gf_signal_count as f64
+    } else {
+        0.0
+    };
+    let gf_galactic_likelihood_mean = if gf_signal_count > 0 {
+        gf_galactic_sum / gf_signal_count as f64
+    } else {
+        0.0
+    };
+    let gf_transition_likelihood_mean = if gf_signal_count > 0 {
+        gf_transition_sum / gf_signal_count as f64
+    } else {
+        0.0
+    };
+    let gf_self_likelihood_mean = if gf_signal_count > 0 {
+        gf_self_likelihood_sum / gf_signal_count as f64
     } else {
         0.0
     };
@@ -931,10 +1010,47 @@ fn main() {
     }
     writeln!(txt).expect("write");
     writeln!(txt, "[great_filter_gate_means]").expect("write");
+    writeln!(txt, "strict_pass_mean = {:.9}", gf_strict_pass_mean).expect("write");
     writeln!(txt, "energy_pass_mean = {:.9}", gf_energy_pass_mean).expect("write");
     writeln!(txt, "conflict_pass_mean = {:.9}", gf_conflict_pass_mean).expect("write");
     writeln!(txt, "self_destruction_pass_mean = {:.9}", gf_self_pass_mean).expect("write");
     writeln!(txt, "environment_pass_mean = {:.9}", gf_environment_pass_mean).expect("write");
+    writeln!(
+        txt,
+        "stellar_stability_likelihood_mean = {:.9}",
+        gf_stellar_likelihood_mean
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "orbital_architecture_likelihood_mean = {:.9}",
+        gf_orbital_likelihood_mean
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "metallicity_band_likelihood_mean = {:.9}",
+        gf_metal_band_likelihood_mean
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "galactic_environment_likelihood_mean = {:.9}",
+        gf_galactic_likelihood_mean
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "transition_likelihood_mean = {:.9}",
+        gf_transition_likelihood_mean
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "self_destruction_likelihood_mean = {:.9}",
+        gf_self_likelihood_mean
+    )
+    .expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[nearest_signal_targets]").expect("write");
     for t in &nearest_targets {
@@ -1005,10 +1121,17 @@ fn main() {
             "trials_per_civilization": gf_trials,
             "signal_count_modeled": gf_signal_count,
             "survival_fraction_conditional": gf_survival_fraction_conditional,
+            "strict_pass_mean": gf_strict_pass_mean,
             "energy_pass_mean": gf_energy_pass_mean,
             "conflict_pass_mean": gf_conflict_pass_mean,
             "self_destruction_pass_mean": gf_self_pass_mean,
-            "environment_pass_mean": gf_environment_pass_mean
+            "environment_pass_mean": gf_environment_pass_mean,
+            "stellar_stability_likelihood_mean": gf_stellar_likelihood_mean,
+            "orbital_architecture_likelihood_mean": gf_orbital_likelihood_mean,
+            "metallicity_band_likelihood_mean": gf_metal_band_likelihood_mean,
+            "galactic_environment_likelihood_mean": gf_galactic_likelihood_mean,
+            "transition_likelihood_mean": gf_transition_likelihood_mean,
+            "self_destruction_likelihood_mean": gf_self_likelihood_mean
         },
         "nearest_signal_targets": nearest_targets.iter().map(|t| json!({
             "source_id": t.source_id,
@@ -1023,10 +1146,17 @@ fn main() {
             "entropy_multiplier": t.entropy_multiplier,
             "local_n_times_p": t.local_n_times_p,
             "survival_fraction": t.survival_fraction,
+            "strict_pass_fraction": t.strict_pass_fraction,
             "energy_pass_fraction": t.energy_pass_fraction,
             "conflict_pass_fraction": t.conflict_pass_fraction,
             "self_destruction_pass_fraction": t.self_destruction_pass_fraction,
-            "environment_pass_fraction": t.environment_pass_fraction
+            "environment_pass_fraction": t.environment_pass_fraction,
+            "stellar_stability_likelihood": t.stellar_stability_likelihood,
+            "orbital_architecture_likelihood": t.orbital_architecture_likelihood,
+            "metallicity_band_likelihood": t.metallicity_band_likelihood,
+            "galactic_environment_likelihood": t.galactic_environment_likelihood,
+            "transition_likelihood": t.transition_likelihood,
+            "self_destruction_likelihood": t.self_destruction_likelihood
         })).collect::<Vec<_>>(),
         "artifacts": {
             "map_png": png_path.display().to_string(),
