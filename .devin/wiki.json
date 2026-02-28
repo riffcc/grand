@@ -1,0 +1,139 @@
+{
+  "repo_notes": [
+    {
+      "author": "Wings",
+      "content": "GUTOE (Grand Unified Theory of Everything) derives all of known physics from a single mathematical object: the Clifford algebra Cl(1,3) of 4-dimensional Minkowski spacetime. Zero free parameters. Every result is either Lean 4 machine-checked (no sorry, no axiom leaks) or deterministically computed by a Rust binary and pinned in a numbered finding.\n\nCurrent status: ~95% complete. Yang-Mills mass gap proven (GRAND-333). Strong CP dissolved (Findings 029-033). Cosmological lithium problem resolved (0.025% match). Three EW/neutrino constants proven unique by infinite elimination — the algebra admits no other integer combination consistent with observation (Findings 154-161). 8131+ Lean proof obligations discharged.\n\nREPO STRUCTURE:\n- lean/Gutoe/          124 Lean 4 modules, organized by physics area\n- lean/lakefile.lean   root build config; every module registered here\n- crates/             Rust workspace (8 crates, 161 binaries)\n  - gutoe-physics/   main physics computation crate\n  - gutoe-em/        electroweak and flavor sector\n  - gutoe-core/      shared algebraic primitives\n  - gutoe-lattice/   lattice gauge theory utilities\n  - gutoe-qm/        quantum mechanics utilities\n  - gutoe-viz/       visualization and report rendering\n- findings/           190+ numbered markdown findings (001, 002, ...)\n  Each finding documents a specific result: what was computed, the\n  exact output, the honest error assessment, and the Lean/Rust evidence.\n- frontend/           Vue 3 interactive tutorial (single HTML file)\n- SPEC.md             Full theory specification\n- VICE_RULES.md       Honesty and anti-overfit rules for all contributors\n\nVERIFICATION METHODOLOGY:\nEvery physics claim has three layers: (1) a Lean theorem proving the structural identity, (2) a Rust binary computing the numerical value, (3) a finding documenting the comparison to experiment with honest error. Nothing is claimed that isn't backed by at least one of these. VICE_RULES.md enforces no retune-on-holdout, no silent parameter injection, no inflation of agreement.\n\nFINDINGS NUMBERING: findings/001 through findings/179+ are numbered sequentially. The filename encodes the finding number and a brief slug. Key milestones: 001-009 (first constants), 029-033 (Strong CP), 057-078 (Yang-Mills chain), 084-098 (cosmology), 107 (PMNS theta23 plot twist), 110 (nuclear), 154-161 (infinite elimination), 169 (Jupiter GRS)."
+    }
+  ],
+  "pages": [
+    {
+      "title": "Overview",
+      "purpose": "Introduce GUTOE: the central claim (all of physics from Cl(1,3), zero free parameters), why this is different from string theory/SUSY/LQG, the three verification pillars (Lean proofs, Rust binaries, numbered findings), current completion status (~95%), the six historically hard problems now closed, and the two genuine open problems that remain. Include a quick-reference table of key derived constants with their errors."
+    },
+    {
+      "title": "Algebraic Foundation",
+      "purpose": "Explain the mathematical starting point: what Cl(1,3) is, why it is the right algebra of 4D Minkowski spacetime, the anticommutation relation {γμ, γν} = 2ημν, and why d=4 is structurally unique. This is the entry point for readers unfamiliar with Clifford algebras."
+    },
+    {
+      "title": "Grade Structure and Basis Elements",
+      "parent": "Algebraic Foundation",
+      "purpose": "Document the 16 basis elements of Cl(1,3) organized by grade: 1 scalar, 4 vectors, 6 bivectors, 4 pseudovectors, 1 pseudoscalar. Explain what each grade represents physically (scalars=scale, bivectors=rotations/boosts/gauge, pseudoscalar γ⁵=chirality). Cover the even subalgebra Cl⁺(1,3) ≅ Cl(3,0) where the gauge group lives. Reference CliffordStructure.lean and DimensionalStructure.lean."
+    },
+    {
+      "title": "Z₃ Symmetry and Orbit Structure",
+      "parent": "Algebraic Foundation",
+      "purpose": "Document the Z₃ automorphism φ: γ₁↦γ₂↦γ₃↦γ₁, γ₀↦γ₀ — the unique non-trivial discrete automorphism of the spatial subalgebra. Explain orbit decomposition: singlets (Z₃-fixed elements → leptons, no color charge) vs triplets (Z₃-cycled elements → quarks, three colors). Show why Z₃ forces exactly three fermion generations and why no fourth generation exists. Reference Z3Uniqueness.lean and Generations.lean."
+    },
+    {
+      "title": "Standard Model",
+      "purpose": "Top-level overview of how the full Standard Model gauge structure SU(3)×SU(2)×U(1), all particle content, all coupling constants, and all mixing parameters emerge from Cl(1,3) + Z₃. No free parameters introduced at any stage. Reference the child pages for each sector."
+    },
+    {
+      "title": "Gauge Group Derivation",
+      "parent": "Standard Model",
+      "purpose": "Document how SU(3)×SU(2)×U(1) is extracted from the even subalgebra. Show the explicit Gell-Mann generator dictionary (each of the 8 SU(3) generators mapped to a Clifford bivector), the 3 SU(2) generators, and the U(1) hypercharge from the grade-0/grade-4 structure. Cover charge quantization from anomaly cancellation. Reference GaugeConstants.lean."
+    },
+    {
+      "title": "Yang-Mills Mass Gap",
+      "parent": "Standard Model",
+      "purpose": "Document the proof of the Yang-Mills mass gap — one of the seven Clay Millennium Problems. Describe the full 15-module Lean proof chain: GRAND-331 (Osterwalder-Schrader reconstruction: Schwinger functions → Hilbert space → self-adjoint Hamiltonian) and GRAND-333 (grand333_continuum_mass_gap_of_domain: ∃ Δ > 0, ∀ n, Δ ≤ continuumMassGapAt n). Cover the Doeblin minorization, the Haar bridge, the Wilson-Z₃ equivalence spine, and the gap floor c_floor = log(275/274). Status: proven with no sorry, Clay dossier submitted."
+    },
+    {
+      "title": "Fundamental Constants",
+      "parent": "Standard Model",
+      "purpose": "Document the derivation of all fundamental dimensionless constants: α⁻¹ = T(16)+1 = 137 (fine structure, from triangular number of Clifford basis), m_p/m_e = 12×T(17) = 1836 (proton/electron mass ratio), sin²θ_W = 3/13 (Weinberg angle from Z₃ orbit counting), α_s(M_Z) from cross-sector recurrence, the Koide formula 2/3 from Z₃ harmonics. Also cover the second-order α correction (Lean-proven) and the third-order candidate c₃ = -153/7. Reference FineStructure.lean, GaugeConstants.lean, Findings 002/012/099-103."
+    },
+    {
+      "title": "Infinite Elimination and Uniqueness",
+      "parent": "Standard Model",
+      "purpose": "Document the triangulation/infinite elimination breakthrough (Findings 152-161). Explain the three triangulated constants p = 137/10 - 1/(7×12), κ = (60/11)(19/3 + 1/36 + 1/(7×13×136)), c_ew = 8 + 6/13 - 1/(7×136) and their Clifford provenance. Show the integer index lattice forms and how the near-target condition collapses infinite integer search to 2/4/1 candidate values. Explain the XL structural bounds that force the unique canonical tuple. Reference TriangulatedConstants.lean, TriangulatedGrammarUniverse.lean (p/kappa/ew_infinite_elimination_xl_complete), lake build green at 8131 jobs."
+    },
+    {
+      "title": "Electroweak Symmetry Breaking",
+      "parent": "Standard Model",
+      "purpose": "Document the Higgs sector derivation: void fraction f_c = 3/16 gives λ_H = 13/100 (Lean-proven from grade counting), VEV v/m_p = 40/153 from lattice order parameter, electroweak masses m_H ≈ 125.08 GeV, m_W ≈ 80.01 GeV, m_Z ≈ 91.23 GeV all within 0.5% of experiment. Cover Strong CP dissolution (Findings 029-033): how Z₃ vacuum selects θ_QCD = 0 dynamically. Reference EWSBHiggs.lean."
+    },
+    {
+      "title": "Fermion Mixing and CP Violation",
+      "parent": "Standard Model",
+      "purpose": "Document CKM (quark mixing) and PMNS (lepton mixing) derivations from Z₃ texture diagonalization. Cover the Cabibbo angle sin²θ₁₂ = 1/19, the Jarlskog invariant J_CKM = 2.83×10⁻⁵, and the full CKM within PDG envelope. For PMNS: the direct derivation θ₂₃ = 49.107° and the α² structural correction to 49.001° — 101× improvement, a frozen prediction testable by JUNO/DUNE. Normal neutrino hierarchy predicted. Reference FlavorMixing.lean, Finding 107."
+    },
+    {
+      "title": "Spacetime and Gravity",
+      "purpose": "Document the derivation of general relativity from the Clifford lattice. Cover simplicial decomposition (6 tetrahedra per cube, deficit angles), the Regge action, its continuum limit to the Einstein-Hilbert action, and the cosmological constant formula. Reference EinsteinFromLattice.lean (22 theorems), Finding 036."
+    },
+    {
+      "title": "Cosmological Constant",
+      "parent": "Spacetime and Gravity",
+      "purpose": "Document the resolution of the 120-order-of-magnitude vacuum energy catastrophe. The formula Λ = λ_H^137 / (√2 · l_P²) × (486/485) gives Λ = 1.1056×10⁻⁵² m⁻², matching Planck 2018 to 0.00023%. Explain why the 137th power of 13/100 provides algebraic suppression rather than fine-tuning. Reference CosmologicalConstant.lean, Findings 054-055."
+    },
+    {
+      "title": "Cosmology",
+      "purpose": "Top-level overview of the full cosmological derivation: inflation through CMB, baryogenesis, BBN, dark matter, and the lithium problem resolution. All cosmological parameters derived from the same Clifford constants as the particle physics results."
+    },
+    {
+      "title": "Inflation, BBN and the Lithium Problem",
+      "parent": "Cosmology",
+      "purpose": "Document: (1) Inflation — inflaton from Clifford structure, n_s = 0.9654, r = 0.00333 (frozen prediction for CMB-S4/LiteBIRD), 60 e-folds. (2) Baryogenesis — η_B = J·α²·(5/11)·(1-λ_QG)·(486/485) = 6.30×10⁻¹⁰, driven by the Jarlskog invariant. (3) BBN — Y_p = 0.2455 (0.08% from obs), D/H consistent. (4) The lithium resolution: Pop-II stellar depletion simulation gives S_sim = 0.879891 vs S_req = 0.880114 — 0.025% match, zero free parameters, same algebra as BBN. Reference lithium7_stellar_depletion.rs, Findings 084-087/094."
+    },
+    {
+      "title": "Dark Matter and CMB",
+      "parent": "Cosmology",
+      "purpose": "Document dark matter from Z₃: 5 stable neutral states in the singlet sector give Ω_DM/Ω_M = 60/71 ≈ 0.845 (0.4% from Planck). CMB power spectrum results: σ₈ = 0.8112 (0.01% from Planck — most precise cosmological result), H₀ = 67.86 km/s/Mpc (0.74%), age = 13.63 Gyr. SPARC galaxy rotation curve validation. Reference DarkMatterSector.lean, cmb_class_report binary, Findings 083/089/092/095-098."
+    },
+    {
+      "title": "Nuclear Physics and Beyond",
+      "purpose": "Top-level overview of nuclear physics, RTSC predictions, and engineering applications derived from the same algebraic framework. The pipeline: Cl(1,3) → gauge group → nuclear masses → materials → reactor."
+    },
+    {
+      "title": "Nuclear First Principles",
+      "parent": "Nuclear Physics and Beyond",
+      "purpose": "Document the semi-empirical mass formula with all five coefficients derived from Clifford/gauge counts: a_v = 95/6 MeV, a_s = 55/3 MeV, a_c = 2/3 MeV, a_a = 23 MeV, a_p = 12 MeV (= n_gauge). RMSE = 3.53 MeV across 2,548 AME2020 nuclides. Stable-presence classification F1 = 0.814 (216/251 correct). Island of stability at Z=114, N=184. Periodic table endpoint Z≈145. CPT mirror δ < 10⁻¹⁵ MeV. Reference NuclearFirstPrinciples.lean (19 theorems), mass_periodic_report binary, Finding 110."
+    },
+    {
+      "title": "Room-Temperature Superconductors",
+      "parent": "Nuclear Physics and Beyond",
+      "purpose": "Document the RTSC prediction: coordination number 6 (simple-cubic) forces attractive pairing kernel κ = 5/16 - 1/12 = 11/48 > 0, giving T_c = 300(1+κ) = 368.75 K (95.6°C). The six witness elements satisfying the filter: Cr(24), Zn(30), Mo(42), Cd(48), Hf(72), Pt(78) — atomic numbers divisible by 3, stepping pattern spaced by 6. T_c range 366-373 K in parameter sweep. Synthesis routes per element. This is a falsifiable prediction testable today in a thin-film lab. Reference RTSCAdmissibility.lean + RTSCWitnessClosure.lean + RTSCIsotopeStability.lean (18 theorems total), rtsc_witness_superconductivity_probe binary."
+    },
+    {
+      "title": "Fusion Reactor Design",
+      "parent": "Nuclear Physics and Beyond",
+      "purpose": "Document the compact fusion reactor design enabled by RTSC magnets: Cr-based RTSC at 26.8 T, D-³He fuel, major radius R = 1.537 m (vs ITER 6.2 m), P_net = 29.4 MW electric, Q = 1.91. 27,702-point parameter sweep for optimization. Ambient-air cooling (no cryogenics). Document how each design parameter traces to Clifford constants. Reference rtsc_honeycomb_fusion_reactor binary."
+    },
+    {
+      "title": "Lean Formalization",
+      "purpose": "Guide to the Lean 4 proof infrastructure: how to build, the module naming conventions, what 'no sorry' and 'no axiom leaks' mean, and the overall proof philosophy. Build command: cd lean && lake build Gutoe. 8131+ proof obligations."
+    },
+    {
+      "title": "Lean Module Index",
+      "parent": "Lean Formalization",
+      "purpose": "Index of all 124 Lean modules in lean/Gutoe/ organized by physics area: algebraic foundation (CliffordStructure, DimensionalStructure, Z3Uniqueness), Standard Model (GaugeConstants, EWSBHiggs, FlavorMixing, FineStructure, MassSpectrum), Yang-Mills chain (grand331 through grand333, YangMillsStructuralGap through YangMillsConstructiveQFT), cosmology (CosmologicalConstant, BBN, Baryogenesis, DarkMatterSector), nuclear (NuclearFirstPrinciples), materials (RTSCAdmissibility, RTSCWitnessClosure, RTSCIsotopeStability), triangulation (TriangulatedConstants, TriangulatedGrammarUniverse, TriangulatedTermProvenance, TriangulatedClosureUniqueness), and utilities (Basic, Conjectures, FalsifiabilityCatalog)."
+    },
+    {
+      "title": "Rust Computation Layer",
+      "purpose": "Guide to the Rust crate workspace: crate structure, how binaries relate to physics results, how to run a specific computation, and how the CI pipeline works. The workspace has 8 crates and 161 binaries."
+    },
+    {
+      "title": "Crate Architecture",
+      "parent": "Rust Computation Layer",
+      "purpose": "Document the 8 Rust crates and their responsibilities: gutoe-physics (main physics: cosmology, nuclear, stellar, RTSC, chemical thermo, ab initio QChem), gutoe-em (electroweak and flavor: CKM/PMNS, neutrino masses), gutoe-core (shared algebraic primitives), gutoe-lattice (lattice gauge theory), gutoe-qm (quantum mechanics), gutoe-viz (visualization and report output), gutoe-analog-gravity, gutoe-gpu. Explain the global_gate_report binary as the master CI runner."
+    },
+    {
+      "title": "CI Gates and Frozen Predictions",
+      "parent": "Rust Computation Layer",
+      "purpose": "Document the CI gate system: each physics result has a dedicated _ci_gate binary that enforces a tight numerical window. If the algebra changes and a result drifts, the gate breaks. Key gates: bbn_ci_gate, lithium7_stellar_ci_gate, triangulation_ci_gate, triangulation_clifford_candidates_ci_gate, neutrino_oscillation_ci_gate, entropy_progression_ci_gate, blind_prediction_register_ci_gate. Explain blind_prediction_register.rs: the formal commitment device that locks zero-parameter predictions before experimental disclosure."
+    },
+    {
+      "title": "Findings System",
+      "purpose": "Explain the findings/ directory: 190+ numbered markdown files (001 through 179+) that document every physics result. Each finding contains: date, scope, method, exact numerical outputs with SHA256, honest error assessment, and the Lean/Rust artifacts used. Findings are the primary audit trail. Key milestones by finding number range: 001-028 (core constants and SM), 029-033 (Strong CP), 057-078 (Yang-Mills chain, 22 findings), 084-098 (cosmology chain), 107 (PMNS theta23 correction), 110 (nuclear), 154-161 (infinite elimination), 163 (CKM/PMNS texture), 169 (Jupiter GRS)."
+    },
+    {
+      "title": "Falsifiable Predictions",
+      "purpose": "Document all frozen, testable predictions with explicit kill criteria. Covers: (1) RTSC — T_c ≥ 300 K for Cr/Zn/Mo/Cd/Hf/Pt in simple-cubic geometry, testable today. (2) r = 0.00333 tensor-to-scalar ratio, testable by CMB-S4/LiteBIRD. (3) Normal neutrino hierarchy, testable by JUNO. (4) θ₂₃ = 49.001°, testable by DUNE/HK. (5) Island of stability at Z=114, N=184. Each prediction is a genuine kill criterion: if it fails, that branch of the framework is falsified. Reference FalsifiabilityCatalog.lean, blind_prediction_register binary, Finding 009."
+    },
+    {
+      "title": "VICE Rules and Honesty Protocol",
+      "purpose": "Document VICE_RULES.md: the anti-overfit and honesty rules enforced across all contributions. Key rules: no retune on holdout data, no silent parameter injection, no inflation of agreement, all errors reported honestly, all open problems acknowledged. Explain how these rules distinguish this framework from numerology — the test is not 'does it fit' but 'does it predict, and was the prediction made before the measurement'."
+    }
+  ]
+}
