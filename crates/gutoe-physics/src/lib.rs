@@ -26,6 +26,7 @@
 //! - Dispersion: ω² = v² k² - λ_QG l_P² k⁴
 
 pub mod abiogenesis;
+pub mod ab_initio_qchem;
 pub mod antibiotic_resistance;
 pub mod baryogenesis;
 pub mod bbn;
@@ -57,6 +58,7 @@ pub mod inflation;
 pub mod lithium7_stellar_depletion;
 pub mod mass_gap;
 pub mod microphysics;
+pub mod molecular_ab_initio;
 pub mod ms_autoimmunity;
 pub mod ms_boundary_shift;
 pub mod ms_cyclosporine_pk;
@@ -77,6 +79,7 @@ pub mod uncertainty;
 pub mod universe;
 
 pub use abiogenesis::*;
+pub use ab_initio_qchem::*;
 pub use antibiotic_resistance::*;
 pub use baryogenesis::*;
 pub use bbn::*;
@@ -108,6 +111,7 @@ pub use inflation::*;
 pub use lithium7_stellar_depletion::*;
 pub use mass_gap::*;
 pub use microphysics::*;
+pub use molecular_ab_initio::*;
 pub use ms_autoimmunity::*;
 pub use ms_boundary_shift::*;
 pub use ms_cyclosporine_pk::*;
