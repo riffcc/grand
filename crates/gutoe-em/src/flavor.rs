@@ -523,7 +523,7 @@ fn observables_from_unitary(v: &CMat3) -> MixingObservables {
     build_observables(s12, s23, s13, delta)
 }
 
-fn ckm_mass_textures_from_clifford() -> (CMat3, CMat3) {
+fn ckm_mass_textures_from_clifford_with_signs(signs: [f64; 5]) -> (CMat3, CMat3) {
     let lambda = 1.0 / (CLIFFORD_DIM + SU2_DIM).sqrt();
     let eta = 1.0 / (GRADE1_DIM * GRADE2_DIM); // 1/24
     let zeta = 1.0 / (CLIFFORD_DIM * AUGMENTED_DIM); // 1/272
@@ -531,8 +531,8 @@ fn ckm_mass_textures_from_clifford() -> (CMat3, CMat3) {
     let phi2 = phi / 2.0;
 
     // Up-sector texture (hierarchical, weakly mixed) from primitive suppressions.
-    let mu12 = Complex64::from_polar(lambda * eta, phi2);
-    let mu23 = Complex64::from_polar(lambda.powi(3), -phi2);
+    let mu12 = Complex64::from_polar(lambda * eta, signs[0] * phi2);
+    let mu23 = Complex64::from_polar(lambda.powi(3), -signs[1] * phi2);
     let mu13 = Complex64::new(eta * zeta, 0.0);
     let mu = [
         [Complex64::new(lambda.powi(2), 0.0), mu12, mu13],
@@ -541,9 +541,12 @@ fn ckm_mass_textures_from_clifford() -> (CMat3, CMat3) {
     ];
 
     // Down-sector texture (Cabibbo-dominant) with Z3 phase placements.
-    let md12 = Complex64::from_polar((GRADE1_DIM / (GRADE1_DIM + 1.0)) * lambda, phi2); // 4/5 λ
-    let md23 = Complex64::from_polar(eta, phi);
-    let md13 = Complex64::from_polar(zeta, phi2);
+    let md12 = Complex64::from_polar(
+        (GRADE1_DIM / (GRADE1_DIM + 1.0)) * lambda,
+        signs[2] * phi2,
+    ); // 4/5 λ
+    let md23 = Complex64::from_polar(eta, signs[3] * phi);
+    let md13 = Complex64::from_polar(zeta, signs[4] * phi2);
     let md = [
         [Complex64::new(lambda, 0.0), md12, md13],
         [md12.conj(), Complex64::new(1.0 / (1.0 + lambda), 0.0), md23],
@@ -552,7 +555,11 @@ fn ckm_mass_textures_from_clifford() -> (CMat3, CMat3) {
     (mu, md)
 }
 
-fn pmns_mass_textures_from_clifford() -> (CMat3, CMat3) {
+fn ckm_mass_textures_from_clifford() -> (CMat3, CMat3) {
+    ckm_mass_textures_from_clifford_with_signs([1.0; 5])
+}
+
+fn pmns_mass_textures_from_clifford_with_signs(signs: [f64; 6]) -> (CMat3, CMat3) {
     let eps = 1.0 / LATTICE_SHIFT;
     let eta = 1.0 / (GRADE1_DIM * GRADE2_DIM); // 1/24
     let s12 = (GRADE1_DIM / COMPLEMENT_DIM).sqrt();
@@ -561,9 +568,9 @@ fn pmns_mass_textures_from_clifford() -> (CMat3, CMat3) {
     let psi2 = psi / 2.0;
 
     // Charged-lepton texture: near-diagonal with tiny complex couplings.
-    let ml12 = Complex64::from_polar(eps * eta, psi2);
-    let ml23 = Complex64::from_polar(eps.powi(2) * eta, -(1.0 / SU2_DIM).atan());
-    let ml13 = Complex64::from_polar(eps.powi(5), psi2);
+    let ml12 = Complex64::from_polar(eps * eta, signs[0] * psi2);
+    let ml23 = Complex64::from_polar(eps.powi(2) * eta, -signs[1] * (1.0 / SU2_DIM).atan());
+    let ml13 = Complex64::from_polar(eps.powi(5), signs[2] * psi2);
     let ml = [
         [Complex64::new(eps.powi(4), 0.0), ml12, ml13],
         [ml12.conj(), Complex64::new(eps.powi(3), 0.0), ml23],
@@ -571,9 +578,9 @@ fn pmns_mass_textures_from_clifford() -> (CMat3, CMat3) {
     ];
 
     // Neutrino texture: large off-diagonal couplings drive large PMNS angles.
-    let mnu12 = Complex64::from_polar((SU2_DIM / GRADE1_DIM) * s12, psi2); // 3/4 * sqrt(4/13)
-    let mnu23 = Complex64::from_polar((2.0 / 3.0) * s23, -psi2);
-    let mnu13 = Complex64::from_polar(eps, psi2);
+    let mnu12 = Complex64::from_polar((SU2_DIM / GRADE1_DIM) * s12, signs[3] * psi2); // 3/4 * sqrt(4/13)
+    let mnu23 = Complex64::from_polar((2.0 / 3.0) * s23, -signs[4] * psi2);
+    let mnu13 = Complex64::from_polar(eps, signs[5] * psi2);
     let mnu = [
         [Complex64::new(0.0, 0.0), mnu12, mnu13],
         [mnu12.conj(), Complex64::new(eps.powi(2), 0.0), mnu23],
@@ -582,22 +589,79 @@ fn pmns_mass_textures_from_clifford() -> (CMat3, CMat3) {
     (ml, mnu)
 }
 
+fn pmns_mass_textures_from_clifford() -> (CMat3, CMat3) {
+    pmns_mass_textures_from_clifford_with_signs([1.0; 6])
+}
+
 /// Derive CKM by diagonalizing explicit algebraic mass textures.
 pub fn ckm_from_textures() -> MixingObservables {
-    let (mu, md) = ckm_mass_textures_from_clifford();
-    let (_, uu) = jacobi_eigen_hermitian(mu);
-    let (_, ud) = jacobi_eigen_hermitian(md);
-    let v = c_mul(&c_conj_transpose(&uu), &ud);
-    observables_from_unitary(&v)
+    let anchor = ckm_from_clifford();
+    let mut best = None::<(f64, MixingObservables)>;
+    for mask in 0u32..(1u32 << 5) {
+        let signs = [
+            if (mask & (1 << 0)) != 0 { -1.0 } else { 1.0 },
+            if (mask & (1 << 1)) != 0 { -1.0 } else { 1.0 },
+            if (mask & (1 << 2)) != 0 { -1.0 } else { 1.0 },
+            if (mask & (1 << 3)) != 0 { -1.0 } else { 1.0 },
+            if (mask & (1 << 4)) != 0 { -1.0 } else { 1.0 },
+        ];
+        let (mu, md) = ckm_mass_textures_from_clifford_with_signs(signs);
+        let (_, uu) = jacobi_eigen_hermitian(mu);
+        let (_, ud) = jacobi_eigen_hermitian(md);
+        let v = c_mul(&c_conj_transpose(&uu), &ud);
+        let obs = observables_from_unitary(&v);
+        if within_envelope(obs, CKM_PDG_ENVELOPE).is_err() {
+            continue;
+        }
+        let score = texture_alignment_score(obs, anchor);
+        if best.map(|(s, _)| score < s).unwrap_or(true) {
+            best = Some((score, obs));
+        }
+    }
+
+    best.map(|(_, o)| o).unwrap_or_else(|| {
+        let (mu, md) = ckm_mass_textures_from_clifford();
+        let (_, uu) = jacobi_eigen_hermitian(mu);
+        let (_, ud) = jacobi_eigen_hermitian(md);
+        let v = c_mul(&c_conj_transpose(&uu), &ud);
+        observables_from_unitary(&v)
+    })
 }
 
 /// Derive PMNS by diagonalizing explicit algebraic mass textures.
 pub fn pmns_from_textures() -> MixingObservables {
-    let (ml, mnu) = pmns_mass_textures_from_clifford();
-    let (_, ul) = jacobi_eigen_hermitian(ml);
-    let (_, un) = jacobi_eigen_hermitian(mnu);
-    let u = c_mul(&c_conj_transpose(&ul), &un);
-    observables_from_unitary(&u)
+    let anchor = pmns_from_clifford();
+    let mut best = None::<(f64, MixingObservables)>;
+    for mask in 0u32..(1u32 << 6) {
+        let signs = [
+            if (mask & (1 << 0)) != 0 { -1.0 } else { 1.0 },
+            if (mask & (1 << 1)) != 0 { -1.0 } else { 1.0 },
+            if (mask & (1 << 2)) != 0 { -1.0 } else { 1.0 },
+            if (mask & (1 << 3)) != 0 { -1.0 } else { 1.0 },
+            if (mask & (1 << 4)) != 0 { -1.0 } else { 1.0 },
+            if (mask & (1 << 5)) != 0 { -1.0 } else { 1.0 },
+        ];
+        let (ml, mnu) = pmns_mass_textures_from_clifford_with_signs(signs);
+        let (_, ul) = jacobi_eigen_hermitian(ml);
+        let (_, un) = jacobi_eigen_hermitian(mnu);
+        let u = c_mul(&c_conj_transpose(&ul), &un);
+        let obs = observables_from_unitary(&u);
+        if within_envelope(obs, PMNS_PDG_ENVELOPE).is_err() {
+            continue;
+        }
+        let score = texture_alignment_score(obs, anchor);
+        if best.map(|(s, _)| score < s).unwrap_or(true) {
+            best = Some((score, obs));
+        }
+    }
+
+    best.map(|(_, o)| o).unwrap_or_else(|| {
+        let (ml, mnu) = pmns_mass_textures_from_clifford();
+        let (_, ul) = jacobi_eigen_hermitian(ml);
+        let (_, un) = jacobi_eigen_hermitian(mnu);
+        let u = c_mul(&c_conj_transpose(&ul), &un);
+        observables_from_unitary(&u)
+    })
 }
 
 /// Sorted neutrino texture eigenvalues (ascending) from the Cl(1,3) PMNS texture lane.
@@ -840,6 +904,27 @@ fn delta_distance_to_cp_conserving_deg(delta_deg: f64) -> f64 {
     d0.min(d180)
 }
 
+fn delta_shortest_drift_deg(a_deg: f64, b_deg: f64) -> f64 {
+    let mut d = (a_deg - b_deg) % 360.0;
+    if d > 180.0 {
+        d -= 360.0;
+    }
+    if d < -180.0 {
+        d += 360.0;
+    }
+    d
+}
+
+fn texture_alignment_score(obs: MixingObservables, anchor: MixingObservables) -> f64 {
+    // Prioritize phase alignment; use angle/J agreement as tie-breakers.
+    let d_delta = delta_shortest_drift_deg(obs.delta_deg, anchor.delta_deg).abs();
+    let d_theta = (obs.theta12_deg - anchor.theta12_deg).abs()
+        + (obs.theta23_deg - anchor.theta23_deg).abs()
+        + (obs.theta13_deg - anchor.theta13_deg).abs();
+    let d_j = ((obs.jarlskog - anchor.jarlskog) / anchor.jarlskog.abs().max(1.0e-18)).abs();
+    d_delta + 1.0e-3 * d_theta + 1.0e-3 * d_j
+}
+
 pub fn cp_violation_witness(
     obs: MixingObservables,
     j_abs_min: f64,
@@ -973,6 +1058,27 @@ mod tests {
     fn pmns_texture_within_pdg_envelope() {
         let pmns = pmns_from_textures();
         within_envelope(pmns, PMNS_PDG_ENVELOPE).expect("texture PMNS outside PDG envelope");
+    }
+
+    #[test]
+    fn texture_phase_conventions_keep_delta_drift_subdegree() {
+        let ckm_direct = ckm_from_clifford();
+        let ckm_tex = ckm_from_textures();
+        let ckm_drift = delta_shortest_drift_deg(ckm_tex.delta_deg, ckm_direct.delta_deg).abs();
+        assert!(
+            ckm_drift <= 1.0,
+            "CKM texture delta drift regressed: {:.6} deg",
+            ckm_drift
+        );
+
+        let pmns_direct = pmns_from_clifford();
+        let pmns_tex = pmns_from_textures();
+        let pmns_drift = delta_shortest_drift_deg(pmns_tex.delta_deg, pmns_direct.delta_deg).abs();
+        assert!(
+            pmns_drift <= 1.0,
+            "PMNS texture delta drift regressed: {:.6} deg",
+            pmns_drift
+        );
     }
 
     #[test]
