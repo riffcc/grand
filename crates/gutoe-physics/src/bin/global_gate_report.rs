@@ -10,11 +10,13 @@ fn run_with_env(cmd: &str, args: &[&str], env: &[(&str, &str)]) -> Result<(), St
     for (k, v) in env {
         command.env(k, v);
     }
-    let status = command
-        .status()
-        .map_err(|e| format!("spawn {cmd}: {e}"))?;
+    let status = command.status().map_err(|e| format!("spawn {cmd}: {e}"))?;
     if !status.success() {
-        return Err(format!("command failed: {} {} (status={status})", cmd, args.join(" ")));
+        return Err(format!(
+            "command failed: {} {} (status={status})",
+            cmd,
+            args.join(" ")
+        ));
     }
     Ok(())
 }
@@ -81,20 +83,37 @@ fn main() {
     let _ = fs::create_dir_all(&out_dir);
 
     // Run fresh artifacts for each critical lane.
-    if let Err(e) = run("cargo", &["run", "-q", "-p", "gutoe-em", "--bin", "flavor_ci_gate"]) {
+    if let Err(e) = run(
+        "cargo",
+        &["run", "-q", "-p", "gutoe-em", "--bin", "flavor_ci_gate"],
+    ) {
         eprintln!("global_gate: flavor_ci_gate failed: {e}");
         std::process::exit(2);
     }
     if let Err(e) = run(
         "cargo",
-        &["run", "-q", "-p", "gutoe-physics", "--bin", "proton_mass_report"],
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "proton_mass_report",
+        ],
     ) {
         eprintln!("global_gate: proton_mass_report failed: {e}");
         std::process::exit(2);
     }
     if let Err(e) = run(
         "cargo",
-        &["run", "-q", "-p", "gutoe-physics", "--bin", "alpha_web_ci_report"],
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "alpha_web_ci_report",
+        ],
     ) {
         eprintln!("global_gate: alpha_web_ci_report failed: {e}");
         std::process::exit(2);
@@ -113,7 +132,10 @@ fn main() {
         eprintln!("global_gate: chiral_symmetry_breaking_report failed: {e}");
         std::process::exit(2);
     }
-    if let Err(e) = run("cargo", &["run", "-q", "-p", "gutoe-em", "--bin", "neutrino_ci_gate"]) {
+    if let Err(e) = run(
+        "cargo",
+        &["run", "-q", "-p", "gutoe-em", "--bin", "neutrino_ci_gate"],
+    ) {
         eprintln!("global_gate: neutrino_ci_gate failed: {e}");
         std::process::exit(2);
     }
@@ -145,63 +167,124 @@ fn main() {
         eprintln!("global_gate: parameter_degeneracy_ci_gate failed: {e}");
         std::process::exit(2);
     }
+    if let Err(e) = run(
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "abiogenesis_ci_gate",
+        ],
+    ) {
+        eprintln!("global_gate: abiogenesis_ci_gate failed: {e}");
+        std::process::exit(2);
+    }
 
     run_or_exit(
         "baryogenesis_report[gain=0]",
         "cargo",
-        &["run", "-q", "-p", "gutoe-physics", "--bin", "baryogenesis_report"],
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "baryogenesis_report",
+        ],
         &[(PMNS_GAIN_ENV, PMNS_GAIN_BASELINE)],
     );
-    let baryo0 = read_json("/tmp/bh_renders/baryogenesis_report.json").expect("baryogenesis gain0 json");
+    let baryo0 =
+        read_json("/tmp/bh_renders/baryogenesis_report.json").expect("baryogenesis gain0 json");
 
     run_or_exit(
         "baryogenesis_report[gain=1]",
         "cargo",
-        &["run", "-q", "-p", "gutoe-physics", "--bin", "baryogenesis_report"],
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "baryogenesis_report",
+        ],
         &[(PMNS_GAIN_ENV, PMNS_GAIN_STRUCTURAL)],
     );
-    let baryo1 = read_json("/tmp/bh_renders/baryogenesis_report.json").expect("baryogenesis gain1 json");
+    let baryo1 =
+        read_json("/tmp/bh_renders/baryogenesis_report.json").expect("baryogenesis gain1 json");
 
     run_or_exit(
         "cmb_full_derived_report[gain=0]",
         "cargo",
-        &["run", "-q", "-p", "gutoe-physics", "--bin", "cmb_full_derived_report"],
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "cmb_full_derived_report",
+        ],
         &[(PMNS_GAIN_ENV, PMNS_GAIN_BASELINE)],
     );
-    let cmb0 =
-        read_json("/tmp/bh_renders/cmb_full_derived/cmb_full_derived_report.json").expect("cmb gain0 json");
+    let cmb0 = read_json("/tmp/bh_renders/cmb_full_derived/cmb_full_derived_report.json")
+        .expect("cmb gain0 json");
 
     run_or_exit(
         "cmb_full_derived_report[gain=1]",
         "cargo",
-        &["run", "-q", "-p", "gutoe-physics", "--bin", "cmb_full_derived_report"],
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "cmb_full_derived_report",
+        ],
         &[(PMNS_GAIN_ENV, PMNS_GAIN_STRUCTURAL)],
     );
-    let cmb =
-        read_json("/tmp/bh_renders/cmb_full_derived/cmb_full_derived_report.json").expect("cmb gain1 json");
+    let cmb = read_json("/tmp/bh_renders/cmb_full_derived/cmb_full_derived_report.json")
+        .expect("cmb gain1 json");
 
     run_or_exit(
         "sigma8_decomposition[gain=1]",
         "cargo",
-        &["run", "-q", "-p", "gutoe-physics", "--bin", "sigma8_decomposition"],
+        &[
+            "run",
+            "-q",
+            "-p",
+            "gutoe-physics",
+            "--bin",
+            "sigma8_decomposition",
+        ],
         &[(PMNS_GAIN_ENV, PMNS_GAIN_STRUCTURAL)],
     );
 
     let flavor = read_json("/tmp/bh_renders/flavor_ci_gate.json").expect("flavor json");
-    let proton = read_json("/tmp/bh_renders/proton_mass_report/proton_mass_report.json").expect("proton json");
-    let alpha = read_json("/tmp/bh_renders/alpha_web_ci_report/alpha_web_ci_report.json").expect("alpha json");
-    let chiral = read_json("/tmp/bh_renders/chiral_symmetry_breaking/chiral_symmetry_breaking_report.json")
-        .expect("chiral json");
+    let proton = read_json("/tmp/bh_renders/proton_mass_report/proton_mass_report.json")
+        .expect("proton json");
+    let alpha = read_json("/tmp/bh_renders/alpha_web_ci_report/alpha_web_ci_report.json")
+        .expect("alpha json");
+    let chiral =
+        read_json("/tmp/bh_renders/chiral_symmetry_breaking/chiral_symmetry_breaking_report.json")
+            .expect("chiral json");
     let neutrino = read_json("/tmp/bh_renders/neutrino_ci_gate.json").expect("neutrino json");
     let li7_stellar =
         read_json("/tmp/bh_renders/lithium7_stellar_ci_gate.json").expect("lithium7 stellar json");
     let degeneracy = read_json("/tmp/bh_renders/parameter_degeneracy_ci_gate.json")
         .expect("parameter degeneracy json");
+    let abiogenesis =
+        read_json("/tmp/bh_renders/abiogenesis_ci_gate.json").expect("abiogenesis json");
     let sigma = read_json("/tmp/bh_renders/sigma8_decomposition/sigma8_decomposition_report.json")
         .expect("sigma json");
 
-    let pmns_corr_res = v_f64(&flavor, &["pmns_theta23_improvement", "corrected_abs_residual_deg"]).unwrap();
-    let pmns_corr_pass = v_bool(&flavor, &["pmns_theta23_improvement", "pass"]).unwrap() && pmns_corr_res <= 0.01;
+    let pmns_corr_res = v_f64(
+        &flavor,
+        &["pmns_theta23_improvement", "corrected_abs_residual_deg"],
+    )
+    .unwrap();
+    let pmns_corr_pass =
+        v_bool(&flavor, &["pmns_theta23_improvement", "pass"]).unwrap() && pmns_corr_res <= 0.01;
 
     let eta0 = v_f64(&baryo0, &["eta_predicted"]).expect("baryogenesis eta gain0");
     let eta1 = v_f64(&baryo1, &["eta_predicted"]).expect("baryogenesis eta gain1");
@@ -248,13 +331,22 @@ fn main() {
     let li7_stellar_delta_abs_max = v_f64(&li7_stellar, &["closure_delta_abs_max"]).unwrap();
     let degeneracy_pass = v_bool(&degeneracy, &["overall_pass"]).unwrap();
     let degeneracy_free = v_f64(&degeneracy, &["counts", "free_parameters"]).unwrap();
-    let degeneracy_rank_tunable = v_f64(&degeneracy, &["linear_algebra", "tunable_only", "rank"]).unwrap();
+    let degeneracy_rank_tunable =
+        v_f64(&degeneracy, &["linear_algebra", "tunable_only", "rank"]).unwrap();
     let degeneracy_transfer_coupling_max = v_f64(
         &degeneracy,
-        &["hidden_reencoding_checks", "tunable_to_transfer_max_abs_sensitivity"],
+        &[
+            "hidden_reencoding_checks",
+            "tunable_to_transfer_max_abs_sensitivity",
+        ],
     )
     .unwrap();
     let degeneracy_verdict = v_str(&degeneracy, &["verdict"]).unwrap();
+    let abiogenesis_pass = v_bool(&abiogenesis, &["overall_pass"]).unwrap();
+    let abiogenesis_n_times_p = v_f64(&abiogenesis, &["closure", "n_times_p"]).unwrap();
+    let abiogenesis_lower_3sigma =
+        v_f64(&abiogenesis, &["inevitability", "n_times_p_lower_3sigma"]).unwrap();
+    let abiogenesis_margin = v_f64(&abiogenesis, &["inevitability", "robust_margin"]).unwrap();
 
     let cmb_pass = tt <= 1.30 && te <= 1.20 && ee <= 1.10;
 
@@ -271,6 +363,7 @@ fn main() {
         && neutrino_pass
         && li7_stellar_pass
         && degeneracy_pass
+        && abiogenesis_pass
         && cmb_pass
         && sigma8_pass;
 
@@ -279,16 +372,36 @@ fn main() {
 
     let mut txt = File::create(&txt_path).expect("create txt");
     writeln!(txt, "[global_gate]").ok();
-    writeln!(txt, "pmns_theta23_corrected_residual_deg = {:.12}", pmns_corr_res).ok();
+    writeln!(
+        txt,
+        "pmns_theta23_corrected_residual_deg = {:.12}",
+        pmns_corr_res
+    )
+    .ok();
     writeln!(txt, "pmns_theta23_pass = {}", pmns_corr_pass).ok();
     writeln!(txt, "pmns_gain0_eta_predicted = {:.12e}", eta0).ok();
     writeln!(txt, "pmns_gain1_eta_predicted = {:.12e}", eta1).ok();
-    writeln!(txt, "pmns_baryogenesis_eta_delta = {:.12e}", pmns_baryo_eta_delta).ok();
-    writeln!(txt, "pmns_baryogenesis_coupling_pass = {}", pmns_baryo_coupling_pass).ok();
+    writeln!(
+        txt,
+        "pmns_baryogenesis_eta_delta = {:.12e}",
+        pmns_baryo_eta_delta
+    )
+    .ok();
+    writeln!(
+        txt,
+        "pmns_baryogenesis_coupling_pass = {}",
+        pmns_baryo_coupling_pass
+    )
+    .ok();
     writeln!(txt, "pmns_cmb_tt_delta = {:.12e}", pmns_cmb_tt_delta).ok();
     writeln!(txt, "pmns_cmb_te_delta = {:.12e}", pmns_cmb_te_delta).ok();
     writeln!(txt, "pmns_cmb_ee_delta = {:.12e}", pmns_cmb_ee_delta).ok();
-    writeln!(txt, "pmns_cmb_sigma8_delta = {:.12e}", pmns_cmb_sigma8_delta).ok();
+    writeln!(
+        txt,
+        "pmns_cmb_sigma8_delta = {:.12e}",
+        pmns_cmb_sigma8_delta
+    )
+    .ok();
     writeln!(txt, "pmns_cmb_delta_max_abs = {:.12e}", pmns_cmb_delta_max).ok();
     writeln!(txt, "pmns_cmb_response_pass = {}", pmns_cmb_response_pass).ok();
     writeln!(txt, "pmns_propagation_pass = {}", pmns_propagation_pass).ok();
@@ -298,11 +411,21 @@ fn main() {
     writeln!(txt, "chiral_symmetry_breaking_pass = {}", chiral_pass).ok();
     writeln!(txt, "neutrino_hierarchy = {}", neutrino_hierarchy).ok();
     writeln!(txt, "neutrino_mass_character = {}", neutrino_mass_character).ok();
-    writeln!(txt, "neutrino_majorana_symmetry_residual = {:.12e}", neutrino_majorana_resid).ok();
+    writeln!(
+        txt,
+        "neutrino_majorana_symmetry_residual = {:.12e}",
+        neutrino_majorana_resid
+    )
+    .ok();
     writeln!(txt, "neutrino_m3_ev = {:.12e}", neutrino_m3_ev).ok();
     writeln!(txt, "neutrino_sum_ev = {:.12e}", neutrino_sum_ev).ok();
     writeln!(txt, "neutrino_pass = {}", neutrino_pass).ok();
-    writeln!(txt, "li7_stellar_closure_delta_abs = {:.12}", li7_stellar_delta_abs).ok();
+    writeln!(
+        txt,
+        "li7_stellar_closure_delta_abs = {:.12}",
+        li7_stellar_delta_abs
+    )
+    .ok();
     writeln!(
         txt,
         "li7_stellar_closure_delta_abs_max = {:.12}",
@@ -325,6 +448,20 @@ fn main() {
     )
     .ok();
     writeln!(txt, "degeneracy_pass = {}", degeneracy_pass).ok();
+    writeln!(txt, "abiogenesis_n_times_p = {:.12}", abiogenesis_n_times_p).ok();
+    writeln!(
+        txt,
+        "abiogenesis_n_times_p_lower_3sigma = {:.12}",
+        abiogenesis_lower_3sigma
+    )
+    .ok();
+    writeln!(
+        txt,
+        "abiogenesis_robust_margin = {:.12}",
+        abiogenesis_margin
+    )
+    .ok();
+    writeln!(txt, "abiogenesis_pass = {}", abiogenesis_pass).ok();
     writeln!(txt, "cmb_tt_red = {:.12}", tt).ok();
     writeln!(txt, "cmb_te_red = {:.12}", te).ok();
     writeln!(txt, "cmb_ee_red = {:.12}", ee).ok();
@@ -396,6 +533,12 @@ fn main() {
             "rank_tunable": degeneracy_rank_tunable,
             "transfer_coupling_max": degeneracy_transfer_coupling_max,
             "pass": degeneracy_pass
+        },
+        "abiogenesis": {
+            "n_times_p": abiogenesis_n_times_p,
+            "n_times_p_lower_3sigma": abiogenesis_lower_3sigma,
+            "robust_margin": abiogenesis_margin,
+            "pass": abiogenesis_pass
         },
         "cmb": {
             "tt_full_red": tt,

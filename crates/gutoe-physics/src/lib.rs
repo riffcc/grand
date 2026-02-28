@@ -25,6 +25,7 @@
 //! - Entropy: S = A/4G + α ln(A/l_P²)
 //! - Dispersion: ω² = v² k² - λ_QG l_P² k⁴
 
+pub mod abiogenesis;
 pub mod baryogenesis;
 pub mod bbn;
 pub mod chemical_thermo;
@@ -44,6 +45,7 @@ pub mod falsifiability;
 pub mod few_body_qm;
 pub mod homochirality;
 pub mod inflation;
+pub mod lithium7_stellar_depletion;
 pub mod mass_gap;
 pub mod microphysics;
 pub mod multi_zone;
@@ -60,6 +62,7 @@ pub mod stiff_integrator;
 pub mod uncertainty;
 pub mod universe;
 
+pub use abiogenesis::*;
 pub use baryogenesis::*;
 pub use bbn::*;
 pub use chemical_thermo::*;
@@ -79,6 +82,7 @@ pub use falsifiability::*;
 pub use few_body_qm::*;
 pub use homochirality::*;
 pub use inflation::*;
+pub use lithium7_stellar_depletion::*;
 pub use mass_gap::*;
 pub use microphysics::*;
 pub use multi_zone::*;
