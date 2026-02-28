@@ -5049,16 +5049,35 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
         0.5,
     );
 
+    let m_solar = parse_env_f64("BH_MASS_SOLAR").unwrap_or(6.5e9).max(1.0);
+    let d_mpc = parse_env_f64("BH_DISTANCE_MPC").unwrap_or(16.8).max(1e-9);
+    let g_si = 6.67430e-11_f64;
+    let c_si = 299_792_458.0_f64;
+    let m_sun_kg = 1.98847e30_f64;
+    let mpc_m = 3.0856775814913673e22_f64;
+    let rad_to_uas = 206_264_806_247.09636_f64;
+    let rg_m = g_si * m_solar * m_sun_kg / (c_si * c_si);
+    let rs_rad = (2.0 * rg_m) / (d_mpc * mpc_m);
+    let fov_rad = fov_rs * rs_rad;
+
     // Baselines in normalized uv units (cycles per FOV).
     // Optional input file for EHT-17:
     //   BH_UV_TRACK_CSV=/path/file.csv
-    //   CSV forms supported (header optional):
-    //     baseline,u,v
-    //     station_i,station_j,u,v
-    //     baseline,station_i,station_j,u,v
+    // Supported CSV forms (header optional):
+    //   baseline,u,v
+    //   station_i,station_j,u,v
+    //   baseline,station_i,station_j,u,v
+    //   time_utc,t1,t2,u_lambda,v_lambda,...  (official EHT release format)
     let mut baselines: Vec<(String, f64, f64)> = Vec::new();
+    let mut uv_note = String::from("Synthetic uv set; replace with 2017 measured tracks in EHT-17");
+    let mut uv_source_mode = String::from("synthetic");
+    let mut uv_source_rows: usize = 0;
+    let mut uv_source_input_csv = String::new();
     if let Ok(path) = std::env::var("BH_UV_TRACK_CSV") {
+        uv_source_input_csv = path.clone();
         if let Ok(text) = std::fs::read_to_string(&path) {
+            let mut parsed_rows = 0usize;
+            let mut eht_lambda_rows = 0usize;
             for line in text.lines() {
                 let l = line.trim();
                 if l.is_empty() || l.starts_with('#') {
@@ -5076,7 +5095,24 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
                 {
                     continue;
                 }
-                let parsed = if parts.len() >= 5 {
+                let parsed = if parts.len() >= 5
+                    && parts[0].parse::<f64>().is_ok()
+                    && parts[1].parse::<f64>().is_err()
+                    && parts[2].parse::<f64>().is_err()
+                {
+                    let Ok(u_lambda) = parts[3].parse::<f64>() else {
+                        continue;
+                    };
+                    let Ok(v_lambda) = parts[4].parse::<f64>() else {
+                        continue;
+                    };
+                    eht_lambda_rows += 1;
+                    Some((
+                        format!("{}-{}", parts[1], parts[2]),
+                        u_lambda * fov_rad,
+                        v_lambda * fov_rad,
+                    ))
+                } else if parts.len() >= 5 {
                     let name = if parts[0].is_empty() {
                         format!("{}-{}", parts[1], parts[2])
                     } else {
@@ -5108,9 +5144,33 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
                     Some((parts[0].to_string(), u, v))
                 };
                 if let Some(x) = parsed {
+                    parsed_rows += 1;
                     baselines.push(x);
                 }
             }
+            uv_source_rows = parsed_rows;
+            if parsed_rows > 0 {
+                if eht_lambda_rows > 0 {
+                    uv_source_mode = String::from("measured_eht_csv_lambda");
+                    uv_note = format!(
+                        "Loaded measured EHT uv rows from BH_UV_TRACK_CSV (rows={parsed_rows}, lambda_rows={eht_lambda_rows}); converted U/V(lambda) to normalized cycles per image FOV."
+                    );
+                } else {
+                    uv_source_mode = String::from("custom_csv_normalized");
+                    uv_note = format!(
+                        "Loaded uv rows from BH_UV_TRACK_CSV (rows={parsed_rows}) in normalized cycles per image FOV."
+                    );
+                }
+            } else {
+                uv_source_mode = String::from("track_parse_failed_fallback_synthetic");
+                uv_note = format!(
+                    "BH_UV_TRACK_CSV was provided but no uv rows parsed (path={path}); using synthetic uv set."
+                );
+            }
+        } else {
+            uv_source_mode = String::from("track_read_failed_fallback_synthetic");
+            uv_note =
+                format!("BH_UV_TRACK_CSV could not be read (path={path}); using synthetic uv set.");
         }
     }
     if baselines.is_empty() {
@@ -5276,14 +5336,23 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
     let mut c = std::fs::File::create(&closure_csv).expect("create eht_closure csv");
     writeln!(c, "triangle,closure_phase_deg,closure_phase_corrupted_deg")
         .expect("write closure header");
-    let vis_map: HashMap<String, (f64, f64)> = vis
-        .iter()
-        .map(|(name, re, im)| (name.clone(), (*re, *im)))
-        .collect();
-    let vis_corrupt_map: HashMap<String, (f64, f64)> = vis_corrupt
-        .iter()
-        .map(|(name, re, im)| (name.clone(), (*re, *im)))
-        .collect();
+    let collapse_vis = |rows: &[(String, f64, f64)]| -> HashMap<String, (f64, f64)> {
+        let mut acc: HashMap<String, (f64, f64, usize)> = HashMap::new();
+        for (name, re, im) in rows {
+            let entry = acc.entry(name.clone()).or_insert((0.0, 0.0, 0));
+            entry.0 += *re;
+            entry.1 += *im;
+            entry.2 += 1;
+        }
+        acc.into_iter()
+            .map(|(k, (re_sum, im_sum, n))| {
+                let nf = (n as f64).max(1.0);
+                (k, (re_sum / nf, im_sum / nf))
+            })
+            .collect()
+    };
+    let vis_map = collapse_vis(&vis);
+    let vis_corrupt_map = collapse_vis(&vis_corrupt);
     let get_pair = |a: &str, b: &str, map: &HashMap<String, (f64, f64)>| -> Option<(f64, f64)> {
         let k1 = format!("{a}-{b}");
         if let Some((re, im)) = map.get(&k1) {
@@ -5394,27 +5463,22 @@ fn run_eht_uv_export(view: &View, width: usize, height: usize, out_dir: &Path) {
 
     let summary = out_dir.join(format!("{}_eht_uv.json", view.slug));
     let mut s = std::fs::File::create(&summary).expect("create eht_uv json");
-    let m_solar = parse_env_f64("BH_MASS_SOLAR").unwrap_or(6.5e9).max(1.0);
-    let d_mpc = parse_env_f64("BH_DISTANCE_MPC").unwrap_or(16.8).max(1e-9);
-    let g_si = 6.67430e-11_f64;
-    let c_si = 299_792_458.0_f64;
-    let m_sun_kg = 1.98847e30_f64;
-    let mpc_m = 3.0856775814913673e22_f64;
-    let rad_to_uas = 206_264_806_247.09636_f64;
-    let rg_m = g_si * m_solar * m_sun_kg / (c_si * c_si);
-    let rs_rad = (2.0 * rg_m) / (d_mpc * mpc_m);
     let rs_uas = rs_rad * rad_to_uas;
     let fov_uas = fov_rs * rs_uas;
     let pixel_uas = fov_uas / (width as f64).max(1.0);
     let shadow_diam_gr_uas = 2.0 * (27.0_f64).sqrt() * rg_m / (d_mpc * mpc_m) * rad_to_uas;
     writeln!(
         s,
-        "{{\n  \"slug\": \"{}\",\n  \"png\": \"{}\",\n  \"width\": {},\n  \"height\": {},\n  \"fov_rs\": {:.6},\n  \"uv_units\": \"normalized cycles per image FOV\",\n  \"note\": \"Synthetic uv set; replace with 2017 measured tracks in EHT-17\",\n  \"uv_csv\": \"{}\",\n  \"uv_corrupted_csv\": \"{}\",\n  \"closure_csv\": \"{}\",\n  \"closure_amp_csv\": \"{}\",\n  \"noise_sigma\": {:.6},\n  \"gain_amp_sigma\": {:.6},\n  \"gain_phase_sigma_deg\": {:.6},\n  \"bw_hz\": {:.3},\n  \"tint_s\": {:.3},\n  \"sefd_csv\": \"{}\",\n  \"gain_csv\": \"{}\",\n  \"m_solar\": {:.3},\n  \"distance_mpc\": {:.6},\n  \"rs_uas\": {:.6},\n  \"fov_uas\": {:.6},\n  \"pixel_uas\": {:.6},\n  \"shadow_diameter_gr_uas\": {:.6}\n}}",
+        "{{\n  \"slug\": \"{}\",\n  \"png\": \"{}\",\n  \"width\": {},\n  \"height\": {},\n  \"fov_rs\": {:.6},\n  \"uv_units\": \"normalized cycles per image FOV\",\n  \"uv_source_mode\": \"{}\",\n  \"uv_source_rows\": {},\n  \"uv_source_input_csv\": \"{}\",\n  \"note\": \"{}\",\n  \"uv_csv\": \"{}\",\n  \"uv_corrupted_csv\": \"{}\",\n  \"closure_csv\": \"{}\",\n  \"closure_amp_csv\": \"{}\",\n  \"noise_sigma\": {:.6},\n  \"gain_amp_sigma\": {:.6},\n  \"gain_phase_sigma_deg\": {:.6},\n  \"bw_hz\": {:.3},\n  \"tint_s\": {:.3},\n  \"sefd_csv\": \"{}\",\n  \"gain_csv\": \"{}\",\n  \"m_solar\": {:.3},\n  \"distance_mpc\": {:.6},\n  \"rs_uas\": {:.6},\n  \"fov_uas\": {:.6},\n  \"pixel_uas\": {:.6},\n  \"shadow_diameter_gr_uas\": {:.6}\n}}",
         view.slug,
         out_dir.join(format!("{}.png", view.slug)).display(),
         width,
         height,
         fov_rs,
+        uv_source_mode,
+        uv_source_rows,
+        uv_source_input_csv,
+        uv_note,
         uv_csv.display(),
         uv_corrupt_csv.display(),
         closure_csv.display(),
