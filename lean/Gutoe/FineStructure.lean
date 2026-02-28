@@ -120,6 +120,25 @@ def alphaInvFirstOrder : ℚ := (alphaInverse 4 : ℚ) + 5 / (alphaInverse 4 : �
 def alphaInvSecondOrder : ℚ :=
   (alphaInverse 4 : ℚ) + 5 / (alphaInverse 4 : ℚ) - 9 / ((alphaInverse 4 : ℚ) ^ 2)
 
+/-- First-order correction lane written explicitly on the structural `137` base. -/
+theorem alpha_first_order_explicit :
+    alphaInvFirstOrder = (137 : ℚ) + 5 / 137 := by
+  unfold alphaInvFirstOrder
+  rw [alpha_inverse_d4]
+  norm_num
+
+/-- Second-order correction lane written explicitly on the structural `137` base. -/
+theorem alpha_second_order_explicit :
+    alphaInvSecondOrder = (137 : ℚ) + 5 / 137 - 9 / (137 ^ 2 : ℚ) := by
+  unfold alphaInvSecondOrder
+  rw [alpha_inverse_d4]
+  norm_num
+
+/-- Second-order residual is in the 2e-5 band against the decimal reference. -/
+theorem alpha_second_order_within_2e5_band :
+    |alphaInvSecondOrder - alphaInversePhysicalRef| < (1 / 50000 : ℚ) := by
+  native_decide
+
 /-- The second-order lane is strictly closer to the decimal reference than
     the first-order lane. -/
 theorem alpha_second_order_closer_than_first :
