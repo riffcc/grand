@@ -127,7 +127,12 @@ lean_lib Gutoe where
              `Gutoe.SM.Anomalies,
              `Gutoe.SM.HyperchargeBridge,
              `Gutoe.SM.Closure,
-             `Gutoe.LambdaQG]
+             `Gutoe.LambdaQG,
+             `Gutoe.RiemannCore,
+             `Gutoe.RiemannSelfAdjoint,
+             `Gutoe.RiemannBridge,
+             `Gutoe.RiemannCounting,
+             `Gutoe.RiemannRHClosure]
 
 lean_exe kerr_ref_frame where
   root := `Gutoe.KerrReferenceFrameGen
