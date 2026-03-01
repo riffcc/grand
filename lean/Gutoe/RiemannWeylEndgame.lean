@@ -28,6 +28,10 @@ def HerglotzLike (m : ℂ → ℂ) : Prop :=
 /-- Abstract m-function identity placeholder: same analytic object up to equality. -/
 def MFunctionIdentity (mH mXi : ℂ → ℂ) : Prop := mH = mXi
 
+/-- Canonical critical-line pole-like support extracted from an m-function.
+    This is now definitionally tied to the function, not carried as abstract data. -/
+def poleSet (m : ℂ → ℂ) : Set ℝ := { t : ℝ | m (criticalLinePoint t) = 0 }
+
 /-- Counting semantics for a spectrum-like point set:
     `N` is explicitly realized as cardinality of finite cuts. -/
 structure StepCountingSemantics (N : ℝ → ℝ) (S : Set ℝ) where
@@ -39,53 +43,63 @@ structure StepCountingSemantics (N : ℝ → ℝ) (S : Set ℝ) where
 
 /-- Endgame contract encoding the Weyl + m-function attack path.
     The remaining work is now decomposed into explicit semantic bridge obligations:
-    zero→pole (`mXi`), pole-transfer (`mXi`→`mH`) under identity, and
-    pole→ordinate enumeration (`mH`). -/
+    zero→pole (`mXi`), while pole transfer and ordinate enumeration are now
+    canonical consequences of `m_identity` and countability. -/
 structure RiemannWeylIdentityContract where
-  rho : ℕ → ℝ
   N_H : ℝ → ℝ
   N_xi : ℝ → ℝ
   mH : ℂ → ℂ
   mXi : ℂ → ℂ
-  poleHSet : Set ℝ
-  poleXiSet : Set ℝ
-  counting_H : StepCountingSemantics N_H poleHSet
-  counting_xi : StepCountingSemantics N_xi poleXiSet
+  counting_H : StepCountingSemantics N_H (poleSet mH)
+  counting_xi : StepCountingSemantics N_xi (poleSet mXi)
   weyl_H : RiemannVonMangoldtEnvelope N_H
   weyl_xi : RiemannVonMangoldtEnvelope N_xi
   count_exact : ∀ T : ℝ, 0 ≤ T → N_H T = N_xi T
   mH_herglotz : HerglotzLike mH
   mXi_herglotz : HerglotzLike mXi
   m_identity : MFunctionIdentity mH mXi
+  poleH_countable : (poleSet mH).Countable
   zero_to_poleXi :
     ∀ s : ℂ, riemannZeta s = 0 →
       (¬ ∃ n : ℕ, s = -2 * (n + 1)) →
       s ≠ 1 →
-      ∃ t : ℝ, s = criticalLinePoint t ∧ t ∈ poleXiSet
-  poleXi_to_poleH :
-    MFunctionIdentity mH mXi → ∀ t : ℝ, t ∈ poleXiSet → t ∈ poleHSet
-  poleH_to_ordinate :
-    ∀ t : ℝ, t ∈ poleHSet → ∃ n : ℕ, t = rho n
+      ∃ t : ℝ, s = criticalLinePoint t ∧ t ∈ poleSet mXi
 
 /-- Explicit semantic bridge theorem:
-    from zero→pole, pole transfer, and pole enumeration, obtain nontrivial-zero
-    ordinate enumeration. -/
-theorem ordinateEnumeration_of_semantic_bridge
+    from zero→pole and canonical pole/countability semantics,
+    obtain an ordinate enumeration. -/
+theorem exists_ordinateEnumeration_of_semantic_bridge
     (hC : RiemannWeylIdentityContract) :
-    RiemannNontrivialZeroOrdinateEnumeration hC.rho := by
-  intro s hs htriv h1
-  rcases hC.zero_to_poleXi s hs htriv h1 with ⟨t, hsEq, htXi⟩
-  have htH : t ∈ hC.poleHSet := hC.poleXi_to_poleH hC.m_identity t htXi
-  rcases hC.poleH_to_ordinate t htH with ⟨n, hn⟩
-  refine ⟨n, ?_⟩
-  simpa [hn] using hsEq
+    ∃ ρ : ℕ → ℝ, RiemannNontrivialZeroOrdinateEnumeration ρ := by
+  by_cases hne : (poleSet hC.mH).Nonempty
+  · rcases hC.poleH_countable.exists_eq_range hne with ⟨ρ, hρ⟩
+    refine ⟨ρ, ?_⟩
+    intro s hs htriv h1
+    rcases hC.zero_to_poleXi s hs htriv h1 with ⟨t, hsEq, htXi⟩
+    have htH : t ∈ poleSet hC.mH := by
+      change hC.mH (criticalLinePoint t) = 0
+      rw [hC.m_identity]
+      exact htXi
+    have htRange : t ∈ Set.range ρ := by simpa [hρ] using htH
+    rcases htRange with ⟨n, hn⟩
+    refine ⟨n, ?_⟩
+    simpa [hn] using hsEq
+  · refine ⟨fun _ => 0, ?_⟩
+    intro s hs htriv h1
+    exfalso
+    rcases hC.zero_to_poleXi s hs htriv h1 with ⟨t, _hsEq, htXi⟩
+    have htH : t ∈ poleSet hC.mH := by
+      change hC.mH (criticalLinePoint t) = 0
+      rw [hC.m_identity]
+      exact htXi
+    exact hne ⟨t, htH⟩
 
 /-- RH closure from the Weyl/m-function endgame contract. -/
 theorem mathlibRH_of_weyl_identity_contract
     (hC : RiemannWeylIdentityContract) :
     RiemannHypothesis := by
-  apply mathlibRH_of_ordinate_enumeration hC.rho
-  exact ordinateEnumeration_of_semantic_bridge hC
+  rcases exists_ordinateEnumeration_of_semantic_bridge hC with ⟨ρ, hEnum⟩
+  exact mathlibRH_of_ordinate_enumeration ρ hEnum
 
 end
 
