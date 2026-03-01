@@ -125,6 +125,38 @@ theorem mathlibRH_of_riemann_nontrivial_ladder_capture
   rcases hCap s hs htriv h1 with ⟨N, t, ht, hsEq⟩
   simpa [hsEq, onCriticalLine, criticalLinePoint_re] using (criticalLinePoint_re t)
 
+/-- Canonical finite-prefix ladder built from an ordinate enumerator. -/
+def prefixSpec (ρ : ℕ → ℝ) (N : ℕ) : Finset ℝ :=
+  (Finset.range (N + 1)).image ρ
+
+/-- Strong single-object endgame assumption:
+    nontrivial `ζ` zeros are exactly critical-line points from an enumerable ordinate list. -/
+def RiemannNontrivialZeroOrdinateEnumeration (ρ : ℕ → ℝ) : Prop :=
+  ∀ s : ℂ, riemannZeta s = 0 →
+    (¬ ∃ n : ℕ, s = -2 * (n + 1)) →
+    s ≠ 1 →
+    ∃ n : ℕ, s = criticalLinePoint (ρ n)
+
+/-- Enumerated ordinate list implies finite-ladder capture (using prefixes). -/
+theorem ladder_capture_of_ordinate_enumeration
+    (ρ : ℕ → ℝ)
+    (hEnum : RiemannNontrivialZeroOrdinateEnumeration ρ) :
+    RiemannNontrivialLadderZeroCapture (prefixSpec ρ) := by
+  intro s hs htriv h1
+  rcases hEnum s hs htriv h1 with ⟨n, hsEq⟩
+  refine ⟨n, ρ n, ?_, hsEq⟩
+  unfold prefixSpec
+  refine Finset.mem_image.mpr ?_
+  refine ⟨n, Finset.mem_range.mpr (Nat.lt_succ_self n), rfl⟩
+
+/-- Direct RH closure from nontrivial-zero ordinate enumeration. -/
+theorem mathlibRH_of_ordinate_enumeration
+    (ρ : ℕ → ℝ)
+    (hEnum : RiemannNontrivialZeroOrdinateEnumeration ρ) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_riemann_nontrivial_ladder_capture
+    (prefixSpec ρ) (ladder_capture_of_ordinate_enumeration ρ hEnum)
+
 end
 
 end Gutoe.RiemannTargetFiniteLadder
