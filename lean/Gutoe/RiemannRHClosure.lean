@@ -5,6 +5,7 @@ import Gutoe.RiemannBridge
 import Gutoe.RiemannCounting
 import Gutoe.RiemannLayer2Identity
 import Gutoe.RiemannLimitBridge
+import Gutoe.RiemannConvergenceTransfer
 
 namespace Gutoe.RiemannRHClosure
 
@@ -14,6 +15,7 @@ open Gutoe.RiemannBridge
 open Gutoe.RiemannCounting
 open Gutoe.RiemannLayer2Identity
 open Gutoe.RiemannLimitBridge
+open Gutoe.RiemannConvergenceTransfer
 
 /-- Program-level assumptions required for the RH closure reduction lane.
     This is intentionally explicit so no hidden assumptions are smuggled in. -/
@@ -94,5 +96,12 @@ theorem rh_from_limit_transfer_contract
     (hC : RHLimitTransferContract Xi) :
     RiemannHypothesisXi Xi := by
   exact rh_of_limit_transfer_contract Xi hC
+
+/-- Convergence/rigidity API: RH from finite exact bridge + transfer convergence. -/
+theorem rh_from_convergence_transfer_contract
+    (Xi : ℂ → ℂ)
+    (hC : RHConvergenceTransferContract Xi) :
+    RiemannHypothesisXi Xi := by
+  exact rh_of_convergence_transfer_contract Xi hC
 
 end Gutoe.RiemannRHClosure
