@@ -128,6 +128,20 @@ theorem zero_to_poleXi_of_target_contract
     rw [hmXi, ← hsEq]
     exact hsXi
 
+/-- Zero→pole bridge specialized to ladder zero-capture at `XiTarget`,
+    routed through the canonical convergence-transfer constructor. -/
+theorem zero_to_poleXi_of_target_zero_capture
+    (mXi : ℂ → ℂ)
+    (hmXi : mXi = XiTarget)
+    (specN : ℕ → Finset ℝ)
+    (hCap : XiTargetLadderZeroCapture specN) :
+    ∀ s : ℂ, riemannZeta s = 0 →
+      (¬ ∃ n : ℕ, s = -2 * (n + 1)) →
+      s ≠ 1 →
+      ∃ t : ℝ, s = criticalLinePoint t ∧ t ∈ poleSet mXi :=
+  zero_to_poleXi_of_target_contract
+    mXi hmXi (toConvergenceTransferContract_of_zeroCapture specN hCap)
+
 /-- Canonical constructor: when `mXi` is identified with `XiTarget`, the
     `zero_to_poleXi` bridge field is auto-derived from the target contract. -/
 def mkWeylIdentityContract_of_target

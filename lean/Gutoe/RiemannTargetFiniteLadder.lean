@@ -96,6 +96,16 @@ theorem approxZero_tolZero_iff_zeroCapture
       XiFinite_zero_of_mem (specN N) ht
     simp [XiFiniteLadder, tolZero, hXiN0]
 
+/-- Canonical constructor: exact ladder zero-capture directly yields
+    a convergence-transfer contract at `XiTarget`. -/
+def toConvergenceTransferContract_of_zeroCapture
+    (specN : ℕ → Finset ℝ)
+    (hCap : XiTargetLadderZeroCapture specN) :
+    RHConvergenceTransferContract XiTarget :=
+  toConvergenceTransferContract
+    { specN := specN
+      approxZero := (approxZero_tolZero_iff_zeroCapture specN).2 hCap }
+
 /-- Direct final closure from explicit ladder zero-capture.
     This is equivalent to the zero-tolerance convergence contract in this lane. -/
 theorem mathlibRH_of_target_ladder_zero_capture
@@ -106,6 +116,14 @@ theorem mathlibRH_of_target_ladder_zero_capture
   have hsXi : XiTarget s = 0 := nontrivialZeroTransferToXiTarget s hs htriv h1
   rcases hCap s hsXi with ⟨N, t, ht, hsEq⟩
   simpa [hsEq, onCriticalLine, criticalLinePoint_re] using (criticalLinePoint_re t)
+
+/-- Same closure as `mathlibRH_of_target_ladder_zero_capture`, routed through
+    the canonical convergence-transfer contract constructor. -/
+theorem mathlibRH_of_target_ladder_zero_capture_via_contract
+    (specN : ℕ → Finset ℝ)
+    (hCap : XiTargetLadderZeroCapture specN) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_contract (toConvergenceTransferContract_of_zeroCapture specN hCap)
 
 /-- One-layer-peeled final gap:
     direct finite-ladder capture of nontrivial `riemannZeta` zeros. -/
