@@ -5,9 +5,12 @@
 //! - geometry/topology shortcuts (warp metrics / wormholes)
 //! and evaluates major FTL proposals under one consistent constraint set.
 
-use gutoe_physics::dark_sector::vacuum_energy_density_structural;
+use gutoe_physics::constants::{G, PLANCK_LENGTH};
+use gutoe_physics::dark_sector::{dark_density_particle, vacuum_energy_density_structural};
+use gutoe_physics::singularity_resolution::lattice_core_radius_m;
 use gutoe_physics::C;
 use serde_json::json;
+use std::f64::consts::PI;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
@@ -17,6 +20,23 @@ fn env_bool(name: &str, default: bool) -> bool {
         Ok(v) => matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"),
         Err(_) => default,
     }
+}
+
+const REAR_FACE_FACTOR: f64 = 0.1;
+const COMPACT_RADIUS_M: f64 = 100.0;
+const COMPACT_THICKNESS_M: f64 = 0.1;
+const COMPACT_SHORTCUT_S: f64 = 0.5; // 2c effective
+const VISIBLE_DENSITY_OPT_KG_M3: f64 = 1.0e-20;
+
+fn required_curvature_energy_density_j_m3(shortcut_s: f64, curvature_scale_m: f64) -> f64 {
+    // Einstein scale proxy: ρ ~ (c^4 / 8πG) * K, K ~ ((1/s)-1)/R^2
+    let pref = C.powi(4) / (8.0 * PI * G);
+    let amp = (1.0 / shortcut_s - 1.0).max(0.0);
+    pref * amp / curvature_scale_m.powi(2)
+}
+
+fn compact_shell_volume_m3(radius_m: f64, thickness_m: f64) -> f64 {
+    (4.0 / 3.0) * PI * ((radius_m + thickness_m).powi(3) - radius_m.powi(3))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -49,6 +69,7 @@ struct EngineSpec {
     requires_anec_violation: bool,
     ctc_risk: bool,
     traversable_as_stated: bool,
+    requires_compact_positive_budget: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -57,6 +78,10 @@ struct FrameworkGates {
     supports_macroscopic_negative_energy: bool,
     supports_anec_violation: bool,
     allows_ctc: bool,
+    lentz_compact_budget_met: bool,
+    lentz_compact_floor_j: f64,
+    lentz_compact_shortfall_ratio: f64,
+    near_core_dead_end_multiplier: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +106,9 @@ fn evaluate_engine(spec: EngineSpec, gates: FrameworkGates) -> EngineVerdict {
     if spec.ctc_risk && !gates.allows_ctc {
         blocked_by.push("chronology_protection_ctc_block");
     }
+    if spec.requires_compact_positive_budget && !gates.lentz_compact_budget_met {
+        blocked_by.push("compact_shell_energy_floor_not_met");
+    }
     if !spec.traversable_as_stated {
         blocked_by.push("not_traversable_as_stated");
     }
@@ -102,6 +130,7 @@ fn best_ftl_engines() -> Vec<EngineSpec> {
             requires_anec_violation: true,
             ctc_risk: true,
             traversable_as_stated: true,
+            requires_compact_positive_budget: false,
         },
         EngineSpec {
             name: "Natario warp metric",
@@ -111,6 +140,7 @@ fn best_ftl_engines() -> Vec<EngineSpec> {
             requires_anec_violation: true,
             ctc_risk: true,
             traversable_as_stated: true,
+            requires_compact_positive_budget: false,
         },
         EngineSpec {
             name: "Van den Broeck warp variant",
@@ -120,6 +150,7 @@ fn best_ftl_engines() -> Vec<EngineSpec> {
             requires_anec_violation: true,
             ctc_risk: true,
             traversable_as_stated: true,
+            requires_compact_positive_budget: false,
         },
         EngineSpec {
             name: "Lentz-style warp soliton",
@@ -129,6 +160,7 @@ fn best_ftl_engines() -> Vec<EngineSpec> {
             requires_anec_violation: false,
             ctc_risk: true,
             traversable_as_stated: true,
+            requires_compact_positive_budget: true,
         },
         EngineSpec {
             name: "Morris-Thorne traversable wormhole",
@@ -138,6 +170,7 @@ fn best_ftl_engines() -> Vec<EngineSpec> {
             requires_anec_violation: true,
             ctc_risk: true,
             traversable_as_stated: true,
+            requires_compact_positive_budget: false,
         },
         EngineSpec {
             name: "Einstein-Rosen bridge (classical)",
@@ -147,6 +180,7 @@ fn best_ftl_engines() -> Vec<EngineSpec> {
             requires_anec_violation: false,
             ctc_risk: false,
             traversable_as_stated: false,
+            requires_compact_positive_budget: false,
         },
         EngineSpec {
             name: "Krasnikov tube",
@@ -156,6 +190,7 @@ fn best_ftl_engines() -> Vec<EngineSpec> {
             requires_anec_violation: true,
             ctc_risk: true,
             traversable_as_stated: true,
+            requires_compact_positive_budget: false,
         },
         EngineSpec {
             name: "Quantum entanglement messaging",
@@ -165,6 +200,7 @@ fn best_ftl_engines() -> Vec<EngineSpec> {
             requires_anec_violation: false,
             ctc_risk: false,
             traversable_as_stated: false,
+            requires_compact_positive_budget: false,
         },
         EngineSpec {
             name: "Tachyonic signaling drive",
@@ -174,6 +210,7 @@ fn best_ftl_engines() -> Vec<EngineSpec> {
             requires_anec_violation: false,
             ctc_risk: true,
             traversable_as_stated: true,
+            requires_compact_positive_budget: false,
         },
     ]
 }
@@ -189,11 +226,31 @@ fn main() {
     // 2) Current cosmology lane yields positive vacuum density (not macroscopic
     //    engineered negative-energy support).
     let rho_vac = vacuum_energy_density_structural();
+    let shell_volume_m3 = compact_shell_volume_m3(COMPACT_RADIUS_M, COMPACT_THICKNESS_M);
+    let rho_required_compact =
+        required_curvature_energy_density_j_m3(COMPACT_SHORTCUT_S, COMPACT_RADIUS_M);
+    let lentz_compact_floor_j = rho_required_compact * shell_volume_m3 * REAR_FACE_FACTOR;
+
+    let rho_dark = dark_density_particle(VISIBLE_DENSITY_OPT_KG_M3);
+    let rho_source_j_m3 = (rho_dark + rho_vac) * C * C;
+    let source_energy_same_shell_j = rho_source_j_m3 * shell_volume_m3;
+    let lentz_compact_shortfall_ratio = lentz_compact_floor_j / source_energy_same_shell_j;
+    let lentz_compact_budget_met = lentz_compact_shortfall_ratio <= 1.0;
+
+    let r_core = lattice_core_radius_m(PLANCK_LENGTH);
+    let rho_required_core = required_curvature_energy_density_j_m3(COMPACT_SHORTCUT_S, r_core);
+    let lentz_core_floor_j = rho_required_core * shell_volume_m3 * REAR_FACE_FACTOR;
+    let near_core_dead_end_multiplier = lentz_core_floor_j / lentz_compact_floor_j;
+
     let gates = FrameworkGates {
         local_signal_bound_enforced: true,
         supports_macroscopic_negative_energy: false,
         supports_anec_violation: false,
         allows_ctc: env_bool("GUTOE_ALLOW_CTC", false),
+        lentz_compact_budget_met,
+        lentz_compact_floor_j,
+        lentz_compact_shortfall_ratio,
+        near_core_dead_end_multiplier,
     };
 
     let specs = best_ftl_engines();
@@ -212,7 +269,12 @@ fn main() {
     let mut txt = File::create(&txt_path).expect("create txt");
     writeln!(txt, "[framework_gates]").expect("write");
     writeln!(txt, "c_m_per_s = {:.6}", C).expect("write");
-    writeln!(txt, "vacuum_energy_density_structural_kg_m3 = {:.12e}", rho_vac).expect("write");
+    writeln!(
+        txt,
+        "vacuum_energy_density_structural_kg_m3 = {:.12e}",
+        rho_vac
+    )
+    .expect("write");
     writeln!(
         txt,
         "local_signal_bound_enforced = {}",
@@ -232,6 +294,30 @@ fn main() {
     )
     .expect("write");
     writeln!(txt, "allows_ctc = {}", gates.allows_ctc).expect("write");
+    writeln!(
+        txt,
+        "lentz_compact_budget_met = {}",
+        gates.lentz_compact_budget_met
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "lentz_compact_floor_j = {:.12e}",
+        gates.lentz_compact_floor_j
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "lentz_compact_shortfall_ratio = {:.12e}",
+        gates.lentz_compact_shortfall_ratio
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "near_core_dead_end_multiplier = {:.12e}",
+        gates.near_core_dead_end_multiplier
+    )
+    .expect("write");
     writeln!(txt).expect("write");
 
     writeln!(txt, "[engine_verdicts]").expect("write");
@@ -263,6 +349,7 @@ fn main() {
                     "requires_anec_violation": v.spec.requires_anec_violation,
                     "ctc_risk": v.spec.ctc_risk,
                     "traversable_as_stated": v.spec.traversable_as_stated,
+                    "requires_compact_positive_budget": v.spec.requires_compact_positive_budget,
                 },
                 "pass": v.pass,
                 "blocked_by": v.blocked_by,
@@ -277,7 +364,11 @@ fn main() {
             "local_signal_bound_enforced": gates.local_signal_bound_enforced,
             "supports_macroscopic_negative_energy": gates.supports_macroscopic_negative_energy,
             "supports_anec_violation": gates.supports_anec_violation,
-            "allows_ctc": gates.allows_ctc
+            "allows_ctc": gates.allows_ctc,
+            "lentz_compact_budget_met": gates.lentz_compact_budget_met,
+            "lentz_compact_floor_j": gates.lentz_compact_floor_j,
+            "lentz_compact_shortfall_ratio": gates.lentz_compact_shortfall_ratio,
+            "near_core_dead_end_multiplier": gates.near_core_dead_end_multiplier
         },
         "summary": {
             "total": verdicts.len(),
@@ -286,8 +377,11 @@ fn main() {
         },
         "engines": rows
     });
-    fs::write(&json_path, serde_json::to_string_pretty(&payload).expect("json encode"))
-        .expect("write json");
+    fs::write(
+        &json_path,
+        serde_json::to_string_pretty(&payload).expect("json encode"),
+    )
+    .expect("write json");
 
     println!("wrote {}", txt_path.display());
     println!("wrote {}", json_path.display());

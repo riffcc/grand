@@ -53,13 +53,22 @@ fn main() {
     let x0 = env_f64("GUTOE_CTC_X0", 0.0);
     let period_t = env_f64("GUTOE_CTC_PERIOD_T", 1.0);
     let amp_x = env_f64("GUTOE_CTC_AMP_X", 0.0);
-    let steps = env_usize("GUTOE_CTC_STEPS", 200).max(2);
+    let steps_per_lap = env_usize("GUTOE_CTC_STEPS", 200).max(2);
+    let laps = env_usize("GUTOE_CTC_LAPS", 1).max(1);
+    let total_steps = (steps_per_lap * laps).max(2);
 
-    let mut worldline = Vec::with_capacity(steps + 1);
-    for i in 0..=steps {
-        let lambda = i as f64 / steps as f64;
-        let t = t0 + period_t * lambda;
-        let x = x0 + amp_x * (2.0 * PI * lambda).sin();
+    let mut worldline = Vec::with_capacity(total_steps + 1);
+    for i in 0..=total_steps {
+        let lambda = i as f64 / total_steps as f64;
+        let laps_param = laps as f64 * lambda;
+        let frac_lap = laps_param.fract();
+        let t = t0 + period_t * laps_param;
+        let x = if i == total_steps {
+            x0
+        } else {
+            // Keep each lap periodic in x while advancing t in the covering space.
+            x0 + amp_x * (2.0 * PI * frac_lap).sin()
+        };
         worldline.push(Event { t, x });
     }
 
@@ -69,7 +78,7 @@ fn main() {
     let mut ds2_min = f64::INFINITY;
     let mut violating_segments = 0usize;
 
-    for i in 0..steps {
+    for i in 0..total_steps {
         let a = worldline[i];
         let b = worldline[i + 1];
         let ds2 = interval_sq(a, b);
@@ -102,7 +111,7 @@ fn main() {
     let mut csv = File::create(&csv_path).expect("create csv");
     writeln!(csv, "i,lambda,t,x").expect("write csv header");
     for (i, e) in worldline.iter().enumerate() {
-        let lambda = i as f64 / steps as f64;
+        let lambda = i as f64 / total_steps as f64;
         writeln!(csv, "{i},{lambda:.12},{:.12e},{:.12e}", e.t, e.x).expect("write csv row");
     }
 
@@ -112,7 +121,9 @@ fn main() {
     writeln!(txt, "x0 = {:.12e}", x0).expect("write");
     writeln!(txt, "period_t = {:.12e}", period_t).expect("write");
     writeln!(txt, "amp_x = {:.12e}", amp_x).expect("write");
-    writeln!(txt, "steps = {}", steps).expect("write");
+    writeln!(txt, "steps_per_lap = {}", steps_per_lap).expect("write");
+    writeln!(txt, "laps = {}", laps).expect("write");
+    writeln!(txt, "total_steps = {}", total_steps).expect("write");
     writeln!(txt).expect("write");
 
     writeln!(txt, "[local_causality]").expect("write");
@@ -130,6 +141,29 @@ fn main() {
     writeln!(txt, "winding_estimate = {:.12e}", winding_est).expect("write");
     writeln!(txt, "winding_integer = {}", winding_integer).expect("write");
     writeln!(txt, "identified_closed = {}", identified_closed).expect("write");
+    writeln!(txt).expect("write");
+
+    let proper_time_per_lap = proper_time / laps as f64;
+    let lap_cover_time = period_t.abs();
+    let finite_local_lap = proper_time_per_lap.is_finite();
+    let unbounded_global_cover_witness = finite_local_lap && timelike_all && laps >= 1;
+
+    writeln!(txt, "[escher_stair]").expect("write");
+    writeln!(txt, "proper_time_per_lap = {:.12e}", proper_time_per_lap).expect("write");
+    writeln!(txt, "lap_cover_time_abs = {:.12e}", lap_cover_time).expect("write");
+    writeln!(txt, "cover_time_total = {:.12e}", dt_total).expect("write");
+    writeln!(txt, "finite_local_lap = {}", finite_local_lap).expect("write");
+    writeln!(
+        txt,
+        "unbounded_global_cover_witness = {}",
+        unbounded_global_cover_witness
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "statement = finite local lap proper-time + arbitrary lap count => unbounded total covering-time"
+    )
+    .expect("write");
 
     let payload = json!({
         "inputs": {
@@ -137,7 +171,9 @@ fn main() {
             "x0": x0,
             "period_t": period_t,
             "amp_x": amp_x,
-            "steps": steps
+            "steps_per_lap": steps_per_lap,
+            "laps": laps,
+            "total_steps": total_steps
         },
         "local_causality": {
             "timelike_all_segments": timelike_all,
@@ -153,6 +189,13 @@ fn main() {
             "winding_estimate": winding_est,
             "winding_integer": winding_integer,
             "identified_closed": identified_closed
+        },
+        "escher_stair": {
+            "proper_time_per_lap": proper_time_per_lap,
+            "lap_cover_time_abs": lap_cover_time,
+            "cover_time_total": dt_total,
+            "finite_local_lap": finite_local_lap,
+            "unbounded_global_cover_witness": unbounded_global_cover_witness
         }
     });
     fs::write(
@@ -169,4 +212,3 @@ fn main() {
         timelike_all, identified_closed, winding_est
     );
 }
-

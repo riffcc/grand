@@ -1,11 +1,13 @@
 import Mathlib
 import Gutoe.DimensionalStructure
 import Gutoe.Z3Uniqueness
+import Gutoe.GaugeConstants
 
 namespace Gutoe.ThermalEntropyClosure
 
 open Gutoe.DimensionalStructure
 open Gutoe.Z3Uniqueness
+open Gutoe.GaugeConstants
 
 /-!
 Lean closure for thermal entropy transduction coefficients used in chemical thermodynamics.
@@ -81,5 +83,41 @@ theorem metalloid_num_unique : goodNums 4 12 metalloidPenaltyQ = ({7} : Finset �
 theorem molecular_num_unique : goodNums 4 12 molecularPenaltyQ = ({5} : Finset ℕ) := by
   unfold goodNums molecularPenaltyQ grade1Count z3FixedCount
   native_decide
+
+/-- Total SM gauge-generator count `8 + 3 + 1 = 12`. -/
+def gaugeGeneratorCount : ℕ := (3^2 - 1) + (2^2 - 1) + 1
+
+/-- Spatial grade-1 count from grade-1 minus the unique fixed timelike slot. -/
+def spatialVectorCount : ℕ := grade1Count - z3FixedCount
+
+/-- Spatial grade-2 count from total grade-2 minus mixed timelike bivectors. -/
+def spatialBivectorCount : ℕ := grade2Count - spatialVectorCount
+
+/-- Odd-parity structural basis proxy: `3 vectors + 3 bivectors + 1 fixed slot = 7`. -/
+def oddParityBasisCount : ℕ := spatialVectorCount + spatialBivectorCount + z3FixedCount
+
+/-- Refractory suppression ratio from gauge/odd-parity structural balance. -/
+def refractorySuppressionRatioQ : ℚ := (gaugeGeneratorCount : ℚ) / (oddParityBasisCount : ℚ)
+
+theorem gauge_generator_count_eq_12 : gaugeGeneratorCount = 12 := by
+  simpa [gaugeGeneratorCount] using total_gauge_bosons
+
+theorem spatial_vector_count_eq_3 : spatialVectorCount = 3 := by
+  unfold spatialVectorCount grade1Count z3FixedCount
+  native_decide
+
+theorem spatial_bivector_count_eq_3 : spatialBivectorCount = 3 := by
+  unfold spatialBivectorCount grade2Count spatialVectorCount grade1Count z3FixedCount
+  native_decide
+
+theorem odd_parity_basis_count_eq_7 : oddParityBasisCount = 7 := by
+  unfold oddParityBasisCount
+  rw [spatial_vector_count_eq_3, spatial_bivector_count_eq_3, z3_fixed_count_eq_1]
+
+theorem refractory_suppression_ratio_eq_12_over_7 :
+    refractorySuppressionRatioQ = (12 / 7 : ℚ) := by
+  unfold refractorySuppressionRatioQ
+  rw [gauge_generator_count_eq_12, odd_parity_basis_count_eq_7]
+  norm_num
 
 end Gutoe.ThermalEntropyClosure
