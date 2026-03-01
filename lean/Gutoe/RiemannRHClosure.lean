@@ -66,4 +66,13 @@ theorem rh_from_layer2_analytic_identity
     RiemannHypothesisXi Xi := by
   exact rh_of_layer2_identity Xi hL2
 
+/-- Minimal Layer-2 closure form:
+    proving only zero-to-finite-witness already forces RH. -/
+theorem rh_from_layer2_forward_only
+    (Xi : ℂ → ℂ)
+    (specN : ℕ → Finset ℝ)
+    (hzero : ZeroToFiniteWitness Xi specN) :
+    RiemannHypothesisXi Xi := by
+  exact rh_of_zero_to_finite_witness Xi specN hzero
+
 end Gutoe.RiemannRHClosure

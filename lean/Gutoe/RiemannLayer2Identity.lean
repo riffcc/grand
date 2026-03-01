@@ -73,6 +73,18 @@ theorem ladder_point_to_zero
   rcases ht with ⟨N, htN⟩
   exact hL2.finite_to_zero N t htN
 
+/-- Minimal Layer-2 RH trigger:
+    only the forward witness direction is required for RH itself. -/
+theorem rh_of_zero_to_finite_witness
+    (Xi : ℂ → ℂ)
+    (specN : ℕ → Finset ℝ)
+    (hzero : ZeroToFiniteWitness Xi specN) :
+    RiemannHypothesisXi Xi := by
+  apply rh_of_zero_parameterization Xi
+  intro s hs
+  rcases hzero s hs with ⟨_N, t, _ht, hsEq⟩
+  exact ⟨t, hsEq⟩
+
 /-- Layer-2 closure: finite-ladder analytic identity induces exact Xi/spectrum bridge. -/
 theorem spectralBridge_of_layer2
     (Xi : ℂ → ℂ)
@@ -97,4 +109,3 @@ theorem rh_of_layer2_identity
 end
 
 end Gutoe.RiemannLayer2Identity
-
