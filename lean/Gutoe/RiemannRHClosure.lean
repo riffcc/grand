@@ -4,6 +4,7 @@ import Gutoe.RiemannSelfAdjoint
 import Gutoe.RiemannBridge
 import Gutoe.RiemannCounting
 import Gutoe.RiemannLayer2Identity
+import Gutoe.RiemannLimitBridge
 
 namespace Gutoe.RiemannRHClosure
 
@@ -12,6 +13,7 @@ open Gutoe.RiemannSelfAdjoint
 open Gutoe.RiemannBridge
 open Gutoe.RiemannCounting
 open Gutoe.RiemannLayer2Identity
+open Gutoe.RiemannLimitBridge
 
 /-- Program-level assumptions required for the RH closure reduction lane.
     This is intentionally explicit so no hidden assumptions are smuggled in. -/
@@ -74,5 +76,16 @@ theorem rh_from_layer2_forward_only
     (hzero : ZeroToFiniteWitness Xi specN) :
     RiemannHypothesisXi Xi := by
   exact rh_of_zero_to_finite_witness Xi specN hzero
+
+/-- Layer-3 limit transfer packaging:
+    RH follows once finite exact bridges + zero-forward transfer are supplied. -/
+theorem rh_from_limit_transfer
+    (Xi : ℂ → ℂ)
+    (XiN : ℕ → (ℂ → ℂ))
+    (specN : ℕ → Finset ℝ)
+    (hfiniteBridge : ∀ N : ℕ, SpectralBridge (XiN N) (levelSpecSet specN N))
+    (hzeroForward : ∀ s : ℂ, Xi s = 0 → ∃ N : ℕ, XiN N s = 0) :
+    RiemannHypothesisXi Xi := by
+  exact rh_of_limit_transfer Xi XiN specN hfiniteBridge hzeroForward
 
 end Gutoe.RiemannRHClosure
