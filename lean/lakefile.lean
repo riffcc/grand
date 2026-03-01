@@ -133,6 +133,7 @@ lean_lib Gutoe where
              `Gutoe.RiemannBridge,
              `Gutoe.RiemannCounting,
              `Gutoe.RiemannLayer2Identity,
+             `Gutoe.RiemannFiniteXiModel,
              `Gutoe.RiemannRHClosure]
 
 lean_exe kerr_ref_frame where
