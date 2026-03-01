@@ -3,6 +3,7 @@ import Gutoe.RiemannCore
 import Gutoe.RiemannSelfAdjoint
 import Gutoe.RiemannBridge
 import Gutoe.RiemannCounting
+import Gutoe.RiemannLayer2Identity
 
 namespace Gutoe.RiemannRHClosure
 
@@ -10,6 +11,7 @@ open Gutoe.RiemannCore
 open Gutoe.RiemannSelfAdjoint
 open Gutoe.RiemannBridge
 open Gutoe.RiemannCounting
+open Gutoe.RiemannLayer2Identity
 
 /-- Program-level assumptions required for the RH closure reduction lane.
     This is intentionally explicit so no hidden assumptions are smuggled in. -/
@@ -56,5 +58,12 @@ theorem counting_transport
     FiniteCountingMatch specA specC := by
   exact finiteCountingMatch_trans hAB hBC
 
-end Gutoe.RiemannRHClosure
+/-- Layer-2 bridge packaging theorem:
+    an explicit finite-ladder analytic identity yields RH directly. -/
+theorem rh_from_layer2_analytic_identity
+    (Xi : ℂ → ℂ)
+    (hL2 : Layer2AnalyticIdentity Xi) :
+    RiemannHypothesisXi Xi := by
+  exact rh_of_layer2_identity Xi hL2
 
+end Gutoe.RiemannRHClosure

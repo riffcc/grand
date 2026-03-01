@@ -132,6 +132,7 @@ lean_lib Gutoe where
              `Gutoe.RiemannSelfAdjoint,
              `Gutoe.RiemannBridge,
              `Gutoe.RiemannCounting,
+             `Gutoe.RiemannLayer2Identity,
              `Gutoe.RiemannRHClosure]
 
 lean_exe kerr_ref_frame where
