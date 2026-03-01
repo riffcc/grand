@@ -185,6 +185,15 @@ theorem mathlibRH_of_nontrivial_capture_and_nonvanishing
   exact mathlibRH_of_nontrivial_capture_and_backtransfer
     specN hCapNontriv (xiTargetZeroTransferToNontrivialZeta_of_nonvanishing hNv)
 
+/-- Obligation-1 discharged path:
+    only nontrivial-`ζ` finite-ladder capture remains. -/
+theorem mathlibRH_of_nontrivial_capture
+    (specN : ℕ → Finset ℝ)
+    (hCapNontriv : RiemannNontrivialLadderZeroCapture specN) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_nontrivial_capture_and_backtransfer
+    specN hCapNontriv xiTargetZeroTransferToNontrivialZeta
+
 /-- Canonical finite-prefix ladder built from an ordinate enumerator. -/
 def prefixSpec (ρ : ℕ → ℝ) (N : ℕ) : Finset ℝ :=
   (Finset.range (N + 1)).image ρ

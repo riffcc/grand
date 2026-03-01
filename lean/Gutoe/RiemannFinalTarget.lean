@@ -91,6 +91,61 @@ theorem xiTargetZeroTransferToNontrivialZeta_of_nonvanishing
     exact hNv.2.1 (by simpa [hs1] using hsXi)
   exact ⟨hsZeta, htriv, h1⟩
 
+/-- `XiTarget = completedRiemannZeta` is nonvanishing at `0`, `1`, and all trivial-zero locations. -/
+theorem xiTargetNonvanishingObligations :
+    XiTargetNonvanishingObligations := by
+  have h1 : XiTarget 1 ≠ 0 := by
+    intro hXi1
+    have hz1 : riemannZeta (1 : ℂ) = 0 := by
+      rw [riemannZeta_def_of_ne_zero (s := (1 : ℂ)) one_ne_zero]
+      simpa [XiTarget, hXi1]
+    exact riemannZeta_one_ne_zero hz1
+  have h0 : XiTarget 0 ≠ 0 := by
+    -- Functional equation: `Λ(1) = Λ(0)`.
+    have hfe0 : XiTarget 1 = XiTarget 0 := by
+      simpa [XiTarget] using (completedRiemannZeta_one_sub (0 : ℂ))
+    simpa [hfe0] using h1
+  have htriv : ∀ n : ℕ, XiTarget (-2 * (n + 1)) ≠ 0 := by
+    intro n
+    let s : ℂ := -2 * (n + 1)
+    let u : ℂ := (1 + 2 * (n + 1) : ℂ)
+    have hu_re_ge1 : (1 : ℝ) ≤ u.re := by
+      have hu_re : u.re = (1 + 2 * (n + 1) : ℝ) := by
+        norm_num [u]
+      linarith
+    have hz_u_ne : riemannZeta u ≠ 0 := riemannZeta_ne_zero_of_one_le_re hu_re_ge1
+    have hu_ne_zero : u ≠ 0 := by
+      have hu_re_pos : (0 : ℝ) < u.re := by
+        have hu_re : u.re = (1 + 2 * (n + 1) : ℝ) := by
+          norm_num [u]
+        linarith
+      intro hu0
+      have hu_re_zero : u.re = 0 := by simpa [hu0]
+      linarith
+    have hXi_u_ne : XiTarget u ≠ 0 := by
+      intro hXi_u
+      have hz_u_zero : riemannZeta u = 0 := by
+        rw [riemannZeta_def_of_ne_zero (s := u) hu_ne_zero]
+        have hnum : completedRiemannZeta u = 0 := by
+          simpa [XiTarget] using hXi_u
+        simp [hnum]
+      exact hz_u_ne hz_u_zero
+    have hu_eq : u = 1 - s := by
+      apply Complex.ext <;> norm_num [u, s]
+    have hs_eq : XiTarget (1 - s) = XiTarget s := by
+      simpa [XiTarget] using (completedRiemannZeta_one_sub s)
+    have hs_ne : XiTarget s ≠ 0 := by
+      have hOneMinus_ne : XiTarget (1 - s) ≠ 0 := by
+        simpa [hu_eq] using hXi_u_ne
+      simpa [hs_eq] using hOneMinus_ne
+    simpa [s] using hs_ne
+  exact ⟨h0, h1, htriv⟩
+
+/-- Reverse transfer discharged by the explicit nonvanishing theorem for `XiTarget`. -/
+theorem xiTargetZeroTransferToNontrivialZeta :
+    XiTargetZeroTransferToNontrivialZeta :=
+  xiTargetZeroTransferToNontrivialZeta_of_nonvanishing xiTargetNonvanishingObligations
+
 /-- Final closure theorem surface:
     contract + nontrivial-zero transfer implies Mathlib's RH statement. -/
 theorem mathlibRH_of_contract_and_transfer
