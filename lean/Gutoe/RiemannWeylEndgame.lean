@@ -128,6 +128,65 @@ theorem zero_to_poleXi_of_target_contract
     rw [hmXi, ← hsEq]
     exact hsXi
 
+/-- Canonical constructor: when `mXi` is identified with `XiTarget`, the
+    `zero_to_poleXi` bridge field is auto-derived from the target contract. -/
+def mkWeylIdentityContract_of_target
+    (N_H N_xi : ℝ → ℝ)
+    (mH mXi : ℂ → ℂ)
+    (counting_H : StepCountingSemantics N_H (poleSet mH))
+    (counting_xi : StepCountingSemantics N_xi (poleSet mXi))
+    (weyl_H : RiemannVonMangoldtEnvelope N_H)
+    (weyl_xi : RiemannVonMangoldtEnvelope N_xi)
+    (count_exact : ∀ T : ℝ, 0 ≤ T → N_H T = N_xi T)
+    (mH_herglotz : HerglotzLike mH)
+    (mXi_herglotz : HerglotzLike mXi)
+    (m_identity : MFunctionIdentity mH mXi)
+    (poleH_countable : (poleSet mH).Countable)
+    (hmXi : mXi = XiTarget)
+    (hTarget : RHConvergenceTransferContract XiTarget) :
+    RiemannWeylIdentityContract where
+  N_H := N_H
+  N_xi := N_xi
+  mH := mH
+  mXi := mXi
+  counting_H := counting_H
+  counting_xi := counting_xi
+  weyl_H := weyl_H
+  weyl_xi := weyl_xi
+  count_exact := count_exact
+  mH_herglotz := mH_herglotz
+  mXi_herglotz := mXi_herglotz
+  m_identity := m_identity
+  poleH_countable := poleH_countable
+  zero_to_poleXi := zero_to_poleXi_of_target_contract mXi hmXi hTarget
+
+/-- One-shot RH closure surface for the target-identified Weyl contract:
+    all Weyl-side obligations plus target convergence-transfer contract. -/
+theorem mathlibRH_of_weyl_identity_contract_of_target
+    (N_H N_xi : ℝ → ℝ)
+    (mH mXi : ℂ → ℂ)
+    (counting_H : StepCountingSemantics N_H (poleSet mH))
+    (counting_xi : StepCountingSemantics N_xi (poleSet mXi))
+    (weyl_H : RiemannVonMangoldtEnvelope N_H)
+    (weyl_xi : RiemannVonMangoldtEnvelope N_xi)
+    (count_exact : ∀ T : ℝ, 0 ≤ T → N_H T = N_xi T)
+    (mH_herglotz : HerglotzLike mH)
+    (mXi_herglotz : HerglotzLike mXi)
+    (m_identity : MFunctionIdentity mH mXi)
+    (poleH_countable : (poleSet mH).Countable)
+    (hmXi : mXi = XiTarget)
+    (hTarget : RHConvergenceTransferContract XiTarget) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_weyl_identity_contract
+    (mkWeylIdentityContract_of_target
+      N_H N_xi mH mXi
+      counting_H counting_xi
+      weyl_H weyl_xi
+      count_exact
+      mH_herglotz mXi_herglotz
+      m_identity poleH_countable
+      hmXi hTarget)
+
 end
 
 end Gutoe.RiemannWeylEndgame
