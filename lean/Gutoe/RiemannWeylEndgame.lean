@@ -1,11 +1,15 @@
 import Mathlib
 import Gutoe.RiemannCore
 import Gutoe.RiemannTargetFiniteLadder
+import Gutoe.RiemannConvergenceTransfer
+import Gutoe.RiemannFinalTarget
 
 namespace Gutoe.RiemannWeylEndgame
 
 open Gutoe.RiemannCore
 open Gutoe.RiemannTargetFiniteLadder
+open Gutoe.RiemannConvergenceTransfer
+open Gutoe.RiemannFinalTarget
 
 noncomputable section
 
@@ -100,6 +104,29 @@ theorem mathlibRH_of_weyl_identity_contract
     RiemannHypothesis := by
   rcases exists_ordinateEnumeration_of_semantic_bridge hC with ⟨ρ, hEnum⟩
   exact mathlibRH_of_ordinate_enumeration ρ hEnum
+
+/-- Instantiation helper for the remaining bridge obligation:
+    if `mXi` is identified with `XiTarget` and the target convergence-transfer
+    contract is available, then `zero_to_poleXi` is derivable automatically. -/
+theorem zero_to_poleXi_of_target_contract
+    (mXi : ℂ → ℂ)
+    (hmXi : mXi = XiTarget)
+    (hTarget : RHConvergenceTransferContract XiTarget) :
+    ∀ s : ℂ, riemannZeta s = 0 →
+      (¬ ∃ n : ℕ, s = -2 * (n + 1)) →
+      s ≠ 1 →
+      ∃ t : ℝ, s = criticalLinePoint t ∧ t ∈ poleSet mXi := by
+  intro s hs htriv h1
+  have hsXi : XiTarget s = 0 := nontrivialZeroTransferToXiTarget s hs htriv h1
+  have hsLine : onCriticalLine s := rhXiTarget_of_contract hTarget s hsXi
+  have hsEq : s = criticalLinePoint s.im := by
+    apply Complex.ext
+    · simpa [onCriticalLine, criticalLinePoint] using hsLine
+    · simp [criticalLinePoint]
+  refine ⟨s.im, hsEq, ?_⟩
+  · change mXi (criticalLinePoint s.im) = 0
+    rw [hmXi, ← hsEq]
+    exact hsXi
 
 end
 
