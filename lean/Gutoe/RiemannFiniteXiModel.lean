@@ -1,11 +1,15 @@
 import Mathlib
 import Gutoe.RiemannCore
 import Gutoe.RiemannBridge
+import Gutoe.RiemannLimitBridge
+import Gutoe.RiemannConvergenceTransfer
 
 namespace Gutoe.RiemannFiniteXiModel
 
 open Gutoe.RiemannCore
 open Gutoe.RiemannBridge
+open Gutoe.RiemannLimitBridge
+open Gutoe.RiemannConvergenceTransfer
 
 noncomputable section
 
@@ -58,6 +62,59 @@ theorem rh_XiFinite
     (spec : Finset ℝ) :
     RiemannHypothesisXi (XiFinite spec) := by
   exact bridge_implies_rh (XiFinite spec) (finiteSpecSet spec) (finiteXi_spectralBridge spec)
+
+/-- Constant finite-level family used to instantiate transfer contracts for `XiFinite`. -/
+def XiFiniteConst (spec : Finset ℝ) : ℕ → (ℂ → ℂ) := fun _ => XiFinite spec
+
+/-- Constant spectral ladder used with `XiFiniteConst`. -/
+def specConst (spec : Finset ℝ) : ℕ → Finset ℝ := fun _ => spec
+
+/-- Zero tolerance profile. -/
+def tolZero : ℕ → ℝ := fun _ => 0
+
+theorem finiteBridgeFamily_XiFiniteConst
+    (spec : Finset ℝ) :
+    FiniteBridgeFamily (XiFiniteConst spec) (specConst spec) := by
+  intro N
+  simpa [XiFiniteConst, specConst, levelSpecSet, finiteSpecSet]
+    using finiteXi_spectralBridge spec
+
+theorem zeroTol_tolZero : zeroTol tolZero := by
+  intro N
+  simp [tolZero]
+
+theorem approxZero_XiFiniteConst
+    (spec : Finset ℝ) :
+    ApproxZeroConvergence (XiFinite spec) (XiFiniteConst spec) tolZero := by
+  intro s hs
+  refine ⟨0, ?_⟩
+  simp [XiFiniteConst, tolZero, hs]
+
+theorem rigidity_XiFiniteConst
+    (spec : Finset ℝ) :
+    SpectralRigidity (XiFiniteConst spec) tolZero := by
+  intro N s hs
+  have hnorm0 : ‖XiFiniteConst spec N s‖ = 0 := by
+    exact le_antisymm hs (norm_nonneg _)
+  exact norm_eq_zero.mp hnorm0
+
+/-- Explicit convergence-transfer contract for `XiFinite` (all obligations discharged). -/
+def XiFiniteConvergenceContract
+    (spec : Finset ℝ) :
+    RHConvergenceTransferContract (XiFinite spec) where
+  XiN := XiFiniteConst spec
+  specN := specConst spec
+  finiteBridge := finiteBridgeFamily_XiFiniteConst spec
+  tol := tolZero
+  tolNonneg := zeroTol_tolZero
+  approxZero := approxZero_XiFiniteConst spec
+  rigidity := rigidity_XiFiniteConst spec
+
+/-- RH for `XiFinite` via convergence-transfer contract path. -/
+theorem rh_XiFinite_via_convergence_contract
+    (spec : Finset ℝ) :
+    RiemannHypothesisXi (XiFinite spec) := by
+  exact rh_of_convergence_transfer_contract (XiFinite spec) (XiFiniteConvergenceContract spec)
 
 end
 
