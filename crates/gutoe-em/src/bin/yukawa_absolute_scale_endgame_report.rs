@@ -2,9 +2,10 @@
 //! lattice/proton-anchor branch against Fermi/PDG anchors.
 
 use gutoe_em::weak::{
-    electron_mass_from_proton_anchor, electroweak_vev_from_fermi,
-    electroweak_vev_from_lattice_order_parameter, higgs_mass_from_vev, w_mass_from_vev_and_alpha,
-    w_z_mass_ratio, z_mass_from_vev_and_alpha, ALPHA_EW_MZ,
+    electron_mass_from_planck_structural_candidate, electron_mass_from_proton_anchor,
+    electroweak_vev_from_fermi, electroweak_vev_from_lattice_order_parameter,
+    electroweak_vev_from_lattice_order_parameter_planck_structural, higgs_mass_from_vev,
+    w_mass_from_vev_and_alpha, w_z_mass_ratio, z_mass_from_vev_and_alpha, ALPHA_EW_MZ,
 };
 use serde::Serialize;
 use std::fs::{self, File};
@@ -27,8 +28,10 @@ struct ScalarComparison {
 struct Report {
     inputs: Inputs,
     electron_anchor: ScalarComparison,
+    electron_planck_structural: ScalarComparison,
     vev_lattice_vs_fermi: ScalarComparison,
     masses_lattice_branch: Masses,
+    masses_planck_structural_branch: Masses,
     masses_fermi_branch: Masses,
     checks: Checks,
 }
@@ -51,8 +54,10 @@ struct Masses {
 #[derive(Debug, Clone, Copy, Serialize)]
 struct Checks {
     electron_anchor_ok_1pct: bool,
+    electron_planck_ok_1pct: bool,
     vev_ok_1pct: bool,
     lattice_mass_ok_1pct: bool,
+    planck_structural_mass_ok_1pct: bool,
     fermi_mass_ok_1pct: bool,
     overall_pass: bool,
 }
@@ -86,28 +91,57 @@ fn main() {
 
     let f0_vac = 1.0;
     let me_anchor = cmp(electron_mass_from_proton_anchor(), M_E_REF_MEV);
+    let me_planck = cmp(
+        electron_mass_from_planck_structural_candidate(),
+        M_E_REF_MEV,
+    );
 
     let v_lattice = electroweak_vev_from_lattice_order_parameter(f0_vac);
+    let v_planck = electroweak_vev_from_lattice_order_parameter_planck_structural(f0_vac);
     let v_fermi = electroweak_vev_from_fermi(G_F);
     let v_cmp = cmp(v_lattice, v_fermi);
 
-    let m_w_lat = cmp(w_mass_from_vev_and_alpha(v_lattice, ALPHA_EW_MZ), M_W_REF_GEV);
-    let m_z_lat = cmp(z_mass_from_vev_and_alpha(v_lattice, ALPHA_EW_MZ), M_Z_REF_GEV);
+    let m_w_lat = cmp(
+        w_mass_from_vev_and_alpha(v_lattice, ALPHA_EW_MZ),
+        M_W_REF_GEV,
+    );
+    let m_z_lat = cmp(
+        z_mass_from_vev_and_alpha(v_lattice, ALPHA_EW_MZ),
+        M_Z_REF_GEV,
+    );
     let m_h_lat = cmp(higgs_mass_from_vev(v_lattice), M_H_REF_GEV);
+
+    let m_w_planck = cmp(
+        w_mass_from_vev_and_alpha(v_planck, ALPHA_EW_MZ),
+        M_W_REF_GEV,
+    );
+    let m_z_planck = cmp(
+        z_mass_from_vev_and_alpha(v_planck, ALPHA_EW_MZ),
+        M_Z_REF_GEV,
+    );
+    let m_h_planck = cmp(higgs_mass_from_vev(v_planck), M_H_REF_GEV);
 
     let m_w_fer = cmp(w_mass_from_vev_and_alpha(v_fermi, ALPHA_EW_MZ), M_W_REF_GEV);
     let m_z_fer = cmp(z_mass_from_vev_and_alpha(v_fermi, ALPHA_EW_MZ), M_Z_REF_GEV);
     let m_h_fer = cmp(higgs_mass_from_vev(v_fermi), M_H_REF_GEV);
 
     let lattice_mass_ok = [m_w_lat, m_z_lat, m_h_lat].into_iter().all(pct_ok);
+    let planck_structural_mass_ok = [m_w_planck, m_z_planck, m_h_planck].into_iter().all(pct_ok);
     let fermi_mass_ok = [m_w_fer, m_z_fer, m_h_fer].into_iter().all(pct_ok);
 
     let checks = Checks {
         electron_anchor_ok_1pct: pct_ok(me_anchor),
+        electron_planck_ok_1pct: pct_ok(me_planck),
         vev_ok_1pct: pct_ok(v_cmp),
         lattice_mass_ok_1pct: lattice_mass_ok,
+        planck_structural_mass_ok_1pct: planck_structural_mass_ok,
         fermi_mass_ok_1pct: fermi_mass_ok,
-        overall_pass: pct_ok(me_anchor) && pct_ok(v_cmp) && lattice_mass_ok && fermi_mass_ok,
+        overall_pass: pct_ok(me_anchor)
+            && pct_ok(me_planck)
+            && pct_ok(v_cmp)
+            && lattice_mass_ok
+            && planck_structural_mass_ok
+            && fermi_mass_ok,
     };
 
     let report = Report {
@@ -118,11 +152,17 @@ fn main() {
             w_over_z_structural: w_z_mass_ratio(),
         },
         electron_anchor: me_anchor,
+        electron_planck_structural: me_planck,
         vev_lattice_vs_fermi: v_cmp,
         masses_lattice_branch: Masses {
             m_w_gev: m_w_lat,
             m_z_gev: m_z_lat,
             m_h_gev: m_h_lat,
+        },
+        masses_planck_structural_branch: Masses {
+            m_w_gev: m_w_planck,
+            m_z_gev: m_z_planck,
+            m_h_gev: m_h_planck,
         },
         masses_fermi_branch: Masses {
             m_w_gev: m_w_fer,
@@ -150,6 +190,14 @@ fn main() {
         report.electron_anchor.predicted,
         report.electron_anchor.reference,
         report.electron_anchor.rel_err
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "electron_planck_structural_mev: pred={:.12} ref={:.12} rel={:+.6e}",
+        report.electron_planck_structural.predicted,
+        report.electron_planck_structural.reference,
+        report.electron_planck_structural.rel_err
     )
     .expect("write");
     writeln!(
@@ -187,6 +235,32 @@ fn main() {
     )
     .expect("write");
     writeln!(txt).expect("write");
+    writeln!(txt, "[planck_structural_branch_masses]").expect("write");
+    writeln!(
+        txt,
+        "mW: pred={:.12} ref={:.12} rel={:+.6e}",
+        report.masses_planck_structural_branch.m_w_gev.predicted,
+        report.masses_planck_structural_branch.m_w_gev.reference,
+        report.masses_planck_structural_branch.m_w_gev.rel_err
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "mZ: pred={:.12} ref={:.12} rel={:+.6e}",
+        report.masses_planck_structural_branch.m_z_gev.predicted,
+        report.masses_planck_structural_branch.m_z_gev.reference,
+        report.masses_planck_structural_branch.m_z_gev.rel_err
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "mH: pred={:.12} ref={:.12} rel={:+.6e}",
+        report.masses_planck_structural_branch.m_h_gev.predicted,
+        report.masses_planck_structural_branch.m_h_gev.reference,
+        report.masses_planck_structural_branch.m_h_gev.rel_err
+    )
+    .expect("write");
+    writeln!(txt).expect("write");
     writeln!(txt, "[fermi_branch_masses]").expect("write");
     writeln!(
         txt,
@@ -215,10 +289,12 @@ fn main() {
     writeln!(txt).expect("write");
     writeln!(
         txt,
-        "checks: electron_1pct={} vev_1pct={} lattice_masses_1pct={} fermi_masses_1pct={} overall={}",
+        "checks: electron_1pct={} electron_planck_1pct={} vev_1pct={} lattice_masses_1pct={} planck_structural_masses_1pct={} fermi_masses_1pct={} overall={}",
         report.checks.electron_anchor_ok_1pct,
+        report.checks.electron_planck_ok_1pct,
         report.checks.vev_ok_1pct,
         report.checks.lattice_mass_ok_1pct,
+        report.checks.planck_structural_mass_ok_1pct,
         report.checks.fermi_mass_ok_1pct,
         report.checks.overall_pass
     )
@@ -229,11 +305,12 @@ fn main() {
     writeln!(json).expect("newline");
 
     println!(
-        "absolute_endgame: overall_pass={} vev_rel={:+.3e} mW_lat_rel={:+.3e} mH_lat_rel={:+.3e}",
+        "absolute_endgame: overall_pass={} vev_rel={:+.3e} me_planck_rel={:+.3e} mW_lat_rel={:+.3e} mW_planck_rel={:+.3e}",
         report.checks.overall_pass,
         report.vev_lattice_vs_fermi.rel_err,
+        report.electron_planck_structural.rel_err,
         report.masses_lattice_branch.m_w_gev.rel_err,
-        report.masses_lattice_branch.m_h_gev.rel_err,
+        report.masses_planck_structural_branch.m_w_gev.rel_err,
     );
     println!("wrote {txt_path}");
     println!("wrote {json_path}");

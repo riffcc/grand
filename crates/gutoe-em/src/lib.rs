@@ -32,29 +32,29 @@ pub use fcnc::{
     FcncGimMetrics, GimChannelMetrics, FCNC_LOOP_PROXY_EXPECTED,
 };
 pub use flavor::{
-    ckm_from_clifford, ckm_from_textures, cp_violation_witness, neutrino_dirac_majorana_prediction,
-    neutrino_splitting_ratio_from_exponent, solve_neutrino_exponent_for_ratio,
+    ckm_from_clifford, ckm_from_textures, cp_violation_witness,
+    neutrino_absolute_masses_from_texture, neutrino_dirac_majorana_prediction,
     neutrino_hierarchy_exponent_structural, neutrino_hierarchy_prediction,
-    neutrino_majorana_symmetry_residual, neutrino_texture_eigenvalues,
-    triangulate_ew_shift_for_target, triangulate_neutrino_from_splittings,
-    neutrino_absolute_masses_from_texture, pmns_from_clifford, pmns_from_clifford_theta23_alpha2,
+    neutrino_majorana_symmetry_residual, neutrino_splitting_ratio_from_exponent,
+    neutrino_texture_eigenvalues, pmns_from_clifford, pmns_from_clifford_theta23_alpha2,
     pmns_from_textures, pmns_theta23_sq_alpha2_corrected, pmns_theta23_sq_direct, residuals,
-    within_envelope, EwShiftTriangulatedSolution, MixingEnvelope, MixingObservables,
-    MixingResiduals, MixingTargets, NeutrinoAbsoluteMasses, NeutrinoTriangulatedSolution,
-    CKM_CP_J_MIN, CKM_PDG_ENVELOPE, CKM_TARGET, CP_PHASE_TOL_DEG, PMNS_CP_J_MIN,
-    PMNS_PDG_ENVELOPE, PMNS_TARGET, PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL,
-};
-pub use holonomy::{
-    class_angle_from_trace, closed_loop_holonomy, enumerate_triangles, sample_holonomy_diagnostics,
-    transport_product, triangle_loop_holonomy, triangle_loop_trace_over_2,
-    triangle_wilson_residual_abs, u1_geometric_phase, u1_phase_composition_residual,
-    HolonomyDiagnostics, RestrictedHolonomySignature, TriangleHolonomySample,
+    solve_neutrino_exponent_for_ratio, triangulate_ew_shift_for_target,
+    triangulate_neutrino_from_splittings, within_envelope, EwShiftTriangulatedSolution,
+    MixingEnvelope, MixingObservables, MixingResiduals, MixingTargets, NeutrinoAbsoluteMasses,
+    NeutrinoTriangulatedSolution, CKM_CP_J_MIN, CKM_PDG_ENVELOPE, CKM_TARGET, CP_PHASE_TOL_DEG,
+    PMNS_CP_J_MIN, PMNS_PDG_ENVELOPE, PMNS_TARGET, PMNS_THETA23_ALPHA2_COEFF_STRUCTURAL,
 };
 pub use gauge::{
     compute_charge_density, em_force_on_lepton, jacobi_poisson, maxwell_wave_step, update_gauge,
     GaugeFields,
 };
 pub use geometry::{mesh_neighbours, mesh_neighbours_3d, site_coords};
+pub use holonomy::{
+    class_angle_from_trace, closed_loop_holonomy, enumerate_triangles, sample_holonomy_diagnostics,
+    transport_product, triangle_loop_holonomy, triangle_loop_trace_over_2,
+    triangle_wilson_residual_abs, u1_geometric_phase, u1_phase_composition_residual,
+    HolonomyDiagnostics, RestrictedHolonomySignature, TriangleHolonomySample,
+};
 pub use sim::{
     alignment_rg, cycle_prob_rg, init_lattice, instanton_threshold, landau_pole, running_alpha_s,
     sample_without_replacement, step, step_counted, veracity, z3_instanton_action,
@@ -64,13 +64,17 @@ pub use su2_gauge::{
     su2_random_perturb, su2_re_tr, wilson_triangles_at, Su2, Su2Links,
 };
 pub use weak::{
-    electron_mass_from_proton_anchor, electroweak_summary, electroweak_vev_from_fermi,
-    electroweak_vev_from_lattice_order_parameter, fermi_constant, higgs_mass_from_vev, higgs_mu_sq,
-    higgs_nontrivial_vev, higgs_potential, higgs_potential_derivative, higgs_vev,
-    normalized_higgs_order_parameter, sin2_weinberg, w_boson_mass, w_mass_from_vev_and_alpha,
-    w_z_mass_ratio, weak_coupling_from_alpha, z_boson_mass, z_mass_from_vev_and_alpha, ALPHA_EW_MZ,
-    ELECTRON_STATE, EWSB_SCALE_FACTOR, HIGGS_CRITICAL_VOID_FRACTION, HIGGS_QUARTIC_LAMBDA,
-    NEUTRINO_STATE, PROTON_MASS_ANCHOR_MEV, VEV_OVER_PROTON,
+    electron_mass_from_planck_structural_candidate, electron_mass_from_proton_anchor,
+    electron_over_planck_structural_candidate, electroweak_summary, electroweak_vev_from_fermi,
+    electroweak_vev_from_lattice_order_parameter,
+    electroweak_vev_from_lattice_order_parameter_planck_structural, fermi_constant,
+    higgs_mass_from_vev, higgs_mu_sq, higgs_nontrivial_vev, higgs_potential,
+    higgs_potential_derivative, higgs_vev, normalized_higgs_order_parameter,
+    proton_mass_from_planck_structural_candidate, sin2_weinberg, w_boson_mass,
+    w_mass_from_vev_and_alpha, w_z_mass_ratio, weak_coupling_from_alpha, z_boson_mass,
+    z_mass_from_vev_and_alpha, ALPHA_EW_MZ, ELECTRON_STATE, EWSB_SCALE_FACTOR,
+    HIGGS_CRITICAL_VOID_FRACTION, HIGGS_QUARTIC_LAMBDA, KG_TO_MEV, NEUTRINO_STATE,
+    PLANCK_MASS_ANCHOR_KG, PROTON_MASS_ANCHOR_MEV, VEV_OVER_PROTON,
 };
 
 // ── Hydrogen Formation Integration Test ──────────────────────────────────────

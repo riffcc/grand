@@ -52,6 +52,10 @@ pub const ALPHA_EW_MZ: f64 = 1.0 / 127.95;
 
 /// Single absolute mass anchor used across GUTOE (MeV).
 pub const PROTON_MASS_ANCHOR_MEV: f64 = 938.272_046;
+/// Planck-mass anchor for structural scale transduction (kg).
+pub const PLANCK_MASS_ANCHOR_KG: f64 = 2.176_434e-8;
+/// Unit conversion for mass: 1 kg = KG_TO_MEV MeV/c^2.
+pub const KG_TO_MEV: f64 = 5.609_588_603e29;
 
 /// Structural Higgs quartic from Cl(1,3) grade counts:
 /// λ_H = (16 - 3) / (4 + 6)^2 = 13/100.
@@ -67,6 +71,18 @@ pub const EWSB_SCALE_FACTOR: f64 = 480.0;
 /// VEV-to-proton ratio from structural counts:
 /// v/mp = 480/1836 = 40/153.
 pub const VEV_OVER_PROTON: f64 = EWSB_SCALE_FACTOR / MP_ME_CLIFFORD as f64;
+
+/// Structural candidate factor for m_e / m_Planck from shared constants.
+///
+/// This is the currently-best fixed-form branch from the in-repo structural sweep:
+///   F = α^11 * (60/11)^2 * (66/67) * (5/11)
+/// with α = 1/137 (leading-order structural value).
+///
+/// It is explicitly treated as a candidate closure lane, not as a proven identity.
+pub fn electron_over_planck_structural_candidate() -> f64 {
+    let alpha_lo: f64 = 1.0 / 137.0;
+    alpha_lo.powi(11) * (60.0_f64 / 11.0).powi(2) * (66.0 / 67.0) * (5.0 / 11.0)
+}
 
 // ── Weinberg angle ────────────────────────────────────────────────────────────
 
@@ -147,6 +163,16 @@ pub fn electron_mass_from_proton_anchor() -> f64 {
     PROTON_MASS_ANCHOR_MEV / MP_ME_CLIFFORD as f64
 }
 
+/// Electron mass from the Planck anchor and structural candidate factor.
+pub fn electron_mass_from_planck_structural_candidate() -> f64 {
+    PLANCK_MASS_ANCHOR_KG * KG_TO_MEV * electron_over_planck_structural_candidate()
+}
+
+/// Proton mass from the structural Planck-electron lane and mp/me = 1836.
+pub fn proton_mass_from_planck_structural_candidate() -> f64 {
+    electron_mass_from_planck_structural_candidate() * MP_ME_CLIFFORD as f64
+}
+
 /// Normalized broken-phase order parameter.
 /// 0 in restored phase (f0 <= f_c), 1 at pure vacuum (f0 = 1).
 pub fn normalized_higgs_order_parameter(higgs_vev: f64) -> f64 {
@@ -165,6 +191,17 @@ pub fn normalized_higgs_order_parameter(higgs_vev: f64) -> f64 {
 pub fn electroweak_vev_from_lattice_order_parameter(higgs_vev: f64) -> f64 {
     let order = normalized_higgs_order_parameter(higgs_vev);
     PROTON_MASS_ANCHOR_MEV * VEV_OVER_PROTON * order
+}
+
+/// Electroweak vev from lattice order parameter using the structural Planck chain.
+///
+/// Chain:
+///   m_e = m_Planck * F_struct
+///   m_p = m_e * (mp/me)_struct = m_e * 1836
+///   v   = m_p * (40/153) * normalized_order(f0)
+pub fn electroweak_vev_from_lattice_order_parameter_planck_structural(higgs_vev: f64) -> f64 {
+    let order = normalized_higgs_order_parameter(higgs_vev);
+    proton_mass_from_planck_structural_candidate() * VEV_OVER_PROTON * order
 }
 
 /// Absolute W mass from vev and alpha-derived weak coupling.
@@ -437,6 +474,34 @@ mod tests {
         assert!(
             (m_h - 125.25).abs() < 0.5,
             "lattice-derived Higgs mass should be near 125.25 GeV"
+        );
+        assert!((m_w / m_z - w_z_mass_ratio()).abs() < 1e-12);
+    }
+
+    /// Candidate full-structural Planck chain gives an O(1%)-class absolute VEV lane.
+    #[test]
+    fn mass_sector_from_planck_structural_candidate_lane() {
+        let f0_vac = 1.0;
+        let v = electroweak_vev_from_lattice_order_parameter_planck_structural(f0_vac);
+        let m_w = w_mass_from_vev_and_alpha(v, ALPHA_EW_MZ);
+        let m_z = z_mass_from_vev_and_alpha(v, ALPHA_EW_MZ);
+        let m_h = higgs_mass_from_vev(v);
+
+        assert!(
+            (v - 246.22).abs() < 2.0,
+            "candidate-planck v should be near 246 GeV"
+        );
+        assert!(
+            (m_w - 80.377).abs() < 1.0,
+            "candidate-planck W should be near 80.4 GeV"
+        );
+        assert!(
+            (m_z - 91.1876).abs() < 1.0,
+            "candidate-planck Z should be near 91.2 GeV"
+        );
+        assert!(
+            (m_h - 125.25).abs() < 1.0,
+            "candidate-planck H should be near 125.3 GeV"
         );
         assert!((m_w / m_z - w_z_mass_ratio()).abs() < 1e-12);
     }

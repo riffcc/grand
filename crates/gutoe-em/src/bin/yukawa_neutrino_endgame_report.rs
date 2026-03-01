@@ -17,6 +17,8 @@ const DM32_TARGET_EV2: f64 = 2.453e-3;
 const RATIO_TOL: f64 = 0.05;
 const ABS_TOL: f64 = 0.05;
 const K_NU_TARGET: f64 = 0.5;
+const K_NU_DRESSED_CANDIDATE: f64 = 7.0 / 12.0;
+const K_NU_DRESSED_TOL: f64 = 0.01;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 struct Lane {
@@ -33,6 +35,7 @@ struct Lane {
     koide_k: f64,
     s2: f64,
     k_nu_rel_err: f64,
+    k_nu_dressed_rel_err: f64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -41,6 +44,7 @@ struct Checks {
     tiny_ok: bool,
     ratio_ok: bool,
     abs_splittings_ok: bool,
+    k_nu_dressed_ok: bool,
     no_fit_pass: bool,
     triangulated_pass: bool,
 }
@@ -61,8 +65,10 @@ struct Targets {
     dm32_target_ev2: f64,
     ratio_target: f64,
     k_nu_target: f64,
+    k_nu_dressed_candidate: f64,
     ratio_tol: f64,
     abs_tol: f64,
+    k_nu_dressed_tol: f64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -104,6 +110,7 @@ fn lane_from_masses(m1: f64, m2: f64, m3: f64) -> Lane {
         koide_k: k,
         s2,
         k_nu_rel_err: rel_err(k, K_NU_TARGET),
+        k_nu_dressed_rel_err: rel_err(k, K_NU_DRESSED_CANDIDATE),
     }
 }
 
@@ -126,11 +133,11 @@ fn main() {
     let ratio_ok = structural.ratio_rel_err.abs() <= RATIO_TOL;
     let abs_splittings_ok =
         structural.dm21_rel_err.abs() <= ABS_TOL && structural.dm32_rel_err.abs() <= ABS_TOL;
+    let k_nu_dressed_ok = structural.k_nu_dressed_rel_err.abs() <= K_NU_DRESSED_TOL;
     let no_fit_pass = hierarchy_ok && tiny_ok && ratio_ok && abs_splittings_ok;
-    let triangulated_pass =
-        tri.ratio_fit_rel_err.abs() < 1.0e-9
-            && triangulated.dm21_rel_err.abs() < 1.0e-9
-            && triangulated.dm32_rel_err.abs() < 1.0e-9;
+    let triangulated_pass = tri.ratio_fit_rel_err.abs() < 1.0e-9
+        && triangulated.dm21_rel_err.abs() < 1.0e-9
+        && triangulated.dm32_rel_err.abs() < 1.0e-9;
 
     let report = Report {
         hierarchy_prediction: hierarchy.clone(),
@@ -139,8 +146,10 @@ fn main() {
             dm32_target_ev2: DM32_TARGET_EV2,
             ratio_target: DM32_TARGET_EV2 / DM21_TARGET_EV2,
             k_nu_target: K_NU_TARGET,
+            k_nu_dressed_candidate: K_NU_DRESSED_CANDIDATE,
             ratio_tol: RATIO_TOL,
             abs_tol: ABS_TOL,
+            k_nu_dressed_tol: K_NU_DRESSED_TOL,
         },
         structural,
         triangulated,
@@ -157,6 +166,7 @@ fn main() {
             tiny_ok,
             ratio_ok,
             abs_splittings_ok,
+            k_nu_dressed_ok,
             no_fit_pass,
             triangulated_pass,
         },
@@ -172,6 +182,12 @@ fn main() {
         report.targets.dm32_target_ev2,
         report.targets.ratio_target,
         report.targets.k_nu_target
+    )
+    .expect("write");
+    writeln!(
+        txt,
+        "targets: K_nu_dressed_candidate={:.12} K_nu_dressed_tol={:.6}",
+        report.targets.k_nu_dressed_candidate, report.targets.k_nu_dressed_tol
     )
     .expect("write");
     writeln!(txt).expect("write");
@@ -196,12 +212,13 @@ fn main() {
     .expect("write");
     writeln!(
         txt,
-        "ratio32/21={:.12e} (rel={:+.6e}) K={:.12e} s2={:.12e} K_vs_half_rel={:+.6e}",
+        "ratio32/21={:.12e} (rel={:+.6e}) K={:.12e} s2={:.12e} K_vs_half_rel={:+.6e} K_vs_7_12_rel={:+.6e}",
         report.structural.ratio_32_over_21,
         report.structural.ratio_rel_err,
         report.structural.koide_k,
         report.structural.s2,
-        report.structural.k_nu_rel_err
+        report.structural.k_nu_rel_err,
+        report.structural.k_nu_dressed_rel_err
     )
     .expect("write");
     writeln!(txt).expect("write");
@@ -236,23 +253,25 @@ fn main() {
     .expect("write");
     writeln!(
         txt,
-        "ratio32/21={:.12e} (rel={:+.6e}) K={:.12e} s2={:.12e} K_vs_half_rel={:+.6e}",
+        "ratio32/21={:.12e} (rel={:+.6e}) K={:.12e} s2={:.12e} K_vs_half_rel={:+.6e} K_vs_7_12_rel={:+.6e}",
         report.triangulated.ratio_32_over_21,
         report.triangulated.ratio_rel_err,
         report.triangulated.koide_k,
         report.triangulated.s2,
-        report.triangulated.k_nu_rel_err
+        report.triangulated.k_nu_rel_err,
+        report.triangulated.k_nu_dressed_rel_err
     )
     .expect("write");
     writeln!(txt).expect("write");
     writeln!(txt, "[checks]").expect("write");
     writeln!(
         txt,
-        "hierarchy_ok={} tiny_ok={} ratio_ok={} abs_splittings_ok={} no_fit_pass={} triangulated_pass={}",
+        "hierarchy_ok={} tiny_ok={} ratio_ok={} abs_splittings_ok={} k_nu_dressed_ok={} no_fit_pass={} triangulated_pass={}",
         report.checks.hierarchy_ok,
         report.checks.tiny_ok,
         report.checks.ratio_ok,
         report.checks.abs_splittings_ok,
+        report.checks.k_nu_dressed_ok,
         report.checks.no_fit_pass,
         report.checks.triangulated_pass
     )
