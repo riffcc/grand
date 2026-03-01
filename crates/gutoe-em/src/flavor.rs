@@ -673,25 +673,42 @@ pub fn neutrino_texture_eigenvalues() -> [f64; 3] {
 
 /// Structural hierarchy exponent from Cl(1,3) counts.
 ///
-/// `p = α^{-1} / (|grade₁| + |grade₂|) = 137 / 10`.
+/// Candidate closed form (TriangulatedConstants lane):
+/// `p = α^{-1} / (|grade₁| + |grade₂|) - 1 / ((|grade₂|+1) * N_gauge)`
+/// with `N_gauge = 12`, i.e. `p = 137/10 - 1/(7*12) = 5749/420`.
 pub fn neutrino_hierarchy_exponent_structural() -> f64 {
-    ALPHA_INVERSE_STRUCTURAL / (GRADE1_DIM + GRADE2_DIM)
+    let p0 = ALPHA_INVERSE_STRUCTURAL / (GRADE1_DIM + GRADE2_DIM); // 137/10
+    let gauge_generators = 12.0;
+    let finite_count_correction = 1.0 / ((GRADE2_DIM + 1.0) * gauge_generators); // 1/(7*12)
+    p0 - finite_count_correction
+}
+
+/// Structural neutrino normalization uplift from shared Cl(1,3) counts:
+/// `κ = (60/11) * (19/3 + 1/36 + 1/(7*13*136))`.
+pub fn neutrino_kappa_structural() -> f64 {
+    let base = 60.0 / 11.0;
+    let term_orbit = ((2.0_f64).powi(4) + SU2_DIM) / SU2_DIM; // 19/3
+    let term_grade2 = 1.0 / (GRADE2_DIM * GRADE2_DIM); // 1/36
+    let term_finite = 1.0 / ((GRADE2_DIM + 1.0) * COMPLEMENT_DIM * 136.0); // 1/(7*13*136)
+    base * (term_orbit + term_grade2 + term_finite)
 }
 
 /// Absolute neutrino masses (eV) from texture lane + structural suppression.
 ///
 /// Mass scale:
-/// `m_scale = m_e * α^4 * (60/11)`.
+/// `m_scale = m_e * α^4 * κ_structural`, where
+/// `κ_structural = (60/11) * (19/3 + 1/36 + 1/(7*13*136))`.
 ///
 /// Hierarchy mapping:
-/// `m_i = m_scale * (|λ_i|/|λ_max|)^p`, `p = 137/10`, with `m_3 = m_scale`.
+/// `m_i = m_scale * (|λ_i|/|λ_max|)^p`,
+/// `p = 137/10 - 1/(7*12)`, with `m_3 = m_scale`.
 pub fn neutrino_absolute_masses_from_texture() -> NeutrinoAbsoluteMasses {
     let mut raw = neutrino_texture_eigenvalues().map(|x| x.abs());
     raw.sort_by(|a, b| a.total_cmp(b));
 
     let alpha_physical = 1.0 / ALPHA_INVERSE_PHYSICAL;
     let electron_mass_anchor_ev = crate::weak::electron_mass_from_proton_anchor() * 1.0e6;
-    let mass_scale_ev = electron_mass_anchor_ev * alpha_physical.powi(4) * (60.0 / 11.0);
+    let mass_scale_ev = electron_mass_anchor_ev * alpha_physical.powi(4) * neutrino_kappa_structural();
     let hierarchy_exponent = neutrino_hierarchy_exponent_structural();
     let raw_max = raw[2].max(1.0e-18);
 
@@ -1151,9 +1168,23 @@ mod tests {
     }
 
     #[test]
-    fn neutrino_hierarchy_exponent_is_structural_137_over_10() {
+    fn neutrino_hierarchy_exponent_matches_triangulated_candidate() {
         let p = neutrino_hierarchy_exponent_structural();
-        assert!((p - 13.7).abs() < 1e-12, "unexpected hierarchy exponent: {p:.12}");
+        let expected = 137.0 / 10.0 - 1.0 / (7.0 * 12.0);
+        assert!(
+            (p - expected).abs() < 1e-12,
+            "unexpected hierarchy exponent: got {p:.12}, expected {expected:.12}"
+        );
+    }
+
+    #[test]
+    fn neutrino_kappa_matches_triangulated_candidate() {
+        let k = neutrino_kappa_structural();
+        let expected = (60.0 / 11.0) * (19.0 / 3.0 + 1.0 / 36.0 + 1.0 / (7.0 * 13.0 * 136.0));
+        assert!(
+            (k - expected).abs() < 1e-12,
+            "unexpected neutrino kappa: got {k:.15e}, expected {expected:.15e}"
+        );
     }
 
     #[test]

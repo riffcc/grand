@@ -36,6 +36,7 @@ struct NeutrinoChecks {
     hierarchy_ok: bool,
     tiny_ok: bool,
     ratio_ok: bool,
+    abs_splittings_ok: bool,
     no_fit_pass: bool,
     tri_ratio_ok: bool,
     tri_abs_ok: bool,
@@ -133,7 +134,8 @@ fn main() {
     let hierarchy_ok = hierarchy == "normal";
     let tiny_ok = abs.m3_ev < 0.8 && abs.sum_ev < 0.12;
     let ratio_ok = pct_ok(ratio_rel, NEUTRINO_RATIO_TOL);
-    let no_fit_pass = hierarchy_ok && tiny_ok && ratio_ok;
+    let abs_splittings_ok = dm21_rel.abs() <= NEUTRINO_RATIO_TOL && dm32_rel.abs() <= NEUTRINO_RATIO_TOL;
+    let no_fit_pass = hierarchy_ok && tiny_ok && ratio_ok && abs_splittings_ok;
 
     let tri_dm21_rel = rel_err(tri.dm21_ev2, DM21_TARGET_EV2);
     let tri_dm32_rel = rel_err(tri.dm32_ev2, DM32_TARGET_EV2);
@@ -146,6 +148,7 @@ fn main() {
         hierarchy_ok,
         tiny_ok,
         ratio_ok,
+        abs_splittings_ok,
         no_fit_pass,
         tri_ratio_ok,
         tri_abs_ok,
@@ -229,10 +232,11 @@ fn main() {
     writeln!(txt, "[neutrino_checks]").expect("write");
     writeln!(
         txt,
-        "hierarchy_ok={} tiny_ok={} ratio_ok={} no_fit_pass={} tri_ratio_ok={} tri_abs_ok={} triangulated_pass={}",
+        "hierarchy_ok={} tiny_ok={} ratio_ok={} abs_splittings_ok={} no_fit_pass={} tri_ratio_ok={} tri_abs_ok={} triangulated_pass={}",
         report.neutrino.checks.hierarchy_ok,
         report.neutrino.checks.tiny_ok,
         report.neutrino.checks.ratio_ok,
+        report.neutrino.checks.abs_splittings_ok,
         report.neutrino.checks.no_fit_pass,
         report.neutrino.checks.tri_ratio_ok,
         report.neutrino.checks.tri_abs_ok,

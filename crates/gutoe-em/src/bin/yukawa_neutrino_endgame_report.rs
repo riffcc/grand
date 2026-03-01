@@ -126,7 +126,7 @@ fn main() {
     let ratio_ok = structural.ratio_rel_err.abs() <= RATIO_TOL;
     let abs_splittings_ok =
         structural.dm21_rel_err.abs() <= ABS_TOL && structural.dm32_rel_err.abs() <= ABS_TOL;
-    let no_fit_pass = hierarchy_ok && tiny_ok && ratio_ok;
+    let no_fit_pass = hierarchy_ok && tiny_ok && ratio_ok && abs_splittings_ok;
     let triangulated_pass =
         tri.ratio_fit_rel_err.abs() < 1.0e-9
             && triangulated.dm21_rel_err.abs() < 1.0e-9
