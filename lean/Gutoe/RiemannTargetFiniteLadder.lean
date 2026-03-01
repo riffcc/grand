@@ -107,6 +107,24 @@ theorem mathlibRH_of_target_ladder_zero_capture
   rcases hCap s hsXi with ⟨N, t, ht, hsEq⟩
   simpa [hsEq, onCriticalLine, criticalLinePoint_re] using (criticalLinePoint_re t)
 
+/-- One-layer-peeled final gap:
+    direct finite-ladder capture of nontrivial `riemannZeta` zeros. -/
+def RiemannNontrivialLadderZeroCapture (specN : ℕ → Finset ℝ) : Prop :=
+  ∀ s : ℂ, riemannZeta s = 0 →
+    (¬ ∃ n : ℕ, s = -2 * (n + 1)) →
+    s ≠ 1 →
+    ∃ N : ℕ, ∃ t : ℝ, t ∈ specN N ∧ s = criticalLinePoint t
+
+/-- Direct RH closure from nontrivial-`ζ` ladder capture.
+    This bypasses `XiTarget` contract plumbing entirely. -/
+theorem mathlibRH_of_riemann_nontrivial_ladder_capture
+    (specN : ℕ → Finset ℝ)
+    (hCap : RiemannNontrivialLadderZeroCapture specN) :
+    RiemannHypothesis := by
+  intro s hs htriv h1
+  rcases hCap s hs htriv h1 with ⟨N, t, ht, hsEq⟩
+  simpa [hsEq, onCriticalLine, criticalLinePoint_re] using (criticalLinePoint_re t)
+
 end
 
 end Gutoe.RiemannTargetFiniteLadder
