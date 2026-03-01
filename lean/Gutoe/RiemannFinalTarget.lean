@@ -30,6 +30,11 @@ def XiTargetZeroTransferToNontrivialZeta : Prop :=
   ∀ s : ℂ, XiTarget s = 0 →
     riemannZeta s = 0 ∧ (¬ ∃ n : ℕ, s = -2 * (n + 1)) ∧ s ≠ 1
 
+/-- Atomic nonvanishing obligations that imply reverse transfer:
+    `XiTarget` is nonzero at `0`, at `1`, and at every trivial-zero location. -/
+def XiTargetNonvanishingObligations : Prop :=
+  XiTarget 0 ≠ 0 ∧ XiTarget 1 ≠ 0 ∧ ∀ n : ℕ, XiTarget (-2 * (n + 1)) ≠ 0
+
 /-- Nontrivial-zero transfer is derivable for `XiTarget = completedRiemannZeta`. -/
 theorem nontrivialZeroTransferToXiTarget :
     NontrivialZeroTransferToXiTarget := by
@@ -59,6 +64,32 @@ theorem nontrivialZeroTransferToXiTarget :
   rcases (div_eq_zero_iff).1 hzDiv with hnum | hden
   · exact hnum
   · exact (hGammaR_ne hden).elim
+
+/-- Reverse transfer derived from explicit nonvanishing obligations. -/
+theorem xiTargetZeroTransferToNontrivialZeta_of_nonvanishing
+    (hNv : XiTargetNonvanishingObligations) :
+    XiTargetZeroTransferToNontrivialZeta := by
+  intro s hsXi
+  have hs0 : s ≠ 0 := by
+    intro hs0Eq
+    exact hNv.1 (by simpa [hs0Eq] using hsXi)
+  have hsZeta : riemannZeta s = 0 := by
+    have hnum : completedRiemannZeta s = 0 := by
+      simpa [XiTarget] using hsXi
+    have hzDiv : completedRiemannZeta s / Complex.Gammaℝ s = 0 := by
+      simp [hnum]
+    calc
+      riemannZeta s = completedRiemannZeta s / Complex.Gammaℝ s := by
+        simpa using (riemannZeta_def_of_ne_zero (s := s) hs0)
+      _ = 0 := hzDiv
+  have htriv : ¬ ∃ n : ℕ, s = -2 * (n + 1) := by
+    intro h
+    rcases h with ⟨n, hsEq⟩
+    exact (hNv.2.2 n) (by simpa [hsEq] using hsXi)
+  have h1 : s ≠ 1 := by
+    intro hs1
+    exact hNv.2.1 (by simpa [hs1] using hsXi)
+  exact ⟨hsZeta, htriv, h1⟩
 
 /-- Final closure theorem surface:
     contract + nontrivial-zero transfer implies Mathlib's RH statement. -/

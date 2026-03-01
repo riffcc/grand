@@ -175,6 +175,16 @@ theorem mathlibRH_of_nontrivial_capture_and_backtransfer
   exact mathlibRH_of_contract
     (toConvergenceTransferContract_of_nontrivial_capture_and_backtransfer specN hCapNontriv hBack)
 
+/-- Minimal atomic closure in this lane:
+    nontrivial-`ζ` ladder capture + `XiTarget` nonvanishing obligations. -/
+theorem mathlibRH_of_nontrivial_capture_and_nonvanishing
+    (specN : ℕ → Finset ℝ)
+    (hCapNontriv : RiemannNontrivialLadderZeroCapture specN)
+    (hNv : XiTargetNonvanishingObligations) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_nontrivial_capture_and_backtransfer
+    specN hCapNontriv (xiTargetZeroTransferToNontrivialZeta_of_nonvanishing hNv)
+
 /-- Canonical finite-prefix ladder built from an ordinate enumerator. -/
 def prefixSpec (ρ : ℕ → ℝ) (N : ℕ) : Finset ℝ :=
   (Finset.range (N + 1)).image ρ
