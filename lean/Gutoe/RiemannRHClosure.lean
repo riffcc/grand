@@ -83,9 +83,16 @@ theorem rh_from_limit_transfer
     (Xi : ℂ → ℂ)
     (XiN : ℕ → (ℂ → ℂ))
     (specN : ℕ → Finset ℝ)
-    (hfiniteBridge : ∀ N : ℕ, SpectralBridge (XiN N) (levelSpecSet specN N))
-    (hzeroForward : ∀ s : ℂ, Xi s = 0 → ∃ N : ℕ, XiN N s = 0) :
+    (hfiniteBridge : FiniteBridgeFamily XiN specN)
+    (hzeroForward : ZeroForwardTransfer Xi XiN) :
     RiemannHypothesisXi Xi := by
   exact rh_of_limit_transfer Xi XiN specN hfiniteBridge hzeroForward
+
+/-- Contract API: one record carries the named remaining obligations. -/
+theorem rh_from_limit_transfer_contract
+    (Xi : ℂ → ℂ)
+    (hC : RHLimitTransferContract Xi) :
+    RiemannHypothesisXi Xi := by
+  exact rh_of_limit_transfer_contract Xi hC
 
 end Gutoe.RiemannRHClosure
