@@ -156,6 +156,27 @@ theorem xiTarget_zero_capture_of_nontrivial_capture_and_backtransfer
   rcases hCapNontriv s hsZeta htriv h1 with ⟨N, t, ht, hsEq⟩
   exact ⟨N, t, ht, hsEq⟩
 
+/-- Deterministic reducer in the opposite direction:
+    if all `XiTarget` zeros are captured by the ladder, then all nontrivial `ζ` zeros are too. -/
+theorem riemann_nontrivial_capture_of_xiTarget_capture
+    (specN : ℕ → Finset ℝ)
+    (hCapXi : XiTargetLadderZeroCapture specN) :
+    RiemannNontrivialLadderZeroCapture specN := by
+  intro s hs htriv h1
+  have hsXi : XiTarget s = 0 := nontrivialZeroTransferToXiTarget s hs htriv h1
+  exact hCapXi s hsXi
+
+/-- Exact equivalence of the two finite-ladder capture formulations for `XiTarget`. -/
+theorem nontrivial_capture_iff_xiTarget_capture
+    (specN : ℕ → Finset ℝ) :
+    RiemannNontrivialLadderZeroCapture specN ↔ XiTargetLadderZeroCapture specN := by
+  constructor
+  · intro hCapNontriv
+    exact xiTarget_zero_capture_of_nontrivial_capture_and_backtransfer
+      specN hCapNontriv xiTargetZeroTransferToNontrivialZeta
+  · intro hCapXi
+    exact riemann_nontrivial_capture_of_xiTarget_capture specN hCapXi
+
 /-- Contract constructor from nontrivial ladder capture + reverse transfer. -/
 def toConvergenceTransferContract_of_nontrivial_capture_and_backtransfer
     (specN : ℕ → Finset ℝ)
@@ -193,6 +214,17 @@ theorem mathlibRH_of_nontrivial_capture
     RiemannHypothesis := by
   exact mathlibRH_of_nontrivial_capture_and_backtransfer
     specN hCapNontriv xiTargetZeroTransferToNontrivialZeta
+
+/-- From a target convergence-transfer contract, nontrivial finite-ladder capture is automatic. -/
+theorem riemann_nontrivial_capture_of_contract
+    (hC : RHConvergenceTransferContract XiTarget) :
+    RiemannNontrivialLadderZeroCapture hC.specN := by
+  have hCapXi : XiTargetLadderZeroCapture hC.specN := by
+    intro s hsXi
+    rcases (zeroForward_of_contract XiTarget hC) s hsXi with ⟨N, hsN⟩
+    rcases (hC.finiteBridge N s).1 hsN with ⟨t, ht, hsEq⟩
+    exact ⟨N, t, ht, hsEq⟩
+  exact riemann_nontrivial_capture_of_xiTarget_capture hC.specN hCapXi
 
 /-- Canonical finite-prefix ladder built from an ordinate enumerator. -/
 def prefixSpec (ρ : ℕ → ℝ) (N : ℕ) : Finset ℝ :=
