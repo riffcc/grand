@@ -24,6 +24,12 @@ theorem rhXiTarget_of_contract
 def NontrivialZeroTransferToXiTarget : Prop :=
   ∀ s : ℂ, riemannZeta s = 0 → (¬ ∃ n : ℕ, s = -2 * (n + 1)) → s ≠ 1 → XiTarget s = 0
 
+/-- Reverse transfer target for the endgame:
+    every `XiTarget`-zero is a nontrivial `riemannZeta`-zero. -/
+def XiTargetZeroTransferToNontrivialZeta : Prop :=
+  ∀ s : ℂ, XiTarget s = 0 →
+    riemannZeta s = 0 ∧ (¬ ∃ n : ℕ, s = -2 * (n + 1)) ∧ s ≠ 1
+
 /-- Nontrivial-zero transfer is derivable for `XiTarget = completedRiemannZeta`. -/
 theorem nontrivialZeroTransferToXiTarget :
     NontrivialZeroTransferToXiTarget := by

@@ -143,6 +143,38 @@ theorem mathlibRH_of_riemann_nontrivial_ladder_capture
   rcases hCap s hs htriv h1 with ⟨N, t, ht, hsEq⟩
   simpa [hsEq, onCriticalLine, criticalLinePoint_re] using (criticalLinePoint_re t)
 
+/-- Deterministic reducer:
+    nontrivial-`ζ` ladder capture + reverse transfer (`XiTarget`-zero to nontrivial `ζ`-zero)
+    yields `XiTarget` ladder zero-capture. -/
+theorem xiTarget_zero_capture_of_nontrivial_capture_and_backtransfer
+    (specN : ℕ → Finset ℝ)
+    (hCapNontriv : RiemannNontrivialLadderZeroCapture specN)
+    (hBack : XiTargetZeroTransferToNontrivialZeta) :
+    XiTargetLadderZeroCapture specN := by
+  intro s hsXi
+  rcases hBack s hsXi with ⟨hsZeta, htriv, h1⟩
+  rcases hCapNontriv s hsZeta htriv h1 with ⟨N, t, ht, hsEq⟩
+  exact ⟨N, t, ht, hsEq⟩
+
+/-- Contract constructor from nontrivial ladder capture + reverse transfer. -/
+def toConvergenceTransferContract_of_nontrivial_capture_and_backtransfer
+    (specN : ℕ → Finset ℝ)
+    (hCapNontriv : RiemannNontrivialLadderZeroCapture specN)
+    (hBack : XiTargetZeroTransferToNontrivialZeta) :
+    RHConvergenceTransferContract XiTarget :=
+  toConvergenceTransferContract_of_zeroCapture specN
+    (xiTarget_zero_capture_of_nontrivial_capture_and_backtransfer specN hCapNontriv hBack)
+
+/-- Endgame closure from the two explicit capture obligations:
+    forward nontrivial ladder capture + reverse transfer to nontrivial `ζ` zeros. -/
+theorem mathlibRH_of_nontrivial_capture_and_backtransfer
+    (specN : ℕ → Finset ℝ)
+    (hCapNontriv : RiemannNontrivialLadderZeroCapture specN)
+    (hBack : XiTargetZeroTransferToNontrivialZeta) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_contract
+    (toConvergenceTransferContract_of_nontrivial_capture_and_backtransfer specN hCapNontriv hBack)
+
 /-- Canonical finite-prefix ladder built from an ordinate enumerator. -/
 def prefixSpec (ρ : ℕ → ℝ) (N : ℕ) : Finset ℝ :=
   (Finset.range (N + 1)).image ρ
