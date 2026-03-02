@@ -96,6 +96,50 @@ theorem structuralRiemannMatrixC_matrix_balance (n : ℕ) :
       exact_mod_cast hq
     simpa [structuralRiemannMatrixC, revParityConjugateMatrixC, structuralCenterMatrixC, hij] using hqC
 
+/-- Rearranged complex-lifted balance identity:
+`T(A) = C - A` for the structural finite matrix. -/
+theorem structuralRiemannMatrixC_revParity_eq_center_sub (n : ℕ) :
+    revParityConjugateMatrixC n (structuralRiemannMatrixC n)
+      = structuralCenterMatrixC n - structuralRiemannMatrixC n := by
+  ext i j
+  have hEntry := congrArg (fun M => M i j) (structuralRiemannMatrixC_matrix_balance n)
+  exact (eq_sub_iff_add_eq).2 (by simpa [add_comm] using hEntry)
+
+/-- The center matrix is fixed by reversal/parity conjugation. -/
+theorem structuralCenterMatrixC_revParity_fixed (n : ℕ) :
+    revParityConjugateMatrixC n (structuralCenterMatrixC n)
+      = structuralCenterMatrixC n := by
+  ext i j
+  by_cases hij : i = j
+  · subst hij
+    have hsq : (finParitySignQ i : ℂ) * (finParitySignQ i : ℂ) = 1 := by
+      exact_mod_cast finParitySignQ_sq_one i
+    calc
+      revParityConjugateMatrixC n (structuralCenterMatrixC n) i i
+          = (finParitySignQ i : ℂ) *
+              structuralCenterMatrixC n (Fin.rev i) (Fin.rev i) *
+              (finParitySignQ i : ℂ) := by
+                simp [revParityConjugateMatrixC]
+      _ = (finParitySignQ i : ℂ) * (structuralCenterQ n : ℂ) * (finParitySignQ i : ℂ) := by
+            simp [structuralCenterMatrixC]
+      _ = (structuralCenterQ n : ℂ) * ((finParitySignQ i : ℂ) * (finParitySignQ i : ℂ)) := by
+            ring
+      _ = (structuralCenterQ n : ℂ) := by simp [hsq]
+      _ = structuralCenterMatrixC n i i := by simp [structuralCenterMatrixC]
+  · have hrev : Fin.rev i ≠ Fin.rev j := by
+      intro h
+      exact hij (Fin.rev_injective h)
+    calc
+      revParityConjugateMatrixC n (structuralCenterMatrixC n) i j
+          = (finParitySignQ i : ℂ) *
+              structuralCenterMatrixC n (Fin.rev i) (Fin.rev j) *
+              (finParitySignQ j : ℂ) := by
+                simp [revParityConjugateMatrixC]
+      _ = 0 := by
+            simp [structuralCenterMatrixC, hrev]
+      _ = structuralCenterMatrixC n i j := by
+            simp [structuralCenterMatrixC, hij]
+
 /-- Canonical real eigenvalue enumerator for the structural matrix at level `N+1`. -/
 noncomputable def operatorEigenvalues (N : ℕ) : Fin (N + 1) → ℝ :=
   (structuralRiemannMatrixC_isHermitian (N + 1)).eigenvalues
