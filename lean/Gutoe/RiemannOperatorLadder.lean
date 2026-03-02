@@ -697,6 +697,54 @@ theorem operatorEigenvalueOrderedCenterChoiceMax_no_up_jump_three
     (hSpec := operatorEigenvalueOrderedCenterChoiceMax_spec M)
     hij hjump
 
+/-- Monotonicity of the canonical maximal ordered-lane center selector:
+as ordered eigenvalue index increases, the selected center index cannot increase. -/
+theorem operatorEigenvalueOrderedCenterChoiceMax_antitone
+    (M : ℕ) :
+    Antitone (fun j : Fin (Fintype.card (Fin (M + 1))) =>
+      (operatorEigenvalueOrderedCenterChoiceMax M j).1) := by
+  intro i j hij
+  let Ki : Fin (M + 1) := operatorEigenvalueOrderedCenterChoiceMax M i
+  let Kj : Fin (M + 1) := operatorEigenvalueOrderedCenterChoiceMax M j
+  let xi : ℝ := operatorEigenvaluesOrdered M i
+  let xj : ℝ := operatorEigenvaluesOrdered M j
+  let ci : ℝ := (Ki.1 : ℝ) + (29 : ℝ) / 16
+  let cj : ℝ := (Kj.1 : ℝ) + (29 : ℝ) / 16
+  have hi_abs : |xi - ci| ≤ (12 : ℝ) / 11 := by
+    simpa [Ki, xi, ci] using operatorEigenvalueOrderedCenterChoiceMax_spec M i
+  have hj_abs : |xj - cj| ≤ (12 : ℝ) / 11 := by
+    simpa [Kj, xj, cj] using operatorEigenvalueOrderedCenterChoiceMax_spec M j
+  have hanti := operatorEigenvaluesOrdered_antitone M
+  have hxj_le_xi : xj ≤ xi := hanti hij
+  have hcj_le_xj_plus : cj ≤ xj + (12 : ℝ) / 11 := by
+    linarith [(abs_le.mp hj_abs).1]
+  have hcj_le_xi_plus : cj ≤ xi + (12 : ℝ) / 11 := by
+    linarith [hcj_le_xj_plus, hxj_le_xi]
+  by_cases hxi_minus_le_cj : xi - (12 : ℝ) / 11 ≤ cj
+  · have habs_xi_cj : |xi - cj| ≤ (12 : ℝ) / 11 := by
+      refine abs_le.mpr ?_
+      constructor
+      · linarith [hcj_le_xi_plus]
+      · linarith [hxi_minus_le_cj]
+    have hmem :
+        Kj ∈ operatorCenterCandidatesOrdered M i := by
+      refine Finset.mem_filter.mpr ?_
+      refine ⟨Finset.mem_univ Kj, ?_⟩
+      simpa [xi, cj] using habs_xi_cj
+    have hle_fin : Kj ≤ Ki := Finset.le_max' (operatorCenterCandidatesOrdered M i) Kj hmem
+    exact hle_fin
+  · have hcj_lt_xi_minus : cj < xi - (12 : ℝ) / 11 := lt_of_not_ge hxi_minus_le_cj
+    have hxi_minus_le_ci : xi - (12 : ℝ) / 11 ≤ ci := by
+      linarith [(abs_le.mp hi_abs).2]
+    have hcj_lt_ci : cj < ci := by
+      linarith [hcj_lt_xi_minus, hxi_minus_le_ci]
+    have hkj_lt_ki_real : ((Kj.1 : ℝ)) < (Ki.1 : ℝ) := by
+      dsimp [ci, cj] at hcj_lt_ci ⊢
+      linarith
+    have hkj_lt_ki : Kj.1 < Ki.1 := by
+      exact_mod_cast hkj_lt_ki_real
+    exact le_of_lt hkj_lt_ki
+
 /-- Hall-style finite-level center-gap condition:
 every finite subfamily of eigenvalue candidate-center sets has union cardinality
 at least the subfamily cardinality. -/
