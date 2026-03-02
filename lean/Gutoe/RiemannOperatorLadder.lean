@@ -2873,6 +2873,16 @@ theorem operatorSameMinPayloadObligation_of_hodgeParity
     OperatorSameMinPayloadObligation := by
   exact ⟨hHP.maxAboveInSameMin, hHP.plusOneAvailInSameMin⟩
 
+/-- Packaged same-min payload from the explicit combinatorial endgame pair:
+`max(j-1) > min(j-1)` plus canonical `min+1` no-prev in same-min branches. -/
+theorem operatorSameMinPayloadObligation_of_sameMinEndgameObligations
+    (hMaxAboveInSameMin : OperatorSameMinMaxAboveObligation)
+    (hNoPrevPlusOneInSameMin : OperatorSameMinPlusOneNoPrevObligation) :
+    OperatorSameMinPayloadObligation := by
+  refine ⟨hMaxAboveInSameMin, ?_⟩
+  exact operatorPlusOneAvailInSameMin_of_noPrev_and_maxAbove
+    hNoPrevPlusOneInSameMin hMaxAboveInSameMin
+
 /-- Constructor: the Hodge parity contract is exactly the concrete operator
 symmetry core plus the same-min branch payload. -/
 theorem operatorHodgeParityContract_of_core_and_sameMinPayload
@@ -2908,6 +2918,17 @@ theorem operatorHodgeParityContract_of_core
   rcases hPayload with ⟨hMaxAboveInSameMin, hPlusOneAvailInSameMin⟩
   exact operatorHodgeParityContract_of_core_and_sameMinPayload
     hCore hMaxAboveInSameMin hPlusOneAvailInSameMin
+
+/-- Core + explicit combinatorial same-min endgame obligations instantiate the
+full Hodge parity contract. -/
+theorem operatorHodgeParityContract_of_core_and_sameMinEndgameObligations
+    (hCore : OperatorHodgeParityCore)
+    (hMaxAboveInSameMin : OperatorSameMinMaxAboveObligation)
+    (hNoPrevPlusOneInSameMin : OperatorSameMinPlusOneNoPrevObligation) :
+    OperatorHodgeParityContract := by
+  exact operatorHodgeParityContract_of_core hCore
+    (operatorSameMinPayloadObligation_of_sameMinEndgameObligations
+      hMaxAboveInSameMin hNoPrevPlusOneInSameMin)
 
 /-- Hodge parity contract instantiates the existing Clifford same-min symmetry
 contract surface. -/
