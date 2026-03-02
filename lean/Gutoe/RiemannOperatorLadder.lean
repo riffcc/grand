@@ -771,6 +771,107 @@ theorem uniform_cauchyOnClosedBall_of_stepTail_operatorCenteredPhaseNormalized
       (fun j => hstep j z hz) n m
   exact lt_of_le_of_lt hbound hsum_lt
 
+/-- Closed-ball uniform convergence for the recentered normalized ladder from
+global step-tail control plus pointwise convergence on that closed ball. -/
+theorem tendstoUniformlyOn_closedBall_operatorCenteredPhaseNormalized_of_stepTail_and_pointwise
+    (R : ℝ) (a : ℕ → ℝ)
+    (hstep : ∀ j : ℕ, ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      ‖operatorCenteredPhaseNormalizedXiLadder (j + 1) z
+        - operatorCenteredPhaseNormalizedXiLadder j z‖ ≤ a j)
+    (htail : ∀ ε : ℝ, 0 < ε → ∃ n0 : ℕ,
+      ∀ n : ℕ, n0 ≤ n → ∀ m : ℕ,
+        Finset.sum (Finset.range m) (fun k => a (n + k)) < ε)
+    {F : ℂ → ℂ}
+    (hpt : ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      Filter.Tendsto (fun N : ℕ => operatorCenteredPhaseNormalizedXiLadder N z)
+        (Filter.atTop : Filter ℕ) (𝓝 (F z))) :
+    TendstoUniformlyOn operatorCenteredPhaseNormalizedXiLadder F
+      (Filter.atTop : Filter ℕ) (Metric.closedBall (0 : ℂ) R) := by
+  have htailCauchy :=
+    uniform_cauchyOnClosedBall_of_stepTail_operatorCenteredPhaseNormalized
+      R a hstep htail
+  have hUC :
+      UniformCauchySeqOn operatorCenteredPhaseNormalizedXiLadder
+        (Filter.atTop : Filter ℕ) (Metric.closedBall (0 : ℂ) R) := by
+    intro u hu
+    rcases (Metric.mem_uniformity_dist).1 hu with ⟨ε, hε, hεsub⟩
+    rcases htailCauchy ε hε with ⟨n0, hn0⟩
+    rw [Filter.eventually_prod_iff]
+    refine ⟨{i : ℕ | n0 ≤ i}, Filter.mem_atTop_sets.mpr ⟨n0, by intro i hi; exact hi⟩,
+      {j : ℕ | n0 ≤ j}, Filter.mem_atTop_sets.mpr ⟨n0, by intro j hj; exact hj⟩, ?_⟩
+    intro i hi j hj z hz
+    have hdist : dist (operatorCenteredPhaseNormalizedXiLadder i z)
+        (operatorCenteredPhaseNormalizedXiLadder j z) < ε := by
+      by_cases hij : i ≤ j
+      · let m : ℕ := j - i
+        have hjEq : j = i + m := by
+          dsimp [m]
+          exact (Nat.add_sub_of_le hij).symm
+        have hlt : ‖operatorCenteredPhaseNormalizedXiLadder j z
+            - operatorCenteredPhaseNormalizedXiLadder i z‖ < ε := by
+          simpa [hjEq] using (hn0 i hi m z hz)
+        simpa [dist_eq_norm, norm_sub_rev] using hlt
+      · have hji : j ≤ i := le_of_not_ge hij
+        let m : ℕ := i - j
+        have hiEq : i = j + m := by
+          dsimp [m]
+          exact (Nat.add_sub_of_le hji).symm
+        have hlt : ‖operatorCenteredPhaseNormalizedXiLadder i z
+            - operatorCenteredPhaseNormalizedXiLadder j z‖ < ε := by
+          simpa [hiEq] using (hn0 j hj m z hz)
+        simpa [dist_eq_norm] using hlt
+    exact hεsub (by simpa using hdist)
+  exact hUC.tendstoUniformlyOn_of_tendsto (fun z hz => hpt z hz)
+
+/-- Local-uniform convergence of the recentered normalized ladder from
+closed-ball step-tail control and pointwise convergence. -/
+theorem tendstoLocallyUniformly_operatorCenteredPhaseNormalized_of_stepTail_and_pointwise
+    (a : ℕ → ℝ)
+    (hstep : ∀ R : ℝ, ∀ j : ℕ, ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      ‖operatorCenteredPhaseNormalizedXiLadder (j + 1) z
+        - operatorCenteredPhaseNormalizedXiLadder j z‖ ≤ a j)
+    (htail : ∀ R : ℝ, ∀ ε : ℝ, 0 < ε → ∃ n0 : ℕ,
+      ∀ n : ℕ, n0 ≤ n → ∀ m : ℕ,
+        Finset.sum (Finset.range m) (fun k => a (n + k)) < ε)
+    {F : ℂ → ℂ}
+    (hpt : ∀ z : ℂ,
+      Filter.Tendsto (fun N : ℕ => operatorCenteredPhaseNormalizedXiLadder N z)
+        (Filter.atTop : Filter ℕ) (𝓝 (F z))) :
+    TendstoLocallyUniformly operatorCenteredPhaseNormalizedXiLadder F
+      (Filter.atTop : Filter ℕ) := by
+  rw [Metric.tendstoLocallyUniformly_iff]
+  intro ε hε x
+  let R : ℝ := ‖x‖ + 1
+  have hUnif :
+      TendstoUniformlyOn operatorCenteredPhaseNormalizedXiLadder F
+        (Filter.atTop : Filter ℕ) (Metric.closedBall (0 : ℂ) R) :=
+    tendstoUniformlyOn_closedBall_operatorCenteredPhaseNormalized_of_stepTail_and_pointwise
+      R a
+      (hstep R)
+      (htail R)
+      (fun z _hz => hpt z)
+  have hBall :
+      Metric.ball x 1 ⊆ Metric.closedBall (0 : ℂ) R := by
+    intro y hy
+    have hxy : ‖y - x‖ < 1 := by
+      simpa [Metric.mem_ball, dist_eq_norm] using hy
+    have hyNorm : ‖y‖ ≤ R := by
+      have hyLt : ‖y‖ < R := by
+        calc
+          ‖y‖ = ‖(y - x) + x‖ := by ring
+          _ ≤ ‖y - x‖ + ‖x‖ := norm_add_le _ _
+          _ < 1 + ‖x‖ := by linarith
+          _ = R := by simp [R, add_comm]
+      exact le_of_lt hyLt
+    simpa [Metric.mem_closedBall, dist_eq_norm, R] using hyNorm
+  refine ⟨Metric.ball x 1, Metric.ball_mem_nhds x zero_lt_one, ?_⟩
+  have hUnifε :
+      ∀ᶠ n : ℕ in (Filter.atTop : Filter ℕ),
+        ∀ y : ℂ, y ∈ Metric.closedBall (0 : ℂ) R →
+          dist (F y) (operatorCenteredPhaseNormalizedXiLadder n y) < ε :=
+    (Metric.tendstoUniformlyOn_iff.1 hUnif) ε hε
+  exact hUnifε.mono (fun n hn y hy => hn y (hBall hy))
+
 /-- Critical-line points are never zero. -/
 theorem criticalLinePoint_ne_zero (t : ℝ) :
     criticalLinePoint t ≠ 0 := by
