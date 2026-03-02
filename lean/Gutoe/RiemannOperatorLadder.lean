@@ -1080,6 +1080,36 @@ theorem operatorCenterCandidatesOrdered_min_lt_max_of_interior
     exact hsingleton_impossible (le_antisymm hkmax_le_m hmin_le_max)
   exact lt_of_not_ge hkmax_not_le_m
 
+/-- Contrapositive interior form: if the ordered candidate interval collapses
+to a singleton (`min = max`), then this can only happen at a boundary
+(`min = 0` or `max = M`). -/
+theorem operatorCenterCandidatesOrdered_min_eq_max_implies_boundary
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1))))
+    (hEq :
+      (operatorEigenvalueOrderedCenterChoiceMin M j).1 =
+        (operatorEigenvalueOrderedCenterChoiceMax M j).1) :
+    (operatorEigenvalueOrderedCenterChoiceMin M j).1 = 0 ∨
+      (operatorEigenvalueOrderedCenterChoiceMax M j).1 = M := by
+  by_contra hNotBoundary
+  have hmin_ne_zero :
+      (operatorEigenvalueOrderedCenterChoiceMin M j).1 ≠ 0 := by
+    intro h
+    exact hNotBoundary (Or.inl h)
+  have hmax_ne_M :
+      (operatorEigenvalueOrderedCenterChoiceMax M j).1 ≠ M := by
+    intro h
+    exact hNotBoundary (Or.inr h)
+  have hmin_pos : 0 < (operatorEigenvalueOrderedCenterChoiceMin M j).1 :=
+    Nat.pos_of_ne_zero hmin_ne_zero
+  have hmax_lt : (operatorEigenvalueOrderedCenterChoiceMax M j).1 < M := by
+    omega
+  have hlt :
+      (operatorEigenvalueOrderedCenterChoiceMin M j).1 <
+        (operatorEigenvalueOrderedCenterChoiceMax M j).1 :=
+    operatorCenterCandidatesOrdered_min_lt_max_of_interior M j hmin_pos hmax_lt
+  exact (Nat.lt_irrefl _)
+    (hEq ▸ hlt)
+
 /-- Monotonicity of the canonical minimal ordered-lane center selector:
 as ordered eigenvalue index increases, the selected center index cannot increase. -/
 theorem operatorEigenvalueOrderedCenterChoiceMin_antitone
