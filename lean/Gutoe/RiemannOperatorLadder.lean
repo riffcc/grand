@@ -7,6 +7,7 @@ import Gutoe.RiemannConvergenceTransfer
 import Gutoe.RiemannFinalTarget
 import Gutoe.RiemannFiniteXiModel
 import Gutoe.RiemannHurwitzKernel
+import Mathlib.LinearAlgebra.Matrix.Gershgorin
 
 namespace Gutoe.RiemannOperatorLadder
 
@@ -104,6 +105,171 @@ theorem structuralRiemannMatrixC_revParity_eq_center_sub (n : ℕ) :
   ext i j
   have hEntry := congrArg (fun M => M i j) (structuralRiemannMatrixC_matrix_balance n)
   exact (eq_sub_iff_add_eq).2 (by simpa [add_comm] using hEntry)
+
+/-- Off-diagonal structural entries on the nearest-neighbor band have constant
+complex norm `6/11`. -/
+theorem norm_structuralRiemannMatrixC_offdiag_eq_hop
+    (n : ℕ) (i j : Fin n) (hij : i ≠ j)
+    (hband : i.1 + 1 = j.1 ∨ j.1 + 1 = i.1) :
+    ‖structuralRiemannMatrixC n i j‖ = ((6 : ℝ) / 11) := by
+  have hentry :
+      structuralRiemannMatrixC n i j = (structuralHopQ : ℂ) := by
+    simp [structuralRiemannMatrixC, structuralRiemannMatrix, hij, hband]
+  rw [hentry]
+  norm_num [structuralHopQ_eq_six_over_eleven]
+
+/-- Off-diagonal structural entries away from the nearest-neighbor band vanish. -/
+theorem norm_structuralRiemannMatrixC_offdiag_eq_zero
+    (n : ℕ) (i j : Fin n) (hij : i ≠ j)
+    (hband : ¬ (i.1 + 1 = j.1 ∨ j.1 + 1 = i.1)) :
+    ‖structuralRiemannMatrixC n i j‖ = 0 := by
+  have hentry : structuralRiemannMatrixC n i j = 0 := by
+    simp [structuralRiemannMatrixC, structuralRiemannMatrix, hij, hband]
+  simpa [hentry]
+
+/-- Gershgorin row-radius bound for the structural tridiagonal matrix:
+each row off-diagonal norm sum is at most `12/11 = 2*(6/11)`. -/
+theorem structuralRiemannMatrixC_rowRadius_le_twelve_over_eleven
+    (n : ℕ) (i : Fin n) :
+    (∑ j ∈ Finset.univ.erase i, ‖structuralRiemannMatrixC n i j‖) ≤ ((12 : ℝ) / 11) := by
+  classical
+  let S := Finset.univ.erase i
+  let Splus : Finset (Fin n) := S.filter (fun j => i.1 + 1 = j.1)
+  let Sminus : Finset (Fin n) := S.filter (fun j => j.1 + 1 = i.1)
+  have hsplit0 :
+      (∑ j ∈ S, ‖structuralRiemannMatrixC n i j‖)
+        = (∑ j ∈ S.filter (fun j => i.1 + 1 = j.1 ∨ j.1 + 1 = i.1),
+              ‖structuralRiemannMatrixC n i j‖) := by
+    have hsub :
+        S.filter (fun j => i.1 + 1 = j.1 ∨ j.1 + 1 = i.1) ⊆ S := by
+      intro j hj
+      exact (Finset.mem_filter.mp hj).1
+    have hsum_subset :
+        (∑ j ∈ S.filter (fun j => i.1 + 1 = j.1 ∨ j.1 + 1 = i.1),
+            ‖structuralRiemannMatrixC n i j‖)
+          = (∑ j ∈ S, ‖structuralRiemannMatrixC n i j‖) := by
+      refine Finset.sum_subset hsub ?_
+      intro j hjS hjNot
+      have hband_not : ¬ (i.1 + 1 = j.1 ∨ j.1 + 1 = i.1) := by
+        intro hband
+        exact hjNot (Finset.mem_filter.mpr ⟨hjS, hband⟩)
+      have hij : i ≠ j := by
+        have hjS' : j ∈ Finset.univ.erase i := by simpa [S] using hjS
+        have hjNe : j ≠ i := (Finset.mem_erase.mp hjS').1
+        exact fun h => hjNe h.symm
+      have hnorm0 : ‖structuralRiemannMatrixC n i j‖ = 0 :=
+        norm_structuralRiemannMatrixC_offdiag_eq_zero n i j hij hband_not
+      simpa [hnorm0]
+    exact hsum_subset.symm
+  have hfilter_or :
+      S.filter (fun j => i.1 + 1 = j.1 ∨ j.1 + 1 = i.1) = Splus ∪ Sminus := by
+    simp [Splus, Sminus, S, Finset.filter_or]
+  have hdisj : Disjoint Splus Sminus := by
+    refine (Finset.disjoint_filter).2 ?_
+    intro j hjS hjp hjm
+    omega
+  have hsplit :
+      (∑ j ∈ S.filter (fun j => i.1 + 1 = j.1 ∨ j.1 + 1 = i.1),
+          ‖structuralRiemannMatrixC n i j‖)
+        = (∑ j ∈ Splus, ‖structuralRiemannMatrixC n i j‖) +
+          (∑ j ∈ Sminus, ‖structuralRiemannMatrixC n i j‖) := by
+    rw [hfilter_or, Finset.sum_union hdisj]
+  have hcard_plus : Splus.card ≤ 1 := by
+    refine (Finset.card_le_one).2 ?_
+    intro a ha b hb
+    have ha' : i.1 + 1 = a.1 := (Finset.mem_filter.mp ha).2
+    have hb' : i.1 + 1 = b.1 := (Finset.mem_filter.mp hb).2
+    apply Fin.ext
+    omega
+  have hcard_minus : Sminus.card ≤ 1 := by
+    refine (Finset.card_le_one).2 ?_
+    intro a ha b hb
+    have ha' : a.1 + 1 = i.1 := (Finset.mem_filter.mp ha).2
+    have hb' : b.1 + 1 = i.1 := (Finset.mem_filter.mp hb).2
+    apply Fin.ext
+    omega
+  have hsum_plus_le : (∑ j ∈ Splus, ‖structuralRiemannMatrixC n i j‖) ≤ (6 : ℝ) / 11 := by
+    have hterm :
+        ∀ j ∈ Splus, ‖structuralRiemannMatrixC n i j‖ ≤ (6 : ℝ) / 11 := by
+      intro j hj
+      have hjS : j ∈ S := (Finset.mem_filter.mp hj).1
+      have hjplus : i.1 + 1 = j.1 := (Finset.mem_filter.mp hj).2
+      have hij : i ≠ j := by
+        have hjS' : j ∈ Finset.univ.erase i := by simpa [S] using hjS
+        have hjNe : j ≠ i := (Finset.mem_erase.mp hjS').1
+        exact fun h => hjNe h.symm
+      have hnorm :
+          ‖structuralRiemannMatrixC n i j‖ = (6 : ℝ) / 11 :=
+        norm_structuralRiemannMatrixC_offdiag_eq_hop n i j hij (Or.inl hjplus)
+      simpa [hnorm]
+    have hsum_le :
+        (∑ j ∈ Splus, ‖structuralRiemannMatrixC n i j‖) ≤
+          (∑ _j ∈ Splus, (6 : ℝ) / 11) := by
+      exact Finset.sum_le_sum (fun j hj => hterm j hj)
+    have hconst :
+        (∑ _j ∈ Splus, (6 : ℝ) / 11) = (Splus.card : ℝ) * ((6 : ℝ) / 11) := by
+      simp [Finset.sum_const, nsmul_eq_mul]
+    have hmul_le : (Splus.card : ℝ) * ((6 : ℝ) / 11) ≤ (1 : ℝ) * ((6 : ℝ) / 11) := by
+      exact mul_le_mul_of_nonneg_right (by exact_mod_cast hcard_plus) (by positivity)
+    calc
+      (∑ j ∈ Splus, ‖structuralRiemannMatrixC n i j‖)
+          ≤ (∑ _j ∈ Splus, (6 : ℝ) / 11) := hsum_le
+      _ = (Splus.card : ℝ) * ((6 : ℝ) / 11) := hconst
+      _ ≤ (1 : ℝ) * ((6 : ℝ) / 11) := hmul_le
+      _ = (6 : ℝ) / 11 := by ring
+  have hsum_minus_le : (∑ j ∈ Sminus, ‖structuralRiemannMatrixC n i j‖) ≤ (6 : ℝ) / 11 := by
+    have hterm :
+        ∀ j ∈ Sminus, ‖structuralRiemannMatrixC n i j‖ ≤ (6 : ℝ) / 11 := by
+      intro j hj
+      have hjS : j ∈ S := (Finset.mem_filter.mp hj).1
+      have hjminus : j.1 + 1 = i.1 := (Finset.mem_filter.mp hj).2
+      have hij : i ≠ j := by
+        have hjS' : j ∈ Finset.univ.erase i := by simpa [S] using hjS
+        have hjNe : j ≠ i := (Finset.mem_erase.mp hjS').1
+        exact fun h => hjNe h.symm
+      have hnorm :
+          ‖structuralRiemannMatrixC n i j‖ = (6 : ℝ) / 11 :=
+        norm_structuralRiemannMatrixC_offdiag_eq_hop n i j hij (Or.inr hjminus)
+      simpa [hnorm]
+    have hsum_le :
+        (∑ j ∈ Sminus, ‖structuralRiemannMatrixC n i j‖) ≤
+          (∑ _j ∈ Sminus, (6 : ℝ) / 11) := by
+      exact Finset.sum_le_sum (fun j hj => hterm j hj)
+    have hconst :
+        (∑ _j ∈ Sminus, (6 : ℝ) / 11) = (Sminus.card : ℝ) * ((6 : ℝ) / 11) := by
+      simp [Finset.sum_const, nsmul_eq_mul]
+    have hmul_le : (Sminus.card : ℝ) * ((6 : ℝ) / 11) ≤ (1 : ℝ) * ((6 : ℝ) / 11) := by
+      exact mul_le_mul_of_nonneg_right (by exact_mod_cast hcard_minus) (by positivity)
+    calc
+      (∑ j ∈ Sminus, ‖structuralRiemannMatrixC n i j‖)
+          ≤ (∑ _j ∈ Sminus, (6 : ℝ) / 11) := hsum_le
+      _ = (Sminus.card : ℝ) * ((6 : ℝ) / 11) := hconst
+      _ ≤ (1 : ℝ) * ((6 : ℝ) / 11) := hmul_le
+      _ = (6 : ℝ) / 11 := by ring
+  have hS : S = Finset.univ.erase i := rfl
+  calc
+    (∑ j ∈ Finset.univ.erase i, ‖structuralRiemannMatrixC n i j‖)
+        = (∑ j ∈ S, ‖structuralRiemannMatrixC n i j‖) := by simp [hS]
+    _ = (∑ j ∈ Splus, ‖structuralRiemannMatrixC n i j‖) +
+          (∑ j ∈ Sminus, ‖structuralRiemannMatrixC n i j‖) := by
+            rw [hsplit0, hsplit]
+    _ ≤ (6 : ℝ) / 11 + (6 : ℝ) / 11 := add_le_add hsum_plus_le hsum_minus_le
+    _ = (12 : ℝ) / 11 := by norm_num
+
+/-- Structural Gershgorin enclosure with explicit radius `12/11` for every
+complex eigenvalue of the structural finite matrix lane. -/
+theorem structuralRiemannMatrixC_eigenvalue_mem_ball_twelve_over_eleven
+    (n : ℕ) {μ : ℂ} (hμ : μ ∈ spectrum ℂ (structuralRiemannMatrixC n)) :
+    ∃ k : Fin n, μ ∈ Metric.closedBall (structuralRiemannMatrixC n k k) ((12 : ℝ) / 11) := by
+  have hμLin : μ ∈ spectrum ℂ (Matrix.toLin' (structuralRiemannMatrixC n)) := by
+    simpa [Matrix.spectrum_toLin'] using hμ
+  have hEig : Module.End.HasEigenvalue (Matrix.toLin' (structuralRiemannMatrixC n)) μ :=
+    Module.End.HasEigenvalue.of_mem_spectrum hμLin
+  rcases (eigenvalue_mem_ball (A := structuralRiemannMatrixC n) (μ := μ) hEig) with ⟨k, hk⟩
+  refine ⟨k, ?_⟩
+  exact Set.mem_of_subset_of_mem
+    (Metric.closedBall_subset_closedBall (structuralRiemannMatrixC_rowRadius_le_twelve_over_eleven n k))
+    hk
 
 /-- The center matrix is fixed by reversal/parity conjugation. -/
 theorem structuralCenterMatrixC_revParity_fixed (n : ℕ) :
