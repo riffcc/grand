@@ -177,6 +177,23 @@ theorem nontrivial_capture_iff_xiTarget_capture
   · intro hCapXi
     exact riemann_nontrivial_capture_of_xiTarget_capture specN hCapXi
 
+/-- Layer-2 normalization: nontrivial ladder capture is exactly
+    `ZeroToFiniteWitness XiTarget specN`. -/
+theorem nontrivial_capture_iff_zeroToFiniteWitness
+    (specN : ℕ → Finset ℝ) :
+    RiemannNontrivialLadderZeroCapture specN
+      ↔ Gutoe.RiemannLayer2Identity.ZeroToFiniteWitness XiTarget specN := by
+  constructor
+  · intro hCapNontriv
+    intro s hsXi
+    rcases xiTargetZeroTransferToNontrivialZeta s hsXi with ⟨hsZeta, htriv, h1⟩
+    rcases hCapNontriv s hsZeta htriv h1 with ⟨N, t, ht, hsEq⟩
+    exact ⟨N, t, ht, hsEq⟩
+  · intro hW
+    intro s hs htriv h1
+    have hsXi : XiTarget s = 0 := nontrivialZeroTransferToXiTarget s hs htriv h1
+    exact hW s hsXi
+
 /-- Contract constructor from nontrivial ladder capture + reverse transfer. -/
 def toConvergenceTransferContract_of_nontrivial_capture_and_backtransfer
     (specN : ℕ → Finset ℝ)
@@ -225,6 +242,24 @@ theorem riemann_nontrivial_capture_of_contract
     rcases (hC.finiteBridge N s).1 hsN with ⟨t, ht, hsEq⟩
     exact ⟨N, t, ht, hsEq⟩
   exact riemann_nontrivial_capture_of_xiTarget_capture hC.specN hCapXi
+
+/-- Canonical Layer-2 witness extracted from a target convergence-transfer contract. -/
+theorem zeroToFiniteWitness_of_contract
+    (hC : RHConvergenceTransferContract XiTarget) :
+    Gutoe.RiemannLayer2Identity.ZeroToFiniteWitness XiTarget hC.specN := by
+  exact (nontrivial_capture_iff_zeroToFiniteWitness hC.specN).1
+    (riemann_nontrivial_capture_of_contract hC)
+
+/-- RH closure stated directly in Layer-2 witness form for `XiTarget`. -/
+theorem mathlibRH_of_zeroToFiniteWitness
+    (specN : ℕ → Finset ℝ)
+    (hW : Gutoe.RiemannLayer2Identity.ZeroToFiniteWitness XiTarget specN) :
+    RiemannHypothesis := by
+  have hRhXi : RiemannHypothesisXi XiTarget :=
+    Gutoe.RiemannLayer2Identity.rh_of_zero_to_finite_witness XiTarget specN hW
+  intro s hs htriv h1
+  have hsXi : XiTarget s = 0 := nontrivialZeroTransferToXiTarget s hs htriv h1
+  exact hRhXi s hsXi
 
 /-- Canonical finite-prefix ladder built from an ordinate enumerator. -/
 def prefixSpec (ρ : ℕ → ℝ) (N : ℕ) : Finset ℝ :=
