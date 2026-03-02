@@ -422,6 +422,19 @@ theorem structuralRiemannMatrixC_spectrum_reflect
 noncomputable def operatorEigenvalues (N : ℕ) : Fin (N + 1) → ℝ :=
   (structuralRiemannMatrixC_isHermitian (N + 1)).eigenvalues
 
+/-- Ordered (`antitone`) Hermitian eigenvalue lane for the structural matrix
+at level `N+1`, taken directly from Mathlib's `eigenvalues₀`. -/
+noncomputable def operatorEigenvaluesOrdered (N : ℕ) :
+    Fin (Fintype.card (Fin (N + 1))) → ℝ :=
+  (structuralRiemannMatrixC_isHermitian (N + 1)).eigenvalues₀
+
+/-- The ordered structural eigenvalue lane is antitone by Mathlib. -/
+theorem operatorEigenvaluesOrdered_antitone (N : ℕ) :
+    Antitone (operatorEigenvaluesOrdered N) := by
+  simpa [operatorEigenvaluesOrdered] using
+    (Matrix.IsHermitian.eigenvalues₀_antitone
+      (hA := structuralRiemannMatrixC_isHermitian (N + 1)))
+
 /-- Every concrete indexed operator eigenvalue is Gershgorin-close to some structural
 diagonal center with explicit radius `12/11`. -/
 theorem operatorEigenvalue_exists_center_gap_le_twelve_over_eleven
