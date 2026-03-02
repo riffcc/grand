@@ -798,6 +798,60 @@ theorem operatorCenterCountLE_eq_range_filter_card (M : ℕ) (x : ℝ) :
     Sfin.card = (Sfin.image (fun i : Fin (M + 1) => i.1)).card := hcard_img.symm
     _ = Snat.card := by simpa [himage_eq]
 
+theorem operatorCenterCountLE_zero_eq_center_indicator (x : ℝ) :
+    operatorCenterCountLE 0 x = (if operatorCenterAt 0 ≤ x then 1 else 0) := by
+  rw [operatorCenterCountLE_eq_range_filter_card]
+  let F : Finset ℕ := (Finset.range (0 + 1)).filter (fun k => operatorCenterAt k ≤ x)
+  by_cases hx : operatorCenterAt 0 ≤ x
+  · have hmem0 : 0 ∈ F := by
+      unfold F
+      simp [hx]
+    have hcard_le : F.card ≤ 1 := by
+      unfold F
+      calc
+        ((Finset.range (0 + 1)).filter (fun k => operatorCenterAt k ≤ x)).card
+            ≤ (Finset.range (0 + 1)).card := by
+              simpa using Finset.card_filter_le
+                (s := Finset.range (0 + 1))
+                (p := fun k => operatorCenterAt k ≤ x)
+        _ = 1 := by simp
+    have hcard_pos : 0 < F.card := Finset.card_pos.mpr ⟨0, hmem0⟩
+    have hcard_eq : F.card = 1 := by omega
+    have hraw :
+        ((Finset.range (0 + 1)).filter (fun k => operatorCenterAt k ≤ x)).card = 1 := by
+      simpa [F] using hcard_eq
+    calc
+      ((Finset.range (0 + 1)).filter (fun k => operatorCenterAt k ≤ x)).card = 1 := hraw
+      _ = (if operatorCenterAt 0 ≤ x then 1 else 0) := by simp [hx]
+  · have hcard_eq : F.card = 0 := by
+      have hFempty : F = ∅ := by
+        ext k
+        constructor
+        · intro hk
+          have hk0 : k = 0 := by
+            have hkRange : k ∈ Finset.range (0 + 1) := (Finset.mem_filter.mp hk).1
+            have hklt : k < 1 := Finset.mem_range.mp hkRange
+            omega
+          subst hk0
+          exact False.elim (hx ((Finset.mem_filter.mp hk).2))
+        · intro hk
+          exfalso
+          simpa using hk
+      simpa [hFempty]
+    have hraw :
+        ((Finset.range (0 + 1)).filter (fun k => operatorCenterAt k ≤ x)).card = 0 := by
+      simpa [F] using hcard_eq
+    calc
+      ((Finset.range (0 + 1)).filter (fun k => operatorCenterAt k ≤ x)).card = 0 := hraw
+      _ = (if operatorCenterAt 0 ≤ x then 1 else 0) := by simp [hx]
+
+theorem operatorSturmSignVariationCount_centerCount_gap_zero (x : ℝ) :
+    operatorSturmSignVariationCount 0 x ≤ operatorCenterCountLE 0 x + 1 ∧
+    operatorCenterCountLE 0 x ≤ operatorSturmSignVariationCount 0 x + 1 := by
+  rw [operatorSturmSignVariationCount_zero_eq_center_indicator,
+    operatorCenterCountLE_zero_eq_center_indicator]
+  by_cases hx : operatorCenterAt 0 ≤ x <;> simp [hx]
+
 /-- Appending one structural center index changes center-count at most by one. -/
 theorem operatorCenterCountLE_succ_le_add_one (M : ℕ) (x : ℝ) :
     operatorCenterCountLE (M + 1) x ≤ operatorCenterCountLE M x + 1 := by
