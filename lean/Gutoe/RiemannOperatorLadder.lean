@@ -422,6 +422,63 @@ theorem structuralRiemannMatrixC_spectrum_reflect
 noncomputable def operatorEigenvalues (N : ℕ) : Fin (N + 1) → ℝ :=
   (structuralRiemannMatrixC_isHermitian (N + 1)).eigenvalues
 
+/-- Every concrete indexed operator eigenvalue is Gershgorin-close to some structural
+diagonal center with explicit radius `12/11`. -/
+theorem operatorEigenvalue_exists_center_gap_le_twelve_over_eleven
+    (M : ℕ) (i : Fin (M + 1)) :
+    ∃ k : Fin (M + 1),
+      ‖((operatorEigenvalues M i : ℂ) - structuralRiemannMatrixC (M + 1) k k)‖ ≤ ((12 : ℝ) / 11) := by
+  have hiReal : (operatorEigenvalues M i) ∈ spectrum ℝ (structuralRiemannMatrixC (M + 1)) := by
+    exact Matrix.IsHermitian.eigenvalues_mem_spectrum_real
+      (hA := structuralRiemannMatrixC_isHermitian (M + 1)) i
+  have hiComplex : ((operatorEigenvalues M i : ℝ) : ℂ) ∈
+      spectrum ℂ (structuralRiemannMatrixC (M + 1)) := by
+    exact (spectrum.algebraMap_mem_iff ℂ).2 hiReal
+  rcases structuralRiemannMatrixC_eigenvalue_mem_ball_twelve_over_eleven
+      (n := M + 1) (μ := (operatorEigenvalues M i : ℂ)) hiComplex with ⟨k, hk⟩
+  refine ⟨k, ?_⟩
+  simpa [Metric.mem_closedBall, dist_eq_norm, sub_eq_add_neg, add_comm, add_left_comm, add_assoc]
+    using hk
+
+/-- Uniform explicit lower bound on all indexed operator eigenvalues, obtained from
+the structural Gershgorin enclosure and diagonal formula. -/
+theorem operatorEigenvalue_lower_uniform
+    (M : ℕ) (i : Fin (M + 1)) :
+    ((117 : ℝ) / 176) ≤ operatorEigenvalues M i := by
+  rcases operatorEigenvalue_exists_center_gap_le_twelve_over_eleven M i with ⟨k, hgap⟩
+  let c : ℝ := (k.1 : ℝ) + (29 : ℝ) / 16
+  have hdiag :
+      structuralRiemannMatrixC (M + 1) k k = (c : ℂ) := by
+    simp [structuralRiemannMatrixC, structuralRiemannMatrix_diag, c, timelikeOffsetQ]
+    ring_nf
+  have habs :
+      |operatorEigenvalues M i - c| ≤ ((12 : ℝ) / 11) := by
+    have hgap' : ‖((operatorEigenvalues M i : ℂ) - (c : ℂ))‖ ≤ ((12 : ℝ) / 11) := by
+      simpa [hdiag, sub_eq_add_neg, add_comm, add_left_comm, add_assoc] using hgap
+    have hgap'' : ‖(((operatorEigenvalues M i - c : ℝ) : ℂ))‖ ≤ ((12 : ℝ) / 11) := by
+      convert hgap' using 1
+      simp
+    calc
+      |operatorEigenvalues M i - c| = ‖(((operatorEigenvalues M i - c : ℝ) : ℂ))‖ := by
+        simpa using (Complex.norm_real (operatorEigenvalues M i - c)).symm
+      _ ≤ ((12 : ℝ) / 11) := hgap''
+  have hc_ge : (29 : ℝ) / 16 ≤ c := by
+    have hk_nonneg : (0 : ℝ) ≤ k.1 := by positivity
+    dsimp [c]
+    linarith
+  have hlower1 : c - ((12 : ℝ) / 11) ≤ operatorEigenvalues M i := by
+    have hpair := abs_le.mp habs
+    linarith [hpair.1]
+  have hlower_const : (117 : ℝ) / 176 ≤ c - (12 : ℝ) / 11 := by
+    have h127_eq : (127 : ℝ) / 176 = ((29 : ℝ) / 16) - ((12 : ℝ) / 11) := by norm_num
+    have h127_le : (127 : ℝ) / 176 ≤ c - (12 : ℝ) / 11 := by
+      linarith [hc_ge, h127_eq]
+    have h117_le_127 : (117 : ℝ) / 176 ≤ (127 : ℝ) / 176 := by norm_num
+    linarith
+  calc
+    (117 : ℝ) / 176 ≤ c - (12 : ℝ) / 11 := hlower_const
+    _ ≤ operatorEigenvalues M i := hlower1
+
 /-- Concrete operator-derived finite ladder:
 real eigenvalues of the structural Hermitian matrix at each level `N+1`. -/
 noncomputable def operatorSpecN (N : ℕ) : Finset ℝ :=
