@@ -548,6 +548,10 @@ theorem operatorSturmP_step (n : ℕ) (x : ℝ) :
         - (operatorSturmOff ^ (2 : ℕ)) * operatorSturmP n x := by
   rfl
 
+@[simp] theorem operatorSturmP_one_eq_center_sub (x : ℝ) :
+    operatorSturmP 1 x = operatorCenterAt 0 - x := by
+  simpa [operatorSturmP, operatorSturmDiag_eq_centerAt]
+
 /-- Ternary sign marker used for finite Sturm sign-variation counting. -/
 def operatorSturmSign (r : ℝ) : Int :=
   if r > 0 then 1 else if r < 0 then -1 else 0
@@ -559,6 +563,11 @@ def operatorSturmSignVariationCount (M : ℕ) (x : ℝ) : ℕ :=
       (fun k =>
         operatorSturmSign (operatorSturmP k x) ≠
           operatorSturmSign (operatorSturmP (k + 1) x))).card)
+
+@[simp] theorem operatorSturmSign_p0_eq_one (x : ℝ) :
+    operatorSturmSign (operatorSturmP 0 x) = 1 := by
+  change operatorSturmSign 1 = 1
+  simp [operatorSturmSign]
 
 theorem operatorSturmSignVariationCount_le (M : ℕ) (x : ℝ) :
     operatorSturmSignVariationCount M x ≤ M + 1 := by
