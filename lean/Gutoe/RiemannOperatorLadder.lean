@@ -364,6 +364,40 @@ theorem operatorSpecSet_image_reflect_structuralCenter (N : ℕ) :
     dsimp [u]
     ring
 
+/-- Reflection around a fixed real center is injective. -/
+theorem reflectAround_injective (c : ℝ) :
+    Function.Injective (fun t : ℝ => c - t) := by
+  intro a b hab
+  linarith
+
+/-- Finite product identity on the concrete operator ladder: replacing the
+ordinate set by its reflected image rewrites each factor by reflected ordinates. -/
+theorem XiFinite_operatorSpecN_reflectedFactors
+    (N : ℕ) (s : ℂ) :
+    XiFinite (operatorSpecN N) s =
+      Finset.prod (operatorSpecN N)
+        (fun t => s - criticalLinePoint ((structuralCenterQ (N + 1) : ℝ) - t)) := by
+  classical
+  let c : ℝ := structuralCenterQ (N + 1)
+  have hEq : operatorSpecN N = (operatorSpecN N).image (fun t => c - t) := by
+    simpa [c] using (operatorSpecN_image_reflect_structuralCenter N).symm
+  calc
+    XiFinite (operatorSpecN N) s
+        = XiFinite ((operatorSpecN N).image (fun t => c - t)) s := by
+            exact congrArg (fun spec => XiFinite spec s) hEq
+    _ = Finset.prod ((operatorSpecN N).image (fun t => c - t))
+          (fun u => s - criticalLinePoint u) := rfl
+    _ = Finset.prod (operatorSpecN N) (fun t => s - criticalLinePoint (c - t)) := by
+          simpa using
+            (Finset.prod_image (s := operatorSpecN N)
+              (g := fun t : ℝ => c - t)
+              (f := fun u : ℝ => s - criticalLinePoint u)
+              (reflectAround_injective c).injOn)
+    _ = Finset.prod (operatorSpecN N) (fun t => s - criticalLinePoint (c - t)) := rfl
+    _ = Finset.prod (operatorSpecN N)
+          (fun t => s - criticalLinePoint ((structuralCenterQ (N + 1) : ℝ) - t)) := by
+          simp [c]
+
 /-- Operator-native finite ladder witness:
 each finite level list is exactly the real ordinates detected as operator
 eigenvalues for that level. -/
