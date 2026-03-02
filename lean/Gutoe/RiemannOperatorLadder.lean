@@ -613,6 +613,32 @@ theorem operatorSturmSignVariationCount_succ_le (M : ℕ) (x : ℝ) :
   simpa [operatorSturmSignVariationCount, P]
     using hsplit
 
+/-- Exact successor decomposition for Sturm sign-variation count:
+appending one recurrence edge contributes exactly one extra variation iff the
+new terminal edge flips sign. -/
+theorem operatorSturmSignVariationCount_succ_eq_add_indicator (M : ℕ) (x : ℝ) :
+    operatorSturmSignVariationCount (M + 1) x =
+      operatorSturmSignVariationCount M x +
+        (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+              operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0) := by
+  classical
+  let P : ℕ → Prop := fun k =>
+    operatorSturmSign (operatorSturmP k x) ≠
+      operatorSturmSign (operatorSturmP (k + 1) x)
+  have hnot_mem : M + 1 ∉ (Finset.range (M + 1)).filter P := by
+    intro hmem
+    exact (Nat.lt_irrefl (M + 1)) ((Finset.mem_filter.mp hmem).1
+      |> Finset.mem_range.mp)
+  rw [operatorSturmSignVariationCount, operatorSturmSignVariationCount]
+  rw [Finset.range_add_one, Finset.filter_insert]
+  by_cases hP : P (M + 1)
+  · have hcard : (insert (M + 1) ((Finset.range (M + 1)).filter P)).card
+        = ((Finset.range (M + 1)).filter P).card + 1 := by
+      simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using
+        Finset.card_insert_of_not_mem hnot_mem
+    simpa [P, hP] using hcard
+  · simp [P, hP]
+
 /-- Gershgorin-window separation geometry used by the Sturm route:
 if indices are at least `3` apart (forward), radius-`12/11` windows are strictly separated. -/
 theorem operatorCenterWindow_separated_of_add_three_le
@@ -709,6 +735,48 @@ theorem operatorCenterCountLE_succ_sub_le_one (M : ℕ) (x : ℝ) :
     operatorCenterCountLE (M + 1) x - operatorCenterCountLE M x ≤ 1 := by
   have hle := operatorCenterCountLE_succ_le_add_one M x
   omega
+
+/-- Exact successor decomposition for center counting:
+appending one center index contributes exactly one iff that center is below
+threshold. -/
+theorem operatorCenterCountLE_succ_eq_add_indicator (M : ℕ) (x : ℝ) :
+    operatorCenterCountLE (M + 1) x =
+      operatorCenterCountLE M x +
+        (if operatorCenterAt (M + 1) ≤ x then 1 else 0) := by
+  classical
+  let P : ℕ → Prop := fun k => operatorCenterAt k ≤ x
+  have hnot_mem : M + 1 ∉ (Finset.range (M + 1)).filter P := by
+    intro hmem
+    exact (Nat.lt_irrefl (M + 1)) ((Finset.mem_filter.mp hmem).1
+      |> Finset.mem_range.mp)
+  rw [operatorCenterCountLE_eq_range_filter_card, operatorCenterCountLE_eq_range_filter_card]
+  rw [Finset.range_add_one, Finset.filter_insert]
+  by_cases hP : P (M + 1)
+  · have hcard : (insert (M + 1) ((Finset.range (M + 1)).filter P)).card
+        = ((Finset.range (M + 1)).filter P).card + 1 := by
+      simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using
+        Finset.card_insert_of_not_mem hnot_mem
+    simpa [P, hP] using hcard
+  · simp [P, hP]
+
+/-- Center count as a finite sum of 0/1 indicators over structural centers. -/
+theorem operatorCenterCountLE_eq_sum_indicator (M : ℕ) (x : ℝ) :
+    operatorCenterCountLE M x =
+      Finset.sum (Finset.range (M + 1))
+        (fun k => if operatorCenterAt k ≤ x then 1 else 0) := by
+  rw [operatorCenterCountLE_eq_range_filter_card]
+  rw [Finset.card_eq_sum_ones, Finset.sum_filter]
+
+/-- Sturm sign-variation count as a finite sum of 0/1 edge-flip indicators. -/
+theorem operatorSturmSignVariationCount_eq_sum_indicator (M : ℕ) (x : ℝ) :
+    operatorSturmSignVariationCount M x =
+      Finset.sum (Finset.range (M + 1))
+        (fun k =>
+          if operatorSturmSign (operatorSturmP k x) ≠
+                operatorSturmSign (operatorSturmP (k + 1) x)
+          then 1 else 0) := by
+  rw [operatorSturmSignVariationCount]
+  rw [Finset.card_eq_sum_ones, Finset.sum_filter]
 
 /-- Sturm-route contract (corrected):
 eigenvalue and center counting functions differ by at most one at every threshold
