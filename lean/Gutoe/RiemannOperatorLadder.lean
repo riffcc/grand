@@ -7246,6 +7246,14 @@ theorem operatorHurwitz_of_operatorApproxZero
   subst hsEq
   simpa using hε
 
+/-- If zero-tolerance operator approximation is already available, then the
+concrete operator Hurwitz kernel obligation is discharged immediately. -/
+theorem operatorHurwitzKernel_of_operatorApproxZero
+    (hApprox0 : OperatorApproxZeroConvergence) :
+    OperatorHurwitzKernel := by
+  intro _hconv _hDiffN _hDiffXi _hNontriv
+  exact operatorHurwitz_of_operatorApproxZero hApprox0
+
 /-- RH closure from the zero-tolerance operator approximation routed through
 the Hurwitz-output surface. -/
 theorem mathlibRH_of_operator_approxZero_via_hurwitz
