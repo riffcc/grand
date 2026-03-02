@@ -1027,6 +1027,53 @@ theorem operatorOrderedTieBreakCenter_injective
   have hsymm : e.symm j1 = e.symm j2 := Fin.ext hidx
   exact e.symm.injective hsymm
 
+/-- Offset form of the deterministic ordered tie-break center:
+`tieBreak = maxChoice - offset`. -/
+def operatorOrderedTieBreakOffset
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) : ℕ :=
+  (operatorEigenvalueOrderedCenterChoiceMax M j).1
+    - (operatorOrderedTieBreakCenter M j).1
+
+/-- Three-line admissibility bridge:
+if the tie-break offset is bounded by the candidate interval width, then the
+tie-break index lies in the ordered candidate interval. -/
+theorem operatorOrderedTieBreakCenter_mem_of_offset_le_width
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1))))
+    (hTieLeMax :
+      (operatorOrderedTieBreakCenter M j).1
+        ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1)
+    (hOffsetWidth :
+      operatorOrderedTieBreakOffset M j
+        ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1
+            - (operatorEigenvalueOrderedCenterChoiceMin M j).1) :
+    operatorOrderedTieBreakCenter M j ∈ operatorCenterCandidatesOrdered M j := by
+  have hTie_le_max :
+      (operatorOrderedTieBreakCenter M j).1
+        ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1 := hTieLeMax
+  have hMin_mem :
+      operatorEigenvalueOrderedCenterChoiceMin M j ∈ operatorCenterCandidatesOrdered M j :=
+    operatorEigenvalueOrderedCenterChoiceMin_mem M j
+  have hMax_mem :
+      operatorEigenvalueOrderedCenterChoiceMax M j ∈ operatorCenterCandidatesOrdered M j :=
+    operatorEigenvalueOrderedCenterChoiceMax_mem M j
+  have hMin_le_max :
+      (operatorEigenvalueOrderedCenterChoiceMin M j).1
+        ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1 := by
+    exact Finset.min'_le (operatorCenterCandidatesOrdered M j)
+      (operatorEigenvalueOrderedCenterChoiceMax M j) hMax_mem
+  have hMin_le_tie :
+      (operatorEigenvalueOrderedCenterChoiceMin M j).1
+        ≤ (operatorOrderedTieBreakCenter M j).1 := by
+    have hOffsetWidth' :
+        (operatorEigenvalueOrderedCenterChoiceMax M j).1
+            - (operatorOrderedTieBreakCenter M j).1
+          ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1
+              - (operatorEigenvalueOrderedCenterChoiceMin M j).1 := by
+      simpa [operatorOrderedTieBreakOffset] using hOffsetWidth
+    omega
+  exact (operatorCenterCandidatesOrdered_mem_iff_between_min_max M j
+    (operatorOrderedTieBreakCenter M j)).2 ⟨hMin_le_tie, hTie_le_max⟩
+
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
 center-gap contract holds. -/
