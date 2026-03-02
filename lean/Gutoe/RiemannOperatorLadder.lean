@@ -3971,6 +3971,32 @@ def OperatorXiFiniteLocallyUniformConvergence : Prop :=
   TendstoLocallyUniformly operatorXiFiniteLadder XiTarget
     (Filter.atTop : Filter ℕ)
 
+/-- Existence of a locally-uniform limit for the concrete operator finite ladder
+along `atTop`. -/
+def OperatorXiFiniteLocallyUniformLimitExists : Prop :=
+  ∃ F : ℂ → ℂ,
+    TendstoLocallyUniformly operatorXiFiniteLadder F (Filter.atTop : Filter ℕ)
+
+/-- Overconstrained uniqueness surface:
+any locally-uniform limit of the concrete operator finite ladder is forced to be
+`XiTarget`. This encodes the "single occupant in an overconstrained function
+class" principle. -/
+def OperatorXiFiniteLocallyUniformLimitUniqueness : Prop :=
+  ∀ F : ℂ → ℂ,
+    TendstoLocallyUniformly operatorXiFiniteLadder F (Filter.atTop : Filter ℕ) →
+      F = XiTarget
+
+/-- If a locally-uniform limit exists and the locally-uniform limit is unique in
+the overconstrained class (hence equals `XiTarget`), then the concrete
+local-uniform convergence obligation follows automatically. -/
+theorem operatorXiFiniteLocallyUniformConvergence_of_limitExists_and_uniqueness
+    (hExist : OperatorXiFiniteLocallyUniformLimitExists)
+    (hUnique : OperatorXiFiniteLocallyUniformLimitUniqueness) :
+    OperatorXiFiniteLocallyUniformConvergence := by
+  rcases hExist with ⟨F, hF⟩
+  have hEq : F = XiTarget := hUnique F hF
+  simpa [OperatorXiFiniteLocallyUniformConvergence, hEq] using hF
+
 /-- Named three-obligation RH surface on the concrete operator lane.
 1) permutation-invariant center-gap (summability geometry),
 2) Hurwitz kernel, and
@@ -4026,6 +4052,22 @@ theorem mathlibRH_of_operator_hurwitzKernel_and_stepSummable_pointwise
   exact mathlibRH_of_operator_hurwitzKernel_and_locallyUniform hKernel
     (tendstoLocallyUniformly_operatorXiFiniteLadder_of_stepSummable_and_pointwise
       a ha_nonneg ha_sum hstep hpt)
+
+/-- RH closure from:
+1) concrete operator Hurwitz kernel,
+2) existence of a locally-uniform limit of the finite operator ladder, and
+3) uniqueness identifying any such limit with `XiTarget`.
+
+This removes "pointwise-to-`XiTarget`" as a primitive obligation and replaces it
+with an overconstrained uniqueness obligation. -/
+theorem mathlibRH_of_operator_hurwitzKernel_and_limitExists_uniqueness
+    (hKernel : OperatorHurwitzKernel)
+    (hExist : OperatorXiFiniteLocallyUniformLimitExists)
+    (hUnique : OperatorXiFiniteLocallyUniformLimitUniqueness) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_operator_hurwitzKernel_and_locallyUniform hKernel
+    (operatorXiFiniteLocallyUniformConvergence_of_limitExists_and_uniqueness
+      hExist hUnique)
 
 /-- Zero-tolerance operator approximation already implies the Hurwitz-output
 surface (with exact finite-level zeros at the target point itself). -/
