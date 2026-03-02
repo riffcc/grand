@@ -3140,6 +3140,18 @@ theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm
   exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_centerGapPermutationInvariant
     (hBridge hS)
 
+/-- Direct Sturm+Weyl reduction:
+if the corrected Sturm-route counting contract holds and Weyl center-gap is
+available, then the finite-level uniform inverse-square bound follows without an
+explicit bridge parameter. -/
+theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm_and_weylCenterGap
+    (hS : OperatorSturmCountContract)
+    (hW : OperatorWeylCenterGap) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
+  exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm hS
+    (fun _ => operatorCenterGapPermutationInvariant_of_weylCenterGap hW)
+
 /-- Sturm-to-summability route (minimal step-compatibility form):
 if eigenvalue counting matches Sturm sign-variation counting and the recurrence-step
 compatibility holds, then any bridge from Sturm contract to permutation-invariant
@@ -3155,6 +3167,21 @@ theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm_stepCompa
   exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm
     (operatorSturmCountContract_of_signVariationBridge_and_stepCompatibility hEigSturm hCompat)
     hBridge
+
+/-- Step-compatibility route with Weyl center-gap:
+the explicit bridge argument is eliminated by the canonical Weyl→permutation
+map. -/
+theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm_stepCompatibility_and_weylCenterGap
+    (hEigSturm :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorEigenvalueCountLE M x = operatorSturmSignVariationCount M x)
+    (hCompat : OperatorSturmStepCompatibility)
+    (hW : OperatorWeylCenterGap) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
+  exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm_stepCompatibility
+    hEigSturm hCompat
+    (fun _ => operatorCenterGapPermutationInvariant_of_weylCenterGap hW)
 
 /-- Sturm-to-summability route (edge-lock form):
 if eigenvalue counting matches Sturm sign-variation counting and edge-lock holds
@@ -3178,6 +3205,27 @@ theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm_edgeLock
   exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm
     (operatorSturmCountContract_of_signVariationBridge_and_edgeLock hEigSturm hEdgeLock)
     hBridge
+
+/-- Edge-lock route with Weyl center-gap:
+the explicit bridge argument is eliminated by the canonical Weyl→permutation
+map. -/
+theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm_edgeLock_and_weylCenterGap
+    (hEigSturm :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorEigenvalueCountLE M x = operatorSturmSignVariationCount M x)
+    (hEdgeLock :
+      ∀ M : ℕ, ∀ x : ℝ,
+        (operatorSturmSignVariationCount M x = operatorCenterCountLE M x + 1 →
+          operatorCenterAt (M + 1) ≤ x) ∧
+        (operatorCenterCountLE M x = operatorSturmSignVariationCount M x + 1 →
+          operatorSturmSign (operatorSturmP (M + 1) x) ≠
+            operatorSturmSign (operatorSturmP (M + 2) x)))
+    (hW : OperatorWeylCenterGap) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
+  exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm_edgeLock
+    hEigSturm hEdgeLock
+    (fun _ => operatorCenterGapPermutationInvariant_of_weylCenterGap hW)
 
 /-- Cardinality growth control for the concrete operator spectral ladder. -/
 theorem card_operatorSpecN_le (N : ℕ) :
