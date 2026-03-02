@@ -1001,6 +1001,68 @@ theorem operatorEigenvalueOrderedCenterChoiceMin_antitone
       exact_mod_cast hkj_lt_ki_real
     exact le_of_lt hkj_lt_ki
 
+/-- Deterministic ordered-lane tie-break center index: reverse index in the
+canonical `Fin (M+1) ↔ Fin(card)` reindexing. -/
+noncomputable def operatorOrderedTieBreakCenter
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) : Fin (M + 1) :=
+  let e : Fin (M + 1) ≃ Fin (Fintype.card (Fin (M + 1))) :=
+    operatorEigenvaluesReindexToOrderedEquiv M
+  ⟨M - (e.symm j).1, by
+    exact Nat.lt_succ_of_le (Nat.sub_le M (e.symm j).1)⟩
+
+/-- The ordered tie-break center selector is injective. -/
+theorem operatorOrderedTieBreakCenter_injective
+    (M : ℕ) :
+    Function.Injective (operatorOrderedTieBreakCenter M) := by
+  intro j1 j2 hEq
+  let e : Fin (M + 1) ≃ Fin (Fintype.card (Fin (M + 1))) :=
+    operatorEigenvaluesReindexToOrderedEquiv M
+  have hNat :
+      M - (e.symm j1).1 = M - (e.symm j2).1 := by
+    simpa [operatorOrderedTieBreakCenter, e] using congrArg Fin.val hEq
+  have hj1 : (e.symm j1).1 ≤ M := Nat.le_of_lt_succ (e.symm j1).2
+  have hj2 : (e.symm j2).1 ≤ M := Nat.le_of_lt_succ (e.symm j2).2
+  have hidx : (e.symm j1).1 = (e.symm j2).1 := by
+    omega
+  have hsymm : e.symm j1 = e.symm j2 := Fin.ext hidx
+  exact e.symm.injective hsymm
+
+/-- Tie-break closure theorem: if the deterministic ordered tie-break center is
+admissible in every ordered candidate set, then the full permutation-invariant
+center-gap contract holds. -/
+theorem operatorCenterGapPermutationInvariant_of_orderedTieBreak
+    (hTie :
+      ∀ M : ℕ, ∀ j : Fin (Fintype.card (Fin (M + 1))),
+        operatorOrderedTieBreakCenter M j ∈ operatorCenterCandidatesOrdered M j) :
+    OperatorCenterGapPermutationInvariant := by
+  intro M
+  classical
+  let e : Fin (M + 1) ≃ Fin (Fintype.card (Fin (M + 1))) :=
+    operatorEigenvaluesReindexToOrderedEquiv M
+  let f : Fin (M + 1) → Fin (M + 1) := fun i => operatorOrderedTieBreakCenter M (e i)
+  have hf_injective : Function.Injective f := by
+    intro i1 i2 h
+    exact e.injective (operatorOrderedTieBreakCenter_injective M h)
+  have hf_surjective : Function.Surjective f := (Finite.injective_iff_surjective).1 hf_injective
+  let σ : Fin (M + 1) ≃ Fin (M + 1) := Equiv.ofBijective f ⟨hf_injective, hf_surjective⟩
+  refine ⟨σ, ?_⟩
+  intro i
+  have hTie_i :
+      operatorOrderedTieBreakCenter M (e i) ∈ operatorCenterCandidatesOrdered M (e i) :=
+    hTie M (e i)
+  have hTie_abs :
+      |operatorEigenvaluesOrdered M (e i) -
+        (((operatorOrderedTieBreakCenter M (e i)).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+    exact (Finset.mem_filter.mp hTie_i).2
+  have hEqEig :
+      operatorEigenvalues M i = operatorEigenvaluesOrdered M (e i) := by
+    simpa [e] using operatorEigenvalues_eq_ordered_reindex M i
+  have hσEq : σ i = operatorOrderedTieBreakCenter M (e i) := rfl
+  have hAbs :
+      |operatorEigenvalues M i - (((σ i).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+    simpa [hEqEig, hσEq] using hTie_abs
+  exact hAbs
+
 /-- Hall-style finite-level center-gap condition:
 every finite subfamily of eigenvalue candidate-center sets has union cardinality
 at least the subfamily cardinality. -/
