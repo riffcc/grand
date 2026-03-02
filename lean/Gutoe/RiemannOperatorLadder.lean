@@ -2913,8 +2913,10 @@ theorem operatorCliffordSameMinSymmetryContract_of_hodgeParity
 theorem operatorSameMinMaxAboveObligation_of_hodgeParity
     (hHP : OperatorHodgeParityContract) :
     OperatorSameMinMaxAboveObligation := by
-  exact operatorSameMinMaxAboveObligation_clifford
-    (operatorCliffordSameMinSymmetryContract_of_hodgeParity hHP)
+  intro M j hj hjpos hjm1 hPrefix hSameMin
+  rcases hHP.interiorInSameMin M j hj hjpos hjm1 hPrefix hSameMin with
+    ⟨hminPos, hmaxLt⟩
+  exact operatorMaxAboveInSameMin_of_interior M j hj hjpos hjm1 hminPos hmaxLt
 
 /-- Step-2 explicit obligation directly from the Hodge parity contract. -/
 theorem operatorSameMinPlusOneNoPrevObligation_of_hodgeParity
