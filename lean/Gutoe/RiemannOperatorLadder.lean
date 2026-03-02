@@ -1978,6 +1978,50 @@ theorem operatorPredExcl_of_sameMin_maxAvailable
   exact operatorSameMin_aboveAvailable_of_maxAvailable
     M j hj hjm1 hSameMin hMaxAbove hMaxAvail
 
+/-- Same-min predecessor exclusion with max-availability discharged from a
+global no-premature-max hypothesis. This reuses the max-availability reduction
+pattern directly and leaves only the structural max-above-min branch. -/
+theorem operatorPredExcl_of_sameMin_maxAvailable_of_noPrematureMax
+    (M : ℕ)
+    (hMaxAboveInSameMin :
+      ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      ∀ hjm1 : j - 1 < operatorGreedyCard M,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+          (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1)
+    (hNoPrematureMax :
+      ∀ i j : ℕ, ∀ hij : i < j, ∀ hj : j < operatorGreedyCard M,
+        operatorGreedyChoiceNat M i ≠
+          operatorEigenvalueOrderedCenterChoiceMax M ⟨j, hj⟩) :
+    ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      (∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) →
+      operatorGreedyChoiceNat M (j - 1) ≠
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ := by
+  refine operatorPredExcl_of_sameMin_maxAvailable M hMaxAboveInSameMin ?_
+  intro j hj hjpos hjm1 _ hSameMin hMaxAbove
+  exact operatorEigenvalueOrderedCenterChoiceMax_mem_available_of_noPremature
+    M hNoPrematureMax (j - 1) hjm1
+
+/-- Same-min branch max-above-min from the existing interior non-collapse theorem. -/
+theorem operatorMaxAboveInSameMin_of_interior
+    (M : ℕ) (j : ℕ) (hj : j < operatorGreedyCard M) (hjpos : 0 < j)
+    (hjm1 : j - 1 < operatorGreedyCard M)
+    (hminPos :
+      0 < (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1)
+    (hmaxLt :
+      (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 < M) :
+    (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+      (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 := by
+  have h := operatorCenterCandidatesOrdered_min_lt_max_of_interior
+    M ⟨j - 1, hjm1⟩ hminPos hmaxLt
+  simpa using h
+
 
 /-- Strong-induction closure:
 if the predecessor step never chooses `min(j)` under the prefix min-availability
