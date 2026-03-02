@@ -2563,7 +2563,6 @@ theorem operatorMaxAboveInSameMin_of_interior
     M ⟨j - 1, hjm1⟩ hminPos hmaxLt
   simpa using h
 
-
 /-- Strong-induction closure:
 if the predecessor step never chooses `min(j)` under the prefix min-availability
 hypothesis, then `min(j)` is available at every step. -/
@@ -2900,9 +2899,29 @@ def OperatorSameMinMaxAboveObligation : Prop :=
       operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
         operatorGreedyAvailableNat M k) →
     (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
-      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
     (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
       (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1
+
+/-- One-line discharge of the explicit same-min `maxAbove` obligation from an
+interior-in-same-min hypothesis package. This isolates the remaining work for
+`OperatorSameMinMaxAboveObligation` to proving interiority
+`0 < min(j-1) ∧ max(j-1) < M` in each same-min branch. -/
+theorem operatorSameMinMaxAboveObligation_of_interiorInSameMin
+    (hInteriorInSameMin :
+      ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      ∀ hjm1 : j - 1 < operatorGreedyCard M,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        0 < (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ∧
+          (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 < M) :
+    OperatorSameMinMaxAboveObligation := by
+  intro M j hj hjpos hjm1 hPrefix hSameMin
+  rcases hInteriorInSameMin M j hj hjpos hjm1 hPrefix hSameMin with ⟨hminPos, hmaxLt⟩
+  exact operatorMaxAboveInSameMin_of_interior M j hj hjpos hjm1 hminPos hmaxLt
 
 /-- Bridge: same-min `min+1` availability implies the explicit no-previous-pick
 obligation for canonical `min+1`. -/
@@ -3100,6 +3119,16 @@ theorem operatorSameMinPlusOneNoPrevObligation_clifford
     OperatorSameMinPlusOneNoPrevObligation := by
   exact operatorSameMinPlusOneNoPrevObligation_of_cliffordSameMinSymmetryContract
     hCliff
+
+/-- Explicit Step-1/Step-2 wiring:
+from the Clifford same-min symmetry contract, instantiate both named same-min
+obligations and close `OperatorCenterGapPermutationInvariant`. -/
+theorem operatorCenterGapPermutationInvariant_of_clifford_step1_step2
+    (hCliff : OperatorCliffordSameMinSymmetryContract) :
+    OperatorCenterGapPermutationInvariant := by
+  exact operatorCenterGapPermutationInvariant_of_sameMinEndgameObligations
+    (operatorSameMinMaxAboveObligation_clifford hCliff)
+    (operatorSameMinPlusOneNoPrevObligation_clifford hCliff)
 
 /-- Hodge/even-odd contract for the same-min branch.
 
