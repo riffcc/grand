@@ -4793,6 +4793,39 @@ theorem operatorSpecN_image_reflect_structuralCenter (N : ℕ) :
     dsimp [u]
     ring
 
+/-- Ordered-lane reflection existence:
+for each ordered eigenvalue at level `M`, some ordered index realizes its
+reflection about the structural center. This is the set-level reflection
+symmetry lifted to ordered representatives. -/
+theorem operatorEigenvaluesOrdered_reflect_exists
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    ∃ j' : Fin (Fintype.card (Fin (M + 1))),
+      operatorEigenvaluesOrdered M j' =
+        (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j := by
+  let i : Fin (M + 1) := (operatorEigenvaluesReindexToOrderedEquiv M).symm j
+  have hiEq : operatorEigenvalues M i = operatorEigenvaluesOrdered M j := by
+    calc
+      operatorEigenvalues M i
+          = operatorEigenvaluesOrdered M (operatorEigenvaluesReindexToOrdered M i) := by
+              simpa using operatorEigenvalues_eq_ordered_reindex M i
+      _ = operatorEigenvaluesOrdered M ((operatorEigenvaluesReindexToOrderedEquiv M) i) := rfl
+      _ = operatorEigenvaluesOrdered M j := by simpa [i]
+  have hj_mem : operatorEigenvaluesOrdered M j ∈ operatorSpecN M := by
+    refine Finset.mem_image.mpr ?_
+    exact ⟨i, Finset.mem_univ i, by simpa [hiEq]⟩
+  have hRef_mem :
+      ((structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j) ∈ operatorSpecN M :=
+    mem_operatorSpecN_reflect_structuralCenter hj_mem
+  rcases Finset.mem_image.mp hRef_mem with ⟨i', _, hi'⟩
+  refine ⟨operatorEigenvaluesReindexToOrdered M i', ?_⟩
+  calc
+    operatorEigenvaluesOrdered M (operatorEigenvaluesReindexToOrdered M i')
+        = operatorEigenvalues M i' := by
+            symm
+            simpa using operatorEigenvalues_eq_ordered_reindex M i'
+    _ = (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j := by
+          simpa using hi'
+
 /-- Set-level invariance of `operatorSpecSet` under center reflection. -/
 theorem operatorSpecSet_image_reflect_structuralCenter (N : ℕ) :
     (operatorSpecSet N).image (fun t => (structuralCenterQ (N + 1) : ℝ) - t) =
