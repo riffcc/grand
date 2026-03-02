@@ -1535,6 +1535,37 @@ theorem operatorEigenvalueOrderedCenterChoiceMin_mem_available_of_noPremature
     ⟨i, hij, hEq⟩
   exact (hNoPremature i j hij hj) hEq
 
+/-- Availability/no-premature equivalence for the future ordered minimum center. -/
+theorem operatorMin_mem_available_iff_no_prev
+    (M : ℕ) (j : ℕ) (hj : j < operatorGreedyCard M) :
+    operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ ∈ operatorGreedyAvailableNat M j ↔
+      ∀ i : ℕ, i < j →
+        operatorGreedyChoiceNat M i ≠ operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ := by
+  constructor
+  · intro hAvail i hij hEq
+    have hjle : j ≤ operatorGreedyCard M := Nat.le_of_lt hj
+    have hnot := operatorGreedyChoiceNat_not_mem_available_of_lt M i j hij hjle
+    exact hnot (hEq ▸ hAvail)
+  · intro hNoPrev
+    by_contra hnot
+    rcases operatorGreedyChoiceNat_exists_prev_of_not_mem_available M j
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩) hnot with
+      ⟨i, hij, hEq⟩
+    exact (hNoPrev i hij) hEq
+
+/-- No-premature-use follows directly from minimum availability. -/
+theorem operatorGreedyChoiceNat_ne_future_min_of_min_available
+    (M : ℕ)
+    (hminAvail :
+      ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ ∈
+          operatorGreedyAvailableNat M j) :
+    ∀ i j : ℕ, ∀ hij : i < j, ∀ hj : j < operatorGreedyCard M,
+      operatorGreedyChoiceNat M i ≠
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ := by
+  intro i j hij hj
+  exact (operatorMin_mem_available_iff_no_prev M j hj).1 (hminAvail j hj) i hij
+
 /-- If the canonical ordered-lane minimum center is available at step `n`,
 then the candidate∩available set at step `n` is nonempty. -/
 theorem operatorGreedyCandAvail_nonempty_of_min_available
