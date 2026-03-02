@@ -595,6 +595,59 @@ theorem operatorPhaseNormalizedXiLadder_centered_involution
     _ = operatorPhaseNormalizedXiLadder N s := by
           simp [operatorPhaseNormalizedXiLadder, k, p, m]
 
+/-- Recentered phase-normalized ladder around the finite midpoint.
+In this coordinate, the involution becomes `z ↦ -z`. -/
+def operatorCenteredPhaseNormalizedXiLadder (N : ℕ) (z : ℂ) : ℂ :=
+  operatorPhaseNormalizedXiLadder N (z + operatorCenterMidpoint N)
+
+/-- Finite-level evenness of the recentered normalized ladder. -/
+theorem operatorCenteredPhaseNormalizedXiLadder_even
+    (N : ℕ) (z : ℂ) :
+    operatorCenteredPhaseNormalizedXiLadder N (-z) =
+      operatorCenteredPhaseNormalizedXiLadder N z := by
+  let m : ℂ := operatorCenterMidpoint N
+  have hmap : (-z) + m = operatorCenterInvolutionArg N (z + m) := by
+    simp [operatorCenterInvolutionArg, operatorCenterMidpoint, m]
+    ring
+  calc
+    operatorCenteredPhaseNormalizedXiLadder N (-z)
+        = operatorPhaseNormalizedXiLadder N ((-z) + m) := by
+            simp [operatorCenteredPhaseNormalizedXiLadder, m]
+    _ = operatorPhaseNormalizedXiLadder N (operatorCenterInvolutionArg N (z + m)) := by
+          rw [hmap]
+    _ = operatorPhaseNormalizedXiLadder N (z + m) := by
+          simpa using (operatorPhaseNormalizedXiLadder_centered_involution N (z + m))
+    _ = operatorCenteredPhaseNormalizedXiLadder N z := by
+          simp [operatorCenteredPhaseNormalizedXiLadder, m]
+
+/-- Local-uniform limits of the recentered normalized ladder inherit exact
+even symmetry. -/
+theorem even_limit_of_locallyUniform_operatorCenteredPhaseNormalized
+    {F : ℂ → ℂ}
+    (hconv : TendstoLocallyUniformly operatorCenteredPhaseNormalizedXiLadder F
+      (Filter.atTop : Filter ℕ)) :
+    ∀ z : ℂ, F (-z) = F z := by
+  intro z
+  have hconvOn : TendstoLocallyUniformlyOn operatorCenteredPhaseNormalizedXiLadder F
+      (Filter.atTop : Filter ℕ) Set.univ := by
+    simpa [tendstoLocallyUniformlyOn_univ] using hconv
+  have hz : Filter.Tendsto (fun N : ℕ => operatorCenteredPhaseNormalizedXiLadder N z)
+      (Filter.atTop : Filter ℕ) (𝓝 (F z)) :=
+    hconvOn.tendsto_at (by simp)
+  have hneg : Filter.Tendsto (fun N : ℕ => operatorCenteredPhaseNormalizedXiLadder N (-z))
+      (Filter.atTop : Filter ℕ) (𝓝 (F (-z))) :=
+    hconvOn.tendsto_at (by simp)
+  have hseqEq :
+      (fun N : ℕ => operatorCenteredPhaseNormalizedXiLadder N (-z)) =
+        (fun N : ℕ => operatorCenteredPhaseNormalizedXiLadder N z) := by
+    funext N
+    exact operatorCenteredPhaseNormalizedXiLadder_even N z
+  have hnegOnZ :
+      Filter.Tendsto (fun N : ℕ => operatorCenteredPhaseNormalizedXiLadder N z)
+        (Filter.atTop : Filter ℕ) (𝓝 (F (-z))) := by
+    simpa [hseqEq] using hneg
+  exact (tendsto_nhds_unique hz hnegOnZ).symm
+
 /-- Telescoping norm control for complex sequences over a finite step range. -/
 theorem norm_sub_le_sum_steps
     (f : ℕ → ℂ) (n m : ℕ) :
