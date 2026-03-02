@@ -491,6 +491,199 @@ def OperatorWeylCenterGap : Prop :=
   ∀ M : ℕ, ∀ i : Fin (M + 1),
     |operatorEigenvalues M i - ((i.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11
 
+/-- Permutation-invariant center-gap contract for the structural operator lane.
+At each finite level, eigenvalues can be bijectively paired with diagonal centers
+`k + 29/16` with uniform gap `≤ 12/11`; no index ordering assumption is used. -/
+def OperatorCenterGapPermutationInvariant : Prop :=
+  ∀ M : ℕ, ∃ σ : Fin (M + 1) ≃ Fin (M + 1), ∀ i : Fin (M + 1),
+    |operatorEigenvalues M i - (((σ i).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11
+
+/-- Ordered Weyl center-gap implies the permutation-invariant center-gap
+via the identity permutation. -/
+theorem operatorCenterGapPermutationInvariant_of_weylCenterGap
+    (hW : OperatorWeylCenterGap) :
+    OperatorCenterGapPermutationInvariant := by
+  intro M
+  refine ⟨Equiv.refl _, ?_⟩
+  intro i
+  simpa using hW M i
+
+/-- Structural center on the real axis for the `k`-th Gershgorin lane. -/
+def operatorCenterAt (k : ℕ) : ℝ := (k : ℝ) + (29 : ℝ) / 16
+
+/-- Gershgorin-window separation geometry used by the Sturm route:
+if indices are at least `3` apart (forward), radius-`12/11` windows are strictly separated. -/
+theorem operatorCenterWindow_separated_of_add_three_le
+    {k l : ℕ} (hkl : k + 3 ≤ l) :
+    operatorCenterAt k + (12 : ℝ) / 11 < operatorCenterAt l - (12 : ℝ) / 11 := by
+  have hklR : (k : ℝ) + 3 ≤ (l : ℝ) := by
+    exact_mod_cast hkl
+  unfold operatorCenterAt
+  linarith
+
+/-- Finite-level eigenvalue counting function below threshold `x` on the concrete lane. -/
+def operatorEigenvalueCountLE (M : ℕ) (x : ℝ) : ℕ :=
+  Finset.card
+    ((Finset.univ : Finset (Fin (M + 1))).filter
+      (fun i => operatorEigenvalues M i ≤ x))
+
+/-- Finite-level center counting function below threshold `x` for structural centers
+`k + 29/16`. -/
+def operatorCenterCountLE (M : ℕ) (x : ℝ) : ℕ :=
+  Finset.card
+    ((Finset.univ : Finset (Fin (M + 1))).filter
+      (fun i => operatorCenterAt i.1 ≤ x))
+
+/-- Sturm-route contract:
+eigenvalue and center counting functions agree at every threshold. This is the
+counting-surface targeted to discharge permutation-invariant center-gap without
+index-order assumptions. -/
+def OperatorSturmCountContract : Prop :=
+  ∀ M : ℕ, ∀ x : ℝ, operatorEigenvalueCountLE M x = operatorCenterCountLE M x
+
+/-- Structural center-window occupancy bound:
+for fixed center index `k`, at most three structural centers can lie in the
+radius-`12/11` window around `operatorCenterAt k` (namely indices `k-1,k,k+1`
+after clipping to the finite level). -/
+theorem operatorCenterWindow_card_le_three
+    (M : ℕ) (k : Fin (M + 1)) :
+    ((Finset.univ : Finset (Fin (M + 1))).filter
+      (fun i => operatorCenterAt k.1 - (12 : ℝ) / 11 < operatorCenterAt i.1 ∧
+        operatorCenterAt i.1 ≤ operatorCenterAt k.1 + (12 : ℝ) / 11)).card ≤ 3 := by
+  classical
+  let Sfin : Finset (Fin (M + 1)) :=
+    (Finset.univ : Finset (Fin (M + 1))).filter
+      (fun i => operatorCenterAt k.1 - (12 : ℝ) / 11 < operatorCenterAt i.1 ∧
+        operatorCenterAt i.1 ≤ operatorCenterAt k.1 + (12 : ℝ) / 11)
+  let Snat : Finset ℕ := (Finset.range (M + 1)).filter
+    (fun n => k.1 - 1 ≤ n ∧ n ≤ k.1 + 1)
+  have hcard_img : (Sfin.image (fun i : Fin (M + 1) => i.1)).card = Sfin.card := by
+    simpa using Finset.card_image_of_injOn (s := Sfin) (f := fun i : Fin (M + 1) => i.1)
+      (by intro a ha b hb hab; exact Fin.ext hab)
+  have hsubset_img : (Sfin.image (fun i : Fin (M + 1) => i.1)) ⊆ Snat := by
+    intro n hn
+    rcases Finset.mem_image.mp hn with ⟨i, hiS, rfl⟩
+    have hiS' := Finset.mem_filter.mp hiS
+    have hiRange : i.1 < M + 1 := i.2
+    have hlow : operatorCenterAt k.1 - (12 : ℝ) / 11 < operatorCenterAt i.1 := hiS'.2.1
+    have hup : operatorCenterAt i.1 ≤ operatorCenterAt k.1 + (12 : ℝ) / 11 := hiS'.2.2
+    have hlt2 : (i.1 : ℝ) < (k.1 : ℝ) + 2 := by
+      unfold operatorCenterAt at hup
+      linarith
+    have hi_upper : i.1 ≤ k.1 + 1 := Nat.lt_succ_iff.mp (by exact_mod_cast hlt2)
+    have hklt2 : (k.1 : ℝ) < (i.1 : ℝ) + 2 := by
+      unfold operatorCenterAt at hlow
+      linarith
+    have hk_le : k.1 ≤ i.1 + 1 := Nat.lt_succ_iff.mp (by exact_mod_cast hklt2)
+    have hi_lower : k.1 - 1 ≤ i.1 := by omega
+    exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hiRange, ⟨hi_lower, hi_upper⟩⟩
+  have hSnat_card_le_three : Snat.card ≤ 3 := by
+    let T : Finset ℕ := {k.1 - 1, k.1, k.1 + 1}
+    have hsubset_T : Snat ⊆ T := by
+      intro n hn
+      have hn' := Finset.mem_filter.mp hn
+      have hkn : k.1 - 1 ≤ n := hn'.2.1
+      have hnk : n ≤ k.1 + 1 := hn'.2.2
+      have hcases : n = k.1 - 1 ∨ n = k.1 ∨ n = k.1 + 1 := by
+        omega
+      rcases hcases with rfl | rfl | rfl <;> simp [T]
+    exact le_trans (Finset.card_le_card hsubset_T)
+      (by simpa [T] using (Finset.card_le_three (a := k.1 - 1) (b := k.1) (c := k.1 + 1)))
+  calc
+    ((Finset.univ : Finset (Fin (M + 1))).filter
+        (fun i => operatorCenterAt k.1 - (12 : ℝ) / 11 < operatorCenterAt i.1 ∧
+          operatorCenterAt i.1 ≤ operatorCenterAt k.1 + (12 : ℝ) / 11)).card
+        = Sfin.card := by rfl
+    _ = (Sfin.image (fun i : Fin (M + 1) => i.1)).card := hcard_img.symm
+    _ ≤ Snat.card := Finset.card_le_card hsubset_img
+    _ ≤ 3 := hSnat_card_le_three
+
+/-- Center counting-function window bound:
+the finite-level center counting function can increase by at most `3` across the
+`±12/11` window around any structural center. -/
+theorem operatorCenterCountLE_window_sub_le_three
+    (M : ℕ) (k : Fin (M + 1)) :
+    operatorCenterCountLE M (operatorCenterAt k.1 + (12 : ℝ) / 11) -
+      operatorCenterCountLE M (operatorCenterAt k.1 - (12 : ℝ) / 11) ≤ 3 := by
+  classical
+  let upper : ℝ := operatorCenterAt k.1 + (12 : ℝ) / 11
+  let lower : ℝ := operatorCenterAt k.1 - (12 : ℝ) / 11
+  let U : Finset (Fin (M + 1)) :=
+    (Finset.univ : Finset (Fin (M + 1))).filter (fun i => operatorCenterAt i.1 ≤ upper)
+  let L : Finset (Fin (M + 1)) :=
+    (Finset.univ : Finset (Fin (M + 1))).filter (fun i => operatorCenterAt i.1 ≤ lower)
+  have hlower_le_upper : lower ≤ upper := by
+    unfold lower upper
+    linarith
+  have hsubset : L ⊆ U := by
+    intro i hiL
+    have hiL' := Finset.mem_filter.mp hiL
+    exact Finset.mem_filter.mpr ⟨hiL'.1, le_trans hiL'.2 hlower_le_upper⟩
+  have hU_sdiff_L :
+      (U \ L) =
+        ((Finset.univ : Finset (Fin (M + 1))).filter
+          (fun i => lower < operatorCenterAt i.1 ∧ operatorCenterAt i.1 ≤ upper)) := by
+    ext i
+    constructor
+    · intro hi
+      have hiU : i ∈ U := (Finset.mem_sdiff.mp hi).1
+      have hiNotL : i ∉ L := (Finset.mem_sdiff.mp hi).2
+      have hiU' := Finset.mem_filter.mp hiU
+      have hiUpper : operatorCenterAt i.1 ≤ upper := hiU'.2
+      have hiLowerNot : ¬ operatorCenterAt i.1 ≤ lower := by
+        intro hle
+        exact hiNotL (Finset.mem_filter.mpr ⟨by simpa using hiU'.1, hle⟩)
+      have hiLower : lower < operatorCenterAt i.1 := lt_of_not_ge hiLowerNot
+      exact Finset.mem_filter.mpr ⟨by simpa using hiU'.1, ⟨hiLower, hiUpper⟩⟩
+    · intro hi
+      have hi' := Finset.mem_filter.mp hi
+      have hiLower : lower < operatorCenterAt i.1 := hi'.2.1
+      have hiUpper : operatorCenterAt i.1 ≤ upper := hi'.2.2
+      have hiU : i ∈ U := Finset.mem_filter.mpr ⟨by simpa using hi'.1, hiUpper⟩
+      have hiNotL : i ∉ L := by
+        intro hiL
+        have hiL' := Finset.mem_filter.mp hiL
+        exact (not_le_of_gt hiLower) hiL'.2
+      exact Finset.mem_sdiff.mpr ⟨hiU, hiNotL⟩
+  have hcard_sub :
+      operatorCenterCountLE M upper - operatorCenterCountLE M lower = (U \ L).card := by
+    unfold operatorCenterCountLE U L
+    have hcard : (U \ L).card = U.card - (L ∩ U).card := by
+      simpa [Finset.inter_comm] using (Finset.card_sdiff (s := L) (t := U))
+    have hinter : L ∩ U = L := by
+      exact Finset.inter_eq_left.mpr hsubset
+    rw [hcard, hinter]
+  have hwindow_card :
+      ((Finset.univ : Finset (Fin (M + 1))).filter
+        (fun i => lower < operatorCenterAt i.1 ∧ operatorCenterAt i.1 ≤ upper)).card ≤ 3 := by
+    simpa [lower, upper] using operatorCenterWindow_card_le_three M k
+  calc
+    operatorCenterCountLE M upper - operatorCenterCountLE M lower
+        = (U \ L).card := hcard_sub
+    _ = ((Finset.univ : Finset (Fin (M + 1))).filter
+          (fun i => lower < operatorCenterAt i.1 ∧ operatorCenterAt i.1 ≤ upper)).card := by
+          simpa [hU_sdiff_L]
+    _ ≤ 3 := hwindow_card
+
+/-- Sturm-route counting consequence:
+if eigenvalue and center counting functions agree at every threshold, then the
+eigenvalue counting function also increases by at most `3` across the structural
+`±12/11` window around each center. -/
+theorem operatorEigenvalueCountLE_window_sub_le_three_of_sturm
+    (hS : OperatorSturmCountContract) (M : ℕ) (k : Fin (M + 1)) :
+    operatorEigenvalueCountLE M (operatorCenterAt k.1 + (12 : ℝ) / 11) -
+      operatorEigenvalueCountLE M (operatorCenterAt k.1 - (12 : ℝ) / 11) ≤ 3 := by
+  have hUpper :
+      operatorEigenvalueCountLE M (operatorCenterAt k.1 + (12 : ℝ) / 11) =
+        operatorCenterCountLE M (operatorCenterAt k.1 + (12 : ℝ) / 11) := by
+    exact hS M (operatorCenterAt k.1 + (12 : ℝ) / 11)
+  have hLower :
+      operatorEigenvalueCountLE M (operatorCenterAt k.1 - (12 : ℝ) / 11) =
+        operatorCenterCountLE M (operatorCenterAt k.1 - (12 : ℝ) / 11) := by
+    exact hS M (operatorCenterAt k.1 - (12 : ℝ) / 11)
+  rw [hUpper, hLower]
+  exact operatorCenterCountLE_window_sub_le_three M k
+
 /-- The Weyl center-gap contract implies indexed linear growth of operator eigenvalues. -/
 theorem indexed_linear_growth_of_operatorWeylCenterGap
     (hW : OperatorWeylCenterGap) :
@@ -1755,14 +1948,132 @@ theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_indexed_linear_
     _ = Finset.sum (Finset.range (M + 1)) a := hsum_range
     _ ≤ ∑' n : ℕ, a n := hrange_le_tsum
 
+/-- Path-B finite-level full-spectrum bound under permutation-invariant center-gap:
+if at each level eigenvalues can be bijectively paired to diagonal centers
+`k + 29/16` with uniform gap `≤ 12/11`, then the complete inverse-square sum over
+`operatorSpecN M` is uniformly bounded in `M`. -/
+theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_centerGapPermutationInvariant
+    (hP : OperatorCenterGapPermutationInvariant) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
+  let a : ℕ → ℝ := fun n => (4 : ℝ) * ((1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ)))
+  have ha_nonneg : ∀ n : ℕ, 0 ≤ a n := by
+    intro n
+    dsimp [a]
+    positivity
+  have hsum_a : Summable a := by
+    have hbase0 : Summable (fun n : ℕ => (1 : ℝ) / ((n : ℝ) ^ (2 : ℕ))) :=
+      (Real.summable_one_div_nat_pow).2 (by norm_num)
+    have hshift : Summable (fun n : ℕ => (1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ))) := by
+      simpa [Nat.cast_add, add_assoc, add_comm, add_left_comm] using
+        (summable_nat_add_iff 1).2 hbase0
+    simpa [a] using hshift.mul_left (4 : ℝ)
+  refine ⟨∑' n : ℕ, a n, tsum_nonneg ha_nonneg, ?_⟩
+  intro M
+  classical
+  rcases hP M with ⟨σ, hσ⟩
+  have himage_le :
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ)))
+        ≤ Finset.sum Finset.univ
+            (fun i : Fin (M + 1) =>
+              (1 : ℝ) / (‖criticalLinePoint (operatorEigenvalues M i)‖ ^ (2 : ℕ))) := by
+    unfold operatorSpecN
+    simpa using
+      (Finset.sum_image_le_of_nonneg
+        (s := (Finset.univ : Finset (Fin (M + 1))))
+        (g := fun i : Fin (M + 1) => operatorEigenvalues M i)
+        (f := fun t : ℝ => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ)))
+        (by intro u hu; positivity))
+  have hindex_le :
+      Finset.sum Finset.univ
+          (fun i : Fin (M + 1) =>
+            (1 : ℝ) / (‖criticalLinePoint (operatorEigenvalues M i)‖ ^ (2 : ℕ)))
+        ≤ Finset.sum Finset.univ (fun i : Fin (M + 1) => a ((σ i).1)) := by
+    refine Finset.sum_le_sum (fun i _ => ?_)
+    let t : ℝ := operatorEigenvalues M i
+    let k : ℕ := (σ i).1
+    have hgap_i : |t - ((k : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+      simpa [t, k] using hσ i
+    have hpair := abs_le.mp hgap_i
+    have hlower :
+        (k : ℝ) + (127 : ℝ) / 176 ≤ t := by
+      have hconst : (k : ℝ) + (29 : ℝ) / 16 - (12 : ℝ) / 11
+          = (k : ℝ) + (127 : ℝ) / 176 := by
+        ring_nf
+      linarith [hpair.1, hconst]
+    have hhalf_le : (((k + 1 : ℕ) : ℝ) / 2) ≤ t := by
+      have hle_half : (((k + 1 : ℕ) : ℝ) / 2) ≤ (k : ℝ) + (1 : ℝ) / 2 := by
+        calc
+          (((k + 1 : ℕ) : ℝ) / 2)
+              = ((k : ℝ) + 1) / 2 := by norm_num [Nat.cast_add]
+          _ = (k : ℝ) / 2 + (1 : ℝ) / 2 := by ring
+          _ ≤ (k : ℝ) + (1 : ℝ) / 2 := by nlinarith
+      have hconst : (1 : ℝ) / 2 ≤ (127 : ℝ) / 176 := by norm_num
+      have hle_const : (k : ℝ) + (1 : ℝ) / 2 ≤ (k : ℝ) + (127 : ℝ) / 176 := by
+        simpa [add_assoc, add_comm, add_left_comm] using add_le_add_left hconst (k : ℝ)
+      exact le_trans (le_trans hle_half hle_const) hlower
+    have hnonneg_half : 0 ≤ (((k + 1 : ℕ) : ℝ) / 2) := by positivity
+    have hnonneg_t : 0 ≤ t := le_trans hnonneg_half hhalf_le
+    have hnorm_ge_t : t ≤ ‖criticalLinePoint t‖ := by
+      have him_abs : |(criticalLinePoint t).im| ≤ ‖criticalLinePoint t‖ :=
+        Complex.abs_im_le_norm (criticalLinePoint t)
+      have him_eq : |(criticalLinePoint t).im| = t := by
+        simpa [criticalLinePoint_im, abs_of_nonneg hnonneg_t]
+      simpa [him_eq] using him_abs
+    have hnorm_lower : (((k + 1 : ℕ) : ℝ) / 2) ≤ ‖criticalLinePoint t‖ :=
+      le_trans hhalf_le hnorm_ge_t
+    have hpow_lower :
+        ((((k + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ))
+          ≤ ‖criticalLinePoint t‖ ^ (2 : ℕ) := by
+      exact pow_le_pow_left₀ hnonneg_half hnorm_lower (2 : ℕ)
+    have hpow_half_pos : 0 < ((((k + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ)) := by
+      positivity
+    have hrecip :
+        (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))
+          ≤ (1 : ℝ) / ((((k + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ)) := by
+      exact one_div_le_one_div_of_le hpow_half_pos hpow_lower
+    have hk1_ne : (((k + 1 : ℕ) : ℝ)) ≠ 0 := by
+      exact_mod_cast Nat.succ_ne_zero k
+    have hrewrite :
+        (1 : ℝ) / ((((k + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ)) = a k := by
+      dsimp [a]
+      field_simp [hk1_ne]
+      ring
+    have hmain :
+        (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ)) ≤ a k := by
+      rw [← hrewrite]
+      exact hrecip
+    simpa [t, k] using hmain
+  have hsum_perm :
+      Finset.sum Finset.univ (fun i : Fin (M + 1) => a ((σ i).1))
+        = Finset.sum Finset.univ (fun i : Fin (M + 1) => a i.1) := by
+    simpa using (Equiv.sum_comp σ (fun i : Fin (M + 1) => a i.1))
+  have hsum_range :
+      Finset.sum Finset.univ (fun i : Fin (M + 1) => a i.1)
+        = Finset.sum (Finset.range (M + 1)) a := by
+    simpa using (Fin.sum_univ_eq_sum_range (f := fun n : ℕ => a n) (n := M + 1))
+  have hrange_le_tsum :
+      Finset.sum (Finset.range (M + 1)) a ≤ ∑' n : ℕ, a n := by
+    exact Summable.sum_le_tsum (s := Finset.range (M + 1)) (f := a)
+      (hs := by intro n hn; exact ha_nonneg n) hsum_a
+  calc
+    Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ)))
+        ≤ Finset.sum Finset.univ
+            (fun i : Fin (M + 1) =>
+              (1 : ℝ) / (‖criticalLinePoint (operatorEigenvalues M i)‖ ^ (2 : ℕ))) := himage_le
+    _ ≤ Finset.sum Finset.univ (fun i : Fin (M + 1) => a ((σ i).1)) := hindex_le
+    _ = Finset.sum Finset.univ (fun i : Fin (M + 1) => a i.1) := hsum_perm
+    _ = Finset.sum (Finset.range (M + 1)) a := hsum_range
+    _ ≤ ∑' n : ℕ, a n := hrange_le_tsum
+
 /-- One-assumption Weyl reduction:
 the Weyl center-gap contract directly yields the finite-level uniform inverse-square bound. -/
 theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_weylCenterGap
     (hW : OperatorWeylCenterGap) :
     ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
       Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
-  exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_indexed_linear_growth
-    (indexed_linear_growth_of_operatorWeylCenterGap hW)
+  exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_centerGapPermutationInvariant
+    (operatorCenterGapPermutationInvariant_of_weylCenterGap hW)
 
 /-- Cardinality growth control for the concrete operator spectral ladder. -/
 theorem card_operatorSpecN_le (N : ℕ) :
@@ -2101,6 +2412,27 @@ theorem mathlibRH_of_operator_hurwitzKernel_and_locallyUniform
     RiemannHypothesis := by
   exact mathlibRH_of_operator_hurwitz_zero_approx
     (operatorHurwitzTransfer_of_kernel hKernel hconv)
+
+/-- Named local-uniform convergence obligation on the concrete operator lane. -/
+def OperatorXiFiniteLocallyUniformConvergence : Prop :=
+  TendstoLocallyUniformly operatorXiFiniteLadder XiTarget
+    (Filter.atTop : Filter ℕ)
+
+/-- Named three-obligation RH surface on the concrete operator lane.
+1) permutation-invariant center-gap (summability geometry),
+2) Hurwitz kernel, and
+3) local-uniform convergence of the operator finite ladder to `XiTarget`. -/
+def OperatorRHThreeConditionalObligations : Prop :=
+  OperatorCenterGapPermutationInvariant ∧
+  OperatorHurwitzKernel ∧
+  OperatorXiFiniteLocallyUniformConvergence
+
+/-- RH closure from the named three-obligation surface. -/
+theorem mathlibRH_of_operator_three_conditional_obligations
+    (h3 : OperatorRHThreeConditionalObligations) :
+    RiemannHypothesis := by
+  rcases h3 with ⟨_hGap, hKernel, hConv⟩
+  exact mathlibRH_of_operator_hurwitzKernel_and_locallyUniform hKernel hConv
 
 /-- RH closure from the concrete operator Hurwitz kernel plus a summable
 nonnegative step profile and pointwise convergence to `XiTarget`. This packages
