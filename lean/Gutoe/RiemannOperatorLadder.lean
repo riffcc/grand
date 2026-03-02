@@ -7262,6 +7262,14 @@ theorem mathlibRH_of_operator_approxZero_via_hurwitz
   exact mathlibRH_of_operator_hurwitz_zero_approx
     (operatorHurwitz_of_operatorApproxZero hApprox0)
 
+/-- Final operator-lane entrypoint:
+once the concrete zero-tolerance approximation obligation is instantiated, RH
+follows immediately in one theorem application. -/
+theorem riemannHypothesis_of_operatorApproxZeroConvergence
+    (hApprox0 : OperatorApproxZeroConvergence) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_operator_approxZero_via_hurwitz hApprox0
+
 end
 
 end Gutoe.RiemannOperatorLadder
