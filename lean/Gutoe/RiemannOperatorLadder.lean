@@ -398,6 +398,54 @@ theorem XiFinite_operatorSpecN_reflectedFactors
           (fun t => s - criticalLinePoint ((structuralCenterQ (N + 1) : ℝ) - t)) := by
           simp [c]
 
+/-- Centered affine involution in the `s`-plane induced by the finite structural
+center at level `N`. -/
+def operatorCenterInvolutionArg (N : ℕ) (s : ℂ) : ℂ :=
+  ((1 : ℂ) + (structuralCenterQ (N + 1) : ℂ) * Complex.I) - s
+
+/-- The centered affine map is an involution. -/
+theorem operatorCenterInvolutionArg_involutive (N : ℕ) :
+    Function.Involutive (operatorCenterInvolutionArg N) := by
+  intro s
+  simp [operatorCenterInvolutionArg, sub_eq_add_neg, add_assoc, add_left_comm, add_comm]
+
+/-- Finite centered involution identity on the concrete operator ladder:
+reflecting `s` about the structural center line multiplies the finite product by
+the parity phase `(-1)^|spec_N|`. -/
+theorem XiFinite_operatorSpecN_centered_involution
+    (N : ℕ) (s : ℂ) :
+    XiFinite (operatorSpecN N) (operatorCenterInvolutionArg N s) =
+      (-1 : ℂ) ^ (operatorSpecN N).card * XiFinite (operatorSpecN N) s := by
+  classical
+  let c : ℝ := structuralCenterQ (N + 1)
+  calc
+    XiFinite (operatorSpecN N) (operatorCenterInvolutionArg N s)
+        = Finset.prod (operatorSpecN N)
+            (fun t => (((1 : ℂ) + (c : ℂ) * Complex.I) - s - criticalLinePoint t)) := by
+              simp [XiFinite, operatorCenterInvolutionArg, c]
+    _ = Finset.prod (operatorSpecN N)
+          (fun t => ((-1 : ℂ) * (s - criticalLinePoint (c - t)))) := by
+          refine Finset.prod_congr rfl ?_
+          intro t ht
+          simp [criticalLinePoint, c]
+          ring
+    _ = (Finset.prod (operatorSpecN N) (fun _t => (-1 : ℂ))) *
+          Finset.prod (operatorSpecN N) (fun t => (s - criticalLinePoint (c - t))) := by
+          simpa using
+            (Finset.prod_mul_distrib
+              (s := operatorSpecN N)
+              (f := fun _ : ℝ => (-1 : ℂ))
+              (g := fun t : ℝ => s - criticalLinePoint (c - t)))
+    _ = (-1 : ℂ) ^ (operatorSpecN N).card *
+          Finset.prod (operatorSpecN N) (fun t => (s - criticalLinePoint (c - t))) := by
+          simp
+    _ = (-1 : ℂ) ^ (operatorSpecN N).card * XiFinite (operatorSpecN N) s := by
+          have href :
+              XiFinite (operatorSpecN N) s =
+                Finset.prod (operatorSpecN N) (fun t => (s - criticalLinePoint (c - t))) := by
+            simpa [c] using (XiFinite_operatorSpecN_reflectedFactors N s)
+          rw [← href]
+
 /-- Operator-native finite ladder witness:
 each finite level list is exactly the real ordinates detected as operator
 eigenvalues for that level. -/
@@ -451,6 +499,26 @@ theorem mathlibRH_of_operator_enumerated_nontrivial_capture
 /-- Concrete operator finite-product ladder used in the convergence lane. -/
 def operatorXiFiniteLadder : ℕ → (ℂ → ℂ) :=
   XiFiniteLadder operatorSpecN
+
+/-- API-level centered involution identity for the concrete operator Xi ladder. -/
+theorem operatorXiFiniteLadder_centered_involution
+    (N : ℕ) (s : ℂ) :
+    operatorXiFiniteLadder N (operatorCenterInvolutionArg N s) =
+      (-1 : ℂ) ^ (operatorSpecN N).card * operatorXiFiniteLadder N s := by
+  simpa [operatorXiFiniteLadder, XiFiniteLadder] using
+    (XiFinite_operatorSpecN_centered_involution N s)
+
+/-- Centered involution preserves the norm of finite operator Xi products. -/
+theorem norm_operatorXiFiniteLadder_centered_involution
+    (N : ℕ) (s : ℂ) :
+    ‖operatorXiFiniteLadder N (operatorCenterInvolutionArg N s)‖ =
+      ‖operatorXiFiniteLadder N s‖ := by
+  calc
+    ‖operatorXiFiniteLadder N (operatorCenterInvolutionArg N s)‖
+        = ‖(-1 : ℂ) ^ (operatorSpecN N).card * operatorXiFiniteLadder N s‖ := by
+            rw [operatorXiFiniteLadder_centered_involution]
+    _ = ‖(-1 : ℂ) ^ (operatorSpecN N).card‖ * ‖operatorXiFiniteLadder N s‖ := norm_mul _ _
+    _ = ‖operatorXiFiniteLadder N s‖ := by simp
 
 /-- Telescoping norm control for complex sequences over a finite step range. -/
 theorem norm_sub_le_sum_steps
