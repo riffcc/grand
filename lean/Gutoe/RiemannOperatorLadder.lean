@@ -1341,13 +1341,29 @@ theorem operatorSturmStepCompatibility_of_edgeLock
           operatorSturmSign (operatorSturmP (M + 2) x) := (hEdgeLock M x).2 hBA
     split_ifs <;> omega
 
-/-- Finite-step preservation of the `±1` gap under minimal step-compatibility. -/
-theorem sturmCenter_gap_step_preserved_of_stepCompatibility
+/-- One-step `±1` gap preservation from local boundary exclusions.
+This is the induction-step core: assuming `|A-B| ≤ 1` at level `M`, the next
+gap stays within `±1` provided the two outward boundary patterns are excluded
+at this `(M,x)`. -/
+theorem sturmCenter_gap_step_preserved_of_boundary_exclusions
     (M : ℕ) (x : ℝ)
     (hGapM :
       operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
       operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1)
-    (hCompat : OperatorSturmStepCompatibility) :
+    (hUpper :
+      let A := operatorSturmSignVariationCount M x
+      let B := operatorCenterCountLE M x
+      let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                    operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+      let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+      A = B + 1 → ¬ (a = 1 ∧ b = 0))
+    (hLower :
+      let A := operatorSturmSignVariationCount M x
+      let B := operatorCenterCountLE M x
+      let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                    operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+      let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+      B = A + 1 → ¬ (b = 1 ∧ a = 0)) :
     operatorSturmSignVariationCount (M + 1) x ≤ operatorCenterCountLE (M + 1) x + 1 ∧
     operatorCenterCountLE (M + 1) x ≤ operatorSturmSignVariationCount (M + 1) x + 1 := by
   let A : ℕ := operatorSturmSignVariationCount M x
@@ -1363,25 +1379,25 @@ theorem sturmCenter_gap_step_preserved_of_stepCompatibility
   have hB' : operatorCenterCountLE (M + 1) x = B + b := by
     unfold B b
     simpa using operatorCenterCountLE_succ_eq_add_indicator M x
-  have ha_le_one : a ≤ 1 := by
+  have ha_cases : a = 0 ∨ a = 1 := by
     unfold a
-    split_ifs <;> omega
-  have hb_le_one : b ≤ 1 := by
+    split_ifs <;> simp
+  have hb_cases : b = 0 ∨ b = 1 := by
     unfold b
-    split_ifs <;> omega
-  have hA_le_B1 : A ≤ B + 1 := hGapM.1
-  have hB_le_A1 : B ≤ A + 1 := hGapM.2
-  have hCompatAB : A = B + 1 → a ≤ b := by
-    simpa [A, B, a, b] using (hCompat M x).1
-  have hCompatBA : B = A + 1 → b ≤ a := by
-    simpa [A, B, a, b] using (hCompat M x).2
+    split_ifs <;> simp
   have hA'_le_B'1 : A + a ≤ B + b + 1 := by
     by_cases hAB : A ≤ B
     · have hA_add : A + a ≤ B + a := Nat.add_le_add_right hAB a
       have hA_add' : A + a ≤ B + 1 := le_trans hA_add (by omega)
       exact le_trans hA_add' (by omega)
     · have hA_eq : A = B + 1 := by omega
-      have hab : a ≤ b := hCompatAB hA_eq
+      have hab : a ≤ b := by
+        rcases ha_cases with ha0 | ha1
+        · omega
+        · rcases hb_cases with hb0 | hb1
+          · exfalso
+            exact (hUpper hA_eq) ⟨ha1, hb0⟩
+          · omega
       have hA_add' : A + a ≤ B + b + 1 := by omega
       exact hA_add'
   have hB'_le_A'1 : B + b ≤ A + a + 1 := by
@@ -1390,12 +1406,31 @@ theorem sturmCenter_gap_step_preserved_of_stepCompatibility
       have hB_add' : B + b ≤ A + 1 := le_trans hB_add (by omega)
       exact le_trans hB_add' (by omega)
     · have hB_eq : B = A + 1 := by omega
-      have hba : b ≤ a := hCompatBA hB_eq
+      have hba : b ≤ a := by
+        rcases hb_cases with hb0 | hb1
+        · omega
+        · rcases ha_cases with ha0 | ha1
+          · exfalso
+            exact (hLower hB_eq) ⟨hb1, ha0⟩
+          · omega
       have hB_add' : B + b ≤ A + a + 1 := by omega
       exact hB_add'
   constructor
   · simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hA'_le_B'1
   · simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hB'_le_A'1
+
+/-- Finite-step preservation of the `±1` gap under minimal step-compatibility. -/
+theorem sturmCenter_gap_step_preserved_of_stepCompatibility
+    (M : ℕ) (x : ℝ)
+    (hGapM :
+      operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
+      operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1)
+    (hCompat : OperatorSturmStepCompatibility) :
+    operatorSturmSignVariationCount (M + 1) x ≤ operatorCenterCountLE (M + 1) x + 1 ∧
+    operatorCenterCountLE (M + 1) x ≤ operatorSturmSignVariationCount (M + 1) x + 1 := by
+  exact sturmCenter_gap_step_preserved_of_boundary_exclusions M x hGapM
+    (operatorSturm_forbid_upper_boundary_pattern_of_stepCompatibility hCompat M x)
+    (operatorSturm_forbid_lower_boundary_pattern_of_stepCompatibility hCompat M x)
 
 /-- Reduction theorem: if eigenvalue count equals Sturm sign-variation count and
 the edge-lock implications hold at every level, then the Sturm-route contract
