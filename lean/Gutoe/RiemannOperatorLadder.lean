@@ -4869,6 +4869,28 @@ theorem operatorEigenvaluesOrdered_reflect_index_lt_of_lt_centerHalf
     operatorEigenvaluesOrdered_index_lt_of_value_lt M hval
   exact ⟨j', hj', hjlt⟩
 
+/-- Reflected-partner index localization (upper-half case):
+if an ordered eigenvalue is strictly above the structural center half, then any
+reflected ordered partner lies strictly later in the antitone ordered lane. -/
+theorem operatorEigenvaluesOrdered_reflect_index_gt_of_gt_centerHalf
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1))))
+    (hHalf : (structuralCenterQ (M + 1) : ℝ) / 2 < operatorEigenvaluesOrdered M j) :
+    ∃ j' : Fin (Fintype.card (Fin (M + 1))),
+      operatorEigenvaluesOrdered M j' =
+        (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j ∧
+      j < j' := by
+  rcases operatorEigenvaluesOrdered_reflect_exists M j with ⟨j', hj'⟩
+  have hval : operatorEigenvaluesOrdered M j' < operatorEigenvaluesOrdered M j := by
+    calc
+      operatorEigenvaluesOrdered M j'
+          = (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j := by
+              simpa [hj']
+      _ < (structuralCenterQ (M + 1) : ℝ) / 2 := by linarith
+      _ < operatorEigenvaluesOrdered M j := hHalf
+  have hjlt : j < j' :=
+    operatorEigenvaluesOrdered_index_lt_of_value_lt M hval
+  exact ⟨j', hj', hjlt⟩
+
 /-- Set-level invariance of `operatorSpecSet` under center reflection. -/
 theorem operatorSpecSet_image_reflect_structuralCenter (N : ℕ) :
     (operatorSpecSet N).image (fun t => (structuralCenterQ (N + 1) : ℝ) - t) =
