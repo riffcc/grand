@@ -2793,6 +2793,73 @@ theorem operatorSameMinPlusOneNoPrevObligation_of_cliffordSameMinSymmetryContrac
   exact operatorSameMinPlusOneNoPrevObligation_of_plusOneAvailInSameMin
     (operatorPlusOneAvailInSameMin_of_cliffordSameMinSymmetryContract hCliff)
 
+/-- Step-1 style instantiation:
+Clifford same-min symmetry contract implies the explicit same-min `max>min`
+obligation. -/
+theorem operatorSameMinMaxAboveObligation_clifford
+    (hCliff : OperatorCliffordSameMinSymmetryContract) :
+    OperatorSameMinMaxAboveObligation := by
+  exact operatorMaxAboveInSameMin_of_cliffordSameMinSymmetryContract hCliff
+
+/-- Step-2 style instantiation:
+Clifford same-min symmetry contract implies the explicit same-min
+canonical-`min+1` no-prev obligation. -/
+theorem operatorSameMinPlusOneNoPrevObligation_clifford
+    (hCliff : OperatorCliffordSameMinSymmetryContract) :
+    OperatorSameMinPlusOneNoPrevObligation := by
+  exact operatorSameMinPlusOneNoPrevObligation_of_cliffordSameMinSymmetryContract
+    hCliff
+
+/-- Hodge/even-odd contract for the same-min branch.
+
+This names the minimal constructive payload expected from the Cl(1,3) parity
+lane: interior non-collapse (`0 < min`, `max < M`) and canonical `min+1`
+availability in every same-min branch. -/
+structure OperatorHodgeParityContract : Prop where
+  interiorInSameMin :
+    ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+    ∀ hjm1 : j - 1 < operatorGreedyCard M,
+      (∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) →
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+      0 < (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ∧
+      (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 < M
+  plusOneAvailInSameMin :
+    ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+    ∀ hjm1 : j - 1 < operatorGreedyCard M,
+      (∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) →
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+      ∃ c : Fin (M + 1),
+        c.1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+        c ∈ operatorGreedyAvailableNat M (j - 1)
+
+/-- Hodge parity contract instantiates the existing Clifford same-min symmetry
+contract surface. -/
+theorem operatorCliffordSameMinSymmetryContract_of_hodgeParity
+    (hHP : OperatorHodgeParityContract) :
+    OperatorCliffordSameMinSymmetryContract := by
+  refine ⟨hHP.interiorInSameMin, hHP.plusOneAvailInSameMin⟩
+
+/-- Step-1 explicit obligation directly from the Hodge parity contract. -/
+theorem operatorSameMinMaxAboveObligation_of_hodgeParity
+    (hHP : OperatorHodgeParityContract) :
+    OperatorSameMinMaxAboveObligation := by
+  exact operatorSameMinMaxAboveObligation_clifford
+    (operatorCliffordSameMinSymmetryContract_of_hodgeParity hHP)
+
+/-- Step-2 explicit obligation directly from the Hodge parity contract. -/
+theorem operatorSameMinPlusOneNoPrevObligation_of_hodgeParity
+    (hHP : OperatorHodgeParityContract) :
+    OperatorSameMinPlusOneNoPrevObligation := by
+  exact operatorSameMinPlusOneNoPrevObligation_clifford
+    (operatorCliffordSameMinSymmetryContract_of_hodgeParity hHP)
+
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
 center-gap contract holds. -/
@@ -6552,6 +6619,15 @@ theorem mathlibRH_of_clifford_and_overconstrained_endgame
   exact mathlibRH_of_clifford_operator_endgame
     (operatorCliffordRHEndgameObligation_of_clifford_and_overconstrained
       hCliff hEnd)
+
+/-- RH closure adapter from the Hodge parity contract plus the operator
+overconstrained endgame obligations. -/
+theorem mathlibRH_of_hodgeParity_and_overconstrained_endgame
+    (hHP : OperatorHodgeParityContract)
+    (hEnd : OperatorOverconstrainedEndgameObligation) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_clifford_and_overconstrained_endgame
+    (operatorCliffordSameMinSymmetryContract_of_hodgeParity hHP) hEnd
 
 /-- Single hard obligation once Hurwitz kernel is fixed:
 existence + uniqueness of the locally-uniform operator-ladder limit. -/
