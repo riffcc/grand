@@ -205,6 +205,67 @@ theorem norm_operatorXiFiniteLadder_le_pow_card_of_ordinate_bound
     (norm_XiFinite_le_pow_card_of_ordinate_bound
       (operatorSpecN N) s B hB)
 
+/-- The concrete operator spectral ladder at level `N` is nonempty. -/
+theorem operatorSpecN_nonempty (N : ℕ) :
+    (operatorSpecN N).Nonempty := by
+  classical
+  have huniv : (Finset.univ : Finset (Fin (N + 1))).Nonempty := Finset.univ_nonempty
+  rcases huniv with ⟨i, hi⟩
+  refine ⟨operatorEigenvalues N i, ?_⟩
+  exact Finset.mem_image.mpr ⟨i, hi, rfl⟩
+
+/-- Cardinality growth control for the concrete operator spectral ladder. -/
+theorem card_operatorSpecN_le (N : ℕ) :
+    (operatorSpecN N).card ≤ N + 1 := by
+  classical
+  unfold operatorSpecN
+  simpa using (Finset.card_image_le (f := operatorEigenvalues N) (s := Finset.univ))
+
+/-- There is always a finite ordinate envelope at each level `N`. -/
+theorem exists_operator_ordinate_envelope (N : ℕ) :
+    ∃ B : ℝ, 0 ≤ B ∧ ∀ t ∈ operatorSpecN N, ‖criticalLinePoint t‖ ≤ B := by
+  classical
+  let B :=
+    (operatorSpecN N).sup' (operatorSpecN_nonempty N) (fun t => ‖criticalLinePoint t‖)
+  refine ⟨B, ?_, ?_⟩
+  · rcases operatorSpecN_nonempty N with ⟨t0, ht0⟩
+    have ht0le : ‖criticalLinePoint t0‖ ≤ B := by
+      exact Finset.le_sup' (s := operatorSpecN N) (f := fun t => ‖criticalLinePoint t‖) ht0
+    exact le_trans (norm_nonneg _) ht0le
+  · intro t ht
+    exact Finset.le_sup' (s := operatorSpecN N) (f := fun t => ‖criticalLinePoint t‖) ht
+
+/-- Uniform closed-ball norm control at level `N` from an ordinate envelope. -/
+theorem norm_operatorXiFiniteLadder_le_on_closedBall
+    (N : ℕ) (R B : ℝ)
+    (hB0 : 0 ≤ B)
+    (hB : ∀ t ∈ operatorSpecN N, ‖criticalLinePoint t‖ ≤ B)
+    {s : ℂ} (hs : s ∈ Metric.closedBall (0 : ℂ) R) :
+    ‖operatorXiFiniteLadder N s‖ ≤ (R + B) ^ (operatorSpecN N).card := by
+  have hsR : ‖s‖ ≤ R := by
+    simpa [Metric.mem_closedBall, dist_eq_norm] using hs
+  have hbase_nonneg : 0 ≤ ‖s‖ + B := by
+    exact add_nonneg (norm_nonneg _) hB0
+  have hbase_le : ‖s‖ + B ≤ R + B := by
+    linarith [hsR]
+  have hpow_le :
+      (‖s‖ + B) ^ (operatorSpecN N).card ≤ (R + B) ^ (operatorSpecN N).card := by
+    exact pow_le_pow_left₀ hbase_nonneg hbase_le _
+  have hN :=
+    norm_operatorXiFiniteLadder_le_pow_card_of_ordinate_bound N s B hB
+  exact le_trans hN hpow_le
+
+/-- Existence form of uniform closed-ball operator control at level `N`. -/
+theorem exists_closedBall_uniform_operator_bound
+    (N : ℕ) (R : ℝ) :
+    ∃ B : ℝ, 0 ≤ B ∧
+      ∀ s ∈ Metric.closedBall (0 : ℂ) R,
+        ‖operatorXiFiniteLadder N s‖ ≤ (R + B) ^ (operatorSpecN N).card := by
+  rcases exists_operator_ordinate_envelope N with ⟨B, hB0, hB⟩
+  refine ⟨B, hB0, ?_⟩
+  intro s hs
+  exact norm_operatorXiFiniteLadder_le_on_closedBall N R B hB0 hB hs
+
 /-- Finite zero witnesses for the operator Xi ladder:
 every finite-level zero is exactly a critical-line point listed in `operatorSpecN N`. -/
 theorem finiteZeroWitness_operatorXiFiniteLadder :
