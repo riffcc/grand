@@ -950,6 +950,88 @@ theorem operatorCenterCandidatesOrdered_mem_iff_between_min_max
       (k := operatorEigenvalueOrderedCenterChoiceMax M j)
       (m := i) hmin_mem hmax_mem hi.1 hi.2
 
+/-- Index reflection on center indices `0..M`: `k ↦ M-k`. -/
+def operatorCenterIndexReflect
+    (M : ℕ) (k : Fin (M + 1)) : Fin (M + 1) :=
+  ⟨M - k.1, by
+    exact Nat.lt_succ_of_le (Nat.sub_le M k.1)⟩
+
+/-- Reflection on center indices is involutive. -/
+theorem operatorCenterIndexReflect_involutive
+    (M : ℕ) :
+    Function.Involutive (operatorCenterIndexReflect M) := by
+  intro k
+  apply Fin.ext
+  dsimp [operatorCenterIndexReflect]
+  omega
+
+/-- If two ordered eigenvalues are reflected about the structural center, then
+candidate-center membership transfers under index reflection `k ↦ M-k`. -/
+theorem operatorCenterCandidatesOrdered_mem_reflect_of_reflectedValue
+    (M : ℕ)
+    (j j' : Fin (Fintype.card (Fin (M + 1))))
+    (hRef :
+      operatorEigenvaluesOrdered M j' =
+        (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j)
+    (k : Fin (M + 1))
+    (hk : k ∈ operatorCenterCandidatesOrdered M j) :
+    operatorCenterIndexReflect M k ∈ operatorCenterCandidatesOrdered M j' := by
+  have hkAbs :
+      |operatorEigenvaluesOrdered M j - ((k.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 :=
+    (Finset.mem_filter.mp hk).2
+  have hCenter :
+      (structuralCenterQ (M + 1) : ℝ) -
+        (((operatorCenterIndexReflect M k).1 : ℝ) + (29 : ℝ) / 16) =
+      ((k.1 : ℝ) + (29 : ℝ) / 16) := by
+    change
+      (structuralCenterQ (M + 1) : ℝ) -
+        (((M - k.1 : ℕ) : ℝ) + (29 : ℝ) / 16) =
+      ((k.1 : ℝ) + (29 : ℝ) / 16)
+    have hk_le : k.1 ≤ M := Nat.le_of_lt_succ k.2
+    rw [Nat.cast_sub hk_le]
+    norm_num [structuralCenterQ, timelikeOffsetQ]
+    ring
+  have hAbs' :
+      |operatorEigenvaluesOrdered M j' -
+          ((((operatorCenterIndexReflect M k).1 : ℝ) + (29 : ℝ) / 16))| ≤ (12 : ℝ) / 11 := by
+    rw [hRef]
+    have hEqExpr :
+        (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j -
+          ((((operatorCenterIndexReflect M k).1 : ℝ) + (29 : ℝ) / 16)) =
+        - (operatorEigenvaluesOrdered M j - ((k.1 : ℝ) + (29 : ℝ) / 16)) := by
+      linarith [hCenter]
+    rw [hEqExpr]
+    simpa [abs_neg, abs_sub_comm] using hkAbs
+  exact Finset.mem_filter.mpr ⟨by simp [operatorCenterIndexReflect], hAbs'⟩
+
+/-- Candidate-center reflection transport is bidirectional for reflected ordered
+eigenvalue values. -/
+theorem operatorCenterCandidatesOrdered_mem_reflect_iff_of_reflectedValue
+    (M : ℕ)
+    (j j' : Fin (Fintype.card (Fin (M + 1))))
+    (hRef :
+      operatorEigenvaluesOrdered M j' =
+        (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j)
+    (k : Fin (M + 1)) :
+    k ∈ operatorCenterCandidatesOrdered M j ↔
+      operatorCenterIndexReflect M k ∈ operatorCenterCandidatesOrdered M j' := by
+  constructor
+  · intro hk
+    exact operatorCenterCandidatesOrdered_mem_reflect_of_reflectedValue M j j' hRef k hk
+  · intro hk
+    have hRef' :
+        operatorEigenvaluesOrdered M j =
+          (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j' := by
+      linarith [hRef]
+    have hk' :
+        operatorCenterIndexReflect M k ∈ operatorCenterCandidatesOrdered M j' := hk
+    have hback :
+        operatorCenterIndexReflect M (operatorCenterIndexReflect M k) ∈
+          operatorCenterCandidatesOrdered M j := by
+      exact operatorCenterCandidatesOrdered_mem_reflect_of_reflectedValue
+        M j' j hRef' (operatorCenterIndexReflect M k) hk'
+    simpa [operatorCenterIndexReflect_involutive M k] using hback
+
 /-- The ordered candidate interval has width at most `2` in index units. -/
 theorem operatorCenterCandidatesOrdered_width_le_two
     (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
