@@ -38,6 +38,31 @@ theorem ordinateIsEigenvalue_iff_mem_operatorSpecSet
       (f := Matrix.mulVecLin (structuralRiemannMatrixC (N + 1)))
       (μ := (t : ℂ)))
 
+/-- The structural complex matrix is Hermitian (real symmetric data lifted to `ℂ`). -/
+theorem structuralRiemannMatrixC_isHermitian (n : ℕ) :
+    (structuralRiemannMatrixC n).IsHermitian := by
+  ext i j
+  simp [Matrix.conjTranspose, structuralRiemannMatrixC]
+  exact (structuralRiemannMatrix_isSymm n).apply i j
+
+/-- Canonical real eigenvalue enumerator for the structural matrix at level `N+1`. -/
+noncomputable def operatorEigenvalues (N : ℕ) : Fin (N + 1) → ℝ :=
+  (structuralRiemannMatrixC_isHermitian (N + 1)).eigenvalues
+
+/-- Concrete operator-derived finite ladder:
+real eigenvalues of the structural Hermitian matrix at each level `N+1`. -/
+noncomputable def operatorSpecN (N : ℕ) : Finset ℝ :=
+  Finset.univ.image (operatorEigenvalues N)
+
+/-- Every ordinate listed in `operatorSpecN N` lies in the real spectrum of
+the structural matrix at level `N+1`. -/
+theorem mem_operatorSpecN_implies_mem_real_spectrum
+    {N : ℕ} {t : ℝ} (ht : t ∈ operatorSpecN N) :
+    t ∈ spectrum ℝ (structuralRiemannMatrixC (N + 1)) := by
+  rcases Finset.mem_image.mp ht with ⟨i, _hi, rfl⟩
+  exact Matrix.IsHermitian.eigenvalues_mem_spectrum_real
+    (hA := structuralRiemannMatrixC_isHermitian (N + 1)) i
+
 /-- Operator-native finite ladder witness:
 each finite level list is exactly the real ordinates detected as operator
 eigenvalues for that level. -/
@@ -57,6 +82,11 @@ def OperatorSetNontrivialCapture : Prop :=
     s ≠ 1 →
     ∃ N : ℕ, ∃ t : ℝ, t ∈ operatorSpecSet N ∧ s = criticalLinePoint t
 
+/-- Concrete finite-ladder capture obligation specialized to the
+operator-constructed `operatorSpecN`. -/
+def OperatorEnumeratedNontrivialCapture : Prop :=
+  RiemannNontrivialLadderZeroCapture operatorSpecN
+
 /-- Operator-native equivalence of endgame capture surfaces. -/
 theorem operator_nontrivial_capture_iff_xiTarget_capture
     (hOp : OperatorSpecLadder) :
@@ -70,6 +100,13 @@ theorem mathlibRH_of_operator_nontrivial_capture
     (hCap : OperatorNontrivialCapture hOp) :
     RiemannHypothesis := by
   exact mathlibRH_of_nontrivial_capture hOp.specN hCap
+
+/-- RH closure directly from nontrivial capture over the concrete operator
+eigenvalue ladder `operatorSpecN`. -/
+theorem mathlibRH_of_operator_enumerated_nontrivial_capture
+    (hCap : OperatorEnumeratedNontrivialCapture) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_nontrivial_capture operatorSpecN hCap
 
 /-- A finite operator-ladder witness immediately yields set-capture on the
 explicit operator spectrum lane. -/
