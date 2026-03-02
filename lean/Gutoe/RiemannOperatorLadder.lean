@@ -243,6 +243,26 @@ theorem operatorApproximateCapture_of_hurwitzTransfer
   refine ⟨N, t, (mem_operatorSpecN_iff_mem_operatorSpecSet N t).1 htN, ?_⟩
   simpa [hzEq] using hdist
 
+/-- The approximate-capture surface also yields the Hurwitz-output surface:
+finite-level critical-line witnesses are concrete finite-product zeros. -/
+theorem operatorHurwitzTransfer_of_operatorApproximateCapture
+    (hApprox : OperatorApproximateCapture) :
+    OperatorHurwitzZeroApproxTransfer := by
+  intro s hsXi ε hε
+  rcases hApprox s hsXi ε hε with ⟨N, t, htSet, hdist⟩
+  have htN : t ∈ operatorSpecN N :=
+    (mem_operatorSpecN_iff_mem_operatorSpecSet N t).2 htSet
+  refine ⟨N, criticalLinePoint t, XiFinite_zero_of_mem (operatorSpecN N) htN, ?_⟩
+  simpa using hdist
+
+/-- Exact equivalence between the operator Hurwitz-output and approximate-capture
+surfaces. This isolates the remaining analytic gap to either form. -/
+theorem operatorHurwitz_iff_operatorApproximateCapture :
+    OperatorHurwitzZeroApproxTransfer ↔ OperatorApproximateCapture := by
+  constructor
+  · exact operatorApproximateCapture_of_hurwitzTransfer
+  · exact operatorHurwitzTransfer_of_operatorApproximateCapture
+
 /-- RH closure from approximate operator-spectrum capture.
 This is the exact interface needed for a future Hurwitz-style transfer lemma. -/
 theorem mathlibRH_of_operator_approximate_capture
@@ -276,6 +296,27 @@ theorem mathlibRH_of_operator_hurwitz_zero_approx
     RiemannHypothesis := by
   exact mathlibRH_of_operator_approximate_capture
     (operatorApproximateCapture_of_hurwitzTransfer hHurwitz)
+
+/-- Zero-tolerance operator approximation already implies the Hurwitz-output
+surface (with exact finite-level zeros at the target point itself). -/
+theorem operatorHurwitz_of_operatorApproxZero
+    (hApprox0 : OperatorApproxZeroConvergence) :
+    OperatorHurwitzZeroApproxTransfer := by
+  have hCapXi : XiTargetLadderZeroCapture operatorSpecN :=
+    (operatorApproxZero_iff_xiTarget_capture).1 hApprox0
+  intro s hsXi ε hε
+  rcases hCapXi s hsXi with ⟨N, t, htN, hsEq⟩
+  refine ⟨N, criticalLinePoint t, XiFinite_zero_of_mem (operatorSpecN N) htN, ?_⟩
+  subst hsEq
+  simpa using hε
+
+/-- RH closure from the zero-tolerance operator approximation routed through
+the Hurwitz-output surface. -/
+theorem mathlibRH_of_operator_approxZero_via_hurwitz
+    (hApprox0 : OperatorApproxZeroConvergence) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_operator_hurwitz_zero_approx
+    (operatorHurwitz_of_operatorApproxZero hApprox0)
 
 end
 
