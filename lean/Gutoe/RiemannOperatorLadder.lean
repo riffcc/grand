@@ -1082,6 +1082,26 @@ def OperatorHurwitzZeroApproxTransfer : Prop :=
     ∃ N : ℕ, ∃ z : ℂ,
       XiFinite (operatorSpecN N) z = 0 ∧ ‖s - z‖ < ε
 
+/-- Concrete operator-lane Hurwitz kernel obligation. -/
+def OperatorHurwitzKernel : Prop :=
+  HurwitzZeroApproxKernel XiTarget operatorXiFiniteLadder
+
+/-- Instantiation of the abstract Hurwitz kernel on the concrete operator lane:
+all regularity/nonvanishing side conditions are discharged from existing lemmas. -/
+theorem operatorHurwitzTransfer_of_kernel
+    (hKernel : OperatorHurwitzKernel)
+    (hconv : TendstoLocallyUniformly operatorXiFiniteLadder XiTarget
+      (Filter.atTop : Filter ℕ)) :
+    OperatorHurwitzZeroApproxTransfer := by
+  exact hurwitzTransfer_of_kernel
+    (Xi := XiTarget)
+    (XiN := operatorXiFiniteLadder)
+    hKernel
+    hconv
+    differentiable_operatorXiFiniteLadder
+    (fun s hs => differentiableAt_XiTarget_of_zero hs)
+    xiFinite_operatorSpecN_zero_ne
+
 /-- The operator Hurwitz-output surface implies the internal approximate-capture
 surface used by the RH closure theorem. -/
 theorem operatorApproximateCapture_of_hurwitzTransfer
@@ -1151,6 +1171,16 @@ theorem mathlibRH_of_operator_hurwitz_zero_approx
     RiemannHypothesis := by
   exact mathlibRH_of_operator_approximate_capture
     (operatorApproximateCapture_of_hurwitzTransfer hHurwitz)
+
+/-- RH closure from the instantiated concrete operator Hurwitz kernel plus
+local-uniform convergence. -/
+theorem mathlibRH_of_operator_hurwitzKernel_and_locallyUniform
+    (hKernel : OperatorHurwitzKernel)
+    (hconv : TendstoLocallyUniformly operatorXiFiniteLadder XiTarget
+      (Filter.atTop : Filter ℕ)) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_operator_hurwitz_zero_approx
+    (operatorHurwitzTransfer_of_kernel hKernel hconv)
 
 /-- Zero-tolerance operator approximation already implies the Hurwitz-output
 surface (with exact finite-level zeros at the target point itself). -/
