@@ -2922,8 +2922,16 @@ theorem operatorSameMinMaxAboveObligation_of_hodgeParity
 theorem operatorSameMinPlusOneNoPrevObligation_of_hodgeParity
     (hHP : OperatorHodgeParityContract) :
     OperatorSameMinPlusOneNoPrevObligation := by
-  exact operatorSameMinPlusOneNoPrevObligation_clifford
-    (operatorCliffordSameMinSymmetryContract_of_hodgeParity hHP)
+  intro M j hj hjpos hjm1 hPrefix hSameMin c hcEq i hi
+  rcases hHP.plusOneAvailInSameMin M j hj hjpos hjm1 hPrefix hSameMin with
+    ⟨c', hc'Eq, hc'Avail⟩
+  have hcc' : c = c' := by
+    apply Fin.ext
+    omega
+  have hAvail : c ∈ operatorGreedyAvailableNat M (j - 1) := by
+    simpa [hcc'] using hc'Avail
+  exact (operatorAvailable_mem_iff_no_prev M (j - 1) (Nat.le_of_lt hjm1) c).1
+    hAvail i hi
 
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
