@@ -588,6 +588,43 @@ noncomputable def operatorEigenvalueOrderedCenterChoice
     (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) : Fin (M + 1) :=
   Classical.choose (operatorEigenvalueOrdered_exists_center_gap_real_le_twelve_over_eleven M j)
 
+/-- Ordered-lane candidate center set at index `j`. -/
+def operatorCenterCandidatesOrdered
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) : Finset (Fin (M + 1)) :=
+  (Finset.univ : Finset (Fin (M + 1))).filter
+    (fun k =>
+      |operatorEigenvaluesOrdered M j - ((k.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11)
+
+/-- The ordered-lane candidate set is nonempty (Gershgorin witness). -/
+theorem operatorCenterCandidatesOrdered_nonempty
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    (operatorCenterCandidatesOrdered M j).Nonempty := by
+  rcases operatorEigenvalueOrdered_exists_center_gap_real_le_twelve_over_eleven M j with ⟨k, hk⟩
+  refine ⟨k, ?_⟩
+  exact Finset.mem_filter.mpr ⟨Finset.mem_univ k, hk⟩
+
+/-- Canonical deterministic ordered-lane center selector: pick the maximal
+admissible candidate center index. -/
+noncomputable def operatorEigenvalueOrderedCenterChoiceMax
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) : Fin (M + 1) :=
+  (operatorCenterCandidatesOrdered M j).max' (operatorCenterCandidatesOrdered_nonempty M j)
+
+/-- Membership certificate for the maximal ordered-lane center choice. -/
+theorem operatorEigenvalueOrderedCenterChoiceMax_mem
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    operatorEigenvalueOrderedCenterChoiceMax M j ∈ operatorCenterCandidatesOrdered M j := by
+  exact Finset.max'_mem (operatorCenterCandidatesOrdered M j)
+    (operatorCenterCandidatesOrdered_nonempty M j)
+
+/-- Gap certificate for the maximal ordered-lane center choice. -/
+theorem operatorEigenvalueOrderedCenterChoiceMax_spec
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    |operatorEigenvaluesOrdered M j
+      - (((operatorEigenvalueOrderedCenterChoiceMax M j).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+  have hmem : operatorEigenvalueOrderedCenterChoiceMax M j ∈ operatorCenterCandidatesOrdered M j :=
+    operatorEigenvalueOrderedCenterChoiceMax_mem M j
+  exact (Finset.mem_filter.mp hmem).2
+
 /-- Gap certificate for the chosen ordered-lane center index. -/
 theorem operatorEigenvalueOrderedCenterChoice_spec
     (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
@@ -596,25 +633,27 @@ theorem operatorEigenvalueOrderedCenterChoice_spec
   exact Classical.choose_spec
     (operatorEigenvalueOrdered_exists_center_gap_real_le_twelve_over_eleven M j)
 
-/-- Ordered-lane jump exclusion:
-for `i < j`, the chosen center index cannot increase by `3` or more. -/
-theorem operatorEigenvalueOrderedCenterChoice_no_up_jump_three
+/-- Generic ordered-lane jump exclusion:
+for any center selector satisfying the `12/11` gap spec, indices cannot jump up
+by `3` or more along the ordered eigenvalue lane. -/
+theorem operatorEigenvalueOrdered_no_up_jump_three_of_spec
     (M : ℕ)
+    (f : Fin (Fintype.card (Fin (M + 1))) → Fin (M + 1))
+    (hSpec : ∀ j : Fin (Fintype.card (Fin (M + 1))),
+      |operatorEigenvaluesOrdered M j - (((f j).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11)
     {i j : Fin (Fintype.card (Fin (M + 1)))} (hij : i < j)
-    (hjump :
-      (operatorEigenvalueOrderedCenterChoice M i).1 + 3
-        ≤ (operatorEigenvalueOrderedCenterChoice M j).1) :
+    (hjump : (f i).1 + 3 ≤ (f j).1) :
     False := by
-  let ki : ℕ := (operatorEigenvalueOrderedCenterChoice M i).1
-  let kj : ℕ := (operatorEigenvalueOrderedCenterChoice M j).1
+  let ki : ℕ := (f i).1
+  let kj : ℕ := (f j).1
   let ci : ℝ := (ki : ℝ) + (29 : ℝ) / 16
   let cj : ℝ := (kj : ℝ) + (29 : ℝ) / 16
   have hgi :
       |operatorEigenvaluesOrdered M i - ci| ≤ (12 : ℝ) / 11 := by
-    simpa [ki, ci] using operatorEigenvalueOrderedCenterChoice_spec M i
+    simpa [ki, ci] using hSpec i
   have hgj :
       |operatorEigenvaluesOrdered M j - cj| ≤ (12 : ℝ) / 11 := by
-    simpa [kj, cj] using operatorEigenvalueOrderedCenterChoice_spec M j
+    simpa [kj, cj] using hSpec j
   have hi_upper : operatorEigenvaluesOrdered M i ≤ ci + (12 : ℝ) / 11 := by
     linarith [(abs_le.mp hgi).2]
   have hj_lower : cj - (12 : ℝ) / 11 ≤ operatorEigenvaluesOrdered M j := by
@@ -630,6 +669,33 @@ theorem operatorEigenvalueOrderedCenterChoice_no_up_jump_three
   have hanti := operatorEigenvaluesOrdered_antitone M
   have hle : operatorEigenvaluesOrdered M j ≤ operatorEigenvaluesOrdered M i := hanti hij.le
   exact not_lt_of_ge hle hlt
+
+/-- Ordered-lane jump exclusion:
+for `i < j`, the chosen center index cannot increase by `3` or more. -/
+theorem operatorEigenvalueOrderedCenterChoice_no_up_jump_three
+    (M : ℕ)
+    {i j : Fin (Fintype.card (Fin (M + 1)))} (hij : i < j)
+    (hjump :
+      (operatorEigenvalueOrderedCenterChoice M i).1 + 3
+        ≤ (operatorEigenvalueOrderedCenterChoice M j).1) :
+    False := by
+  exact operatorEigenvalueOrdered_no_up_jump_three_of_spec M
+    (f := operatorEigenvalueOrderedCenterChoice M)
+    (hSpec := operatorEigenvalueOrderedCenterChoice_spec M)
+    hij hjump
+
+/-- Ordered-lane jump exclusion for the canonical maximal center selector. -/
+theorem operatorEigenvalueOrderedCenterChoiceMax_no_up_jump_three
+    (M : ℕ)
+    {i j : Fin (Fintype.card (Fin (M + 1)))} (hij : i < j)
+    (hjump :
+      (operatorEigenvalueOrderedCenterChoiceMax M i).1 + 3
+        ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1) :
+    False := by
+  exact operatorEigenvalueOrdered_no_up_jump_three_of_spec M
+    (f := operatorEigenvalueOrderedCenterChoiceMax M)
+    (hSpec := operatorEigenvalueOrderedCenterChoiceMax_spec M)
+    hij hjump
 
 /-- Hall-style finite-level center-gap condition:
 every finite subfamily of eigenvalue candidate-center sets has union cardinality
