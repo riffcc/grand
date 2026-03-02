@@ -2573,6 +2573,20 @@ def OperatorSameMinPlusOneNoPrevObligation : Prop :=
         (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 →
       ∀ i : ℕ, i < (j - 1) → operatorGreedyChoiceNat M i ≠ c
 
+/-- Final same-min structural branch obligation:
+in each same-min branch, predecessor candidate interval is non-singleton
+(`max(j-1) > min(j-1)`). -/
+def OperatorSameMinMaxAboveObligation : Prop :=
+  ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+  ∀ hjm1 : j - 1 < operatorGreedyCard M,
+    (∀ k : ℕ, ∀ hk : k < j,
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+        operatorGreedyAvailableNat M k) →
+    (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+    (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+      (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1
+
 /-- Bridge: same-min `min+1` availability implies the explicit no-previous-pick
 obligation for canonical `min+1`. -/
 theorem operatorSameMinPlusOneNoPrevObligation_of_plusOneAvailInSameMin
@@ -2668,6 +2682,16 @@ theorem operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sam
   have hAvail : c ∈ operatorGreedyAvailableNat M (j - 1) :=
     (hAvailIff).2 hNoPrev
   exact ⟨c, hcEq, hAvail⟩
+
+/-- Packaged center-gap closure from the two explicit same-min endgame
+obligations: non-singleton same-min branch plus canonical `min+1` no-prev. -/
+theorem operatorCenterGapPermutationInvariant_of_sameMinEndgameObligations
+    (hMaxAboveInSameMin : OperatorSameMinMaxAboveObligation)
+    (hNoPrevPlusOneInSameMin : OperatorSameMinPlusOneNoPrevObligation) :
+    OperatorCenterGapPermutationInvariant := by
+  exact
+    operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sameMin_plusOneNoPrev_and_maxAbove
+      hMaxAboveInSameMin hNoPrevPlusOneInSameMin
 
 /-- Geometric-algebraic same-min symmetry contract (Clifford-lane interface):
 in every same-min branch, the predecessor candidate interval is interior
@@ -6389,6 +6413,20 @@ theorem mathlibRH_of_operator_three_conditional_obligations
   exact mathlibRH_of_operator_two_conditional_obligations
     (operator_two_conditional_obligations_of_three h3)
 
+/-- RH closure adapter from:
+1) explicit same-min endgame obligations, and
+2) the minimal operator two-obligation surface. -/
+theorem mathlibRH_of_sameMinEndgame_and_two_conditional
+    (hMaxAboveInSameMin : OperatorSameMinMaxAboveObligation)
+    (hNoPrevPlusOneInSameMin : OperatorSameMinPlusOneNoPrevObligation)
+    (h2 : OperatorRHTwoConditionalObligations) :
+    RiemannHypothesis := by
+  rcases h2 with ⟨hKernel, hConv⟩
+  have hGap : OperatorCenterGapPermutationInvariant :=
+    operatorCenterGapPermutationInvariant_of_sameMinEndgameObligations
+      hMaxAboveInSameMin hNoPrevPlusOneInSameMin
+  exact mathlibRH_of_operator_three_conditional_obligations ⟨hGap, hKernel, hConv⟩
+
 /-- Full Clifford-operator endgame bundle:
 1) Clifford same-min symmetry contract (geometry lane),
 2) concrete operator Hurwitz kernel, and
@@ -6477,6 +6515,21 @@ theorem mathlibRH_of_operator_overconstrained_endgame
   rcases hEnd with ⟨hKernel, hExist, hUnique⟩
   exact mathlibRH_of_operator_hurwitzKernel_and_limitExists_uniqueness
     hKernel hExist hUnique
+
+/-- RH closure adapter from:
+1) explicit same-min endgame obligations, and
+2) operator overconstrained endgame obligations. -/
+theorem mathlibRH_of_sameMinEndgame_and_overconstrained
+    (hMaxAboveInSameMin : OperatorSameMinMaxAboveObligation)
+    (hNoPrevPlusOneInSameMin : OperatorSameMinPlusOneNoPrevObligation)
+    (hEnd : OperatorOverconstrainedEndgameObligation) :
+    RiemannHypothesis := by
+  rcases hEnd with ⟨hKernel, hExist, hUnique⟩
+  have hConv : OperatorXiFiniteLocallyUniformConvergence :=
+    operatorXiFiniteLocallyUniformConvergence_of_limitExists_and_uniqueness
+      hExist hUnique
+  exact mathlibRH_of_sameMinEndgame_and_two_conditional
+    hMaxAboveInSameMin hNoPrevPlusOneInSameMin ⟨hKernel, hConv⟩
 
 /-- Obligation instantiator: Clifford same-min symmetry plus the operator
 overconstrained endgame obligations instantiate the Clifford RH endgame bundle. -/
