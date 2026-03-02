@@ -2557,6 +2557,55 @@ theorem operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sam
       ⟨c, hcEq, _hcCand, hcAvail⟩
     exact ⟨c, hcEq, hcAvail⟩
 
+/-- Final constructive seam (explicit form):
+in each same-min branch, no earlier greedy step picks the canonical center
+`min(j-1)+1`. -/
+def OperatorSameMinPlusOneNoPrevObligation : Prop :=
+  ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+  ∀ hjm1 : j - 1 < operatorGreedyCard M,
+    (∀ k : ℕ, ∀ hk : k < j,
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+        operatorGreedyAvailableNat M k) →
+    (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+    ∀ c : Fin (M + 1),
+      c.1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 →
+      ∀ i : ℕ, i < (j - 1) → operatorGreedyChoiceNat M i ≠ c
+
+/-- Endgame closure from the explicit final seam:
+if same-min branches satisfy `max(j-1)>min(j-1)` and the no-previous-pick
+obligation for canonical `min+1`, then the greedy route closes
+`OperatorCenterGapPermutationInvariant`. -/
+theorem operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sameMin_plusOneNoPrev_and_maxAbove
+    (hMaxAboveInSameMin :
+      ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      ∀ hjm1 : j - 1 < operatorGreedyCard M,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+          (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1)
+    (hNoPrevPlusOneInSameMin : OperatorSameMinPlusOneNoPrevObligation) :
+    OperatorCenterGapPermutationInvariant := by
+  refine operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sameMin_plusOneAvail_and_maxAbove
+    hMaxAboveInSameMin ?_
+  intro M j hj hjpos hjm1 hPrefix hSameMin
+  have hMaxAbove :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+        (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 :=
+    hMaxAboveInSameMin M j hj hjpos hjm1 hPrefix hSameMin
+  rcases operatorPlusOneAvail_iff_no_prev_choice_of_min_lt_max M j hjm1 hMaxAbove with
+    ⟨c, hcEq, hAvailIff⟩
+  have hNoPrev :
+      ∀ i : ℕ, i < (j - 1) → operatorGreedyChoiceNat M i ≠ c :=
+    hNoPrevPlusOneInSameMin M j hj hjpos hjm1 hPrefix hSameMin c hcEq
+  have hAvail : c ∈ operatorGreedyAvailableNat M (j - 1) :=
+    (hAvailIff).2 hNoPrev
+  exact ⟨c, hcEq, hAvail⟩
+
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
 center-gap contract holds. -/
