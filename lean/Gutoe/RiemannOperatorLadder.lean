@@ -446,6 +446,41 @@ theorem XiFinite_operatorSpecN_centered_involution
             simpa [c] using (XiFinite_operatorSpecN_reflectedFactors N s)
           rw [← href]
 
+/-- Midpoint of the centered involution in the `s`-plane at finite level `N`. -/
+def operatorCenterMidpoint (N : ℕ) : ℂ :=
+  ((1 : ℂ) + (structuralCenterQ (N + 1) : ℂ) * Complex.I) / 2
+
+/-- `(-1)^k` depends only on parity (`k mod 2`). -/
+theorem negOne_pow_eq_negOne_pow_mod2 (k : ℕ) :
+    (-1 : ℂ) ^ k = (-1 : ℂ) ^ (k % 2) := by
+  have hkdecomp : k = k % 2 + 2 * (k / 2) := by
+    simpa [Nat.add_comm, Nat.mul_comm] using (Nat.mod_add_div k 2).symm
+  calc
+    (-1 : ℂ) ^ k = (-1 : ℂ) ^ (k % 2 + 2 * (k / 2)) := by
+      exact congrArg (fun n : ℕ => (-1 : ℂ) ^ n) hkdecomp
+    _ = (-1 : ℂ) ^ (2 * (k / 2)) * (-1 : ℂ) ^ (k % 2) := by
+      rw [Nat.add_comm, pow_add]
+    _ = (-1 : ℂ) ^ (k % 2) := by
+      simp [pow_mul]
+
+/-- Mod-2 parity square for `-1` is always `1`. -/
+theorem negOne_pow_mod2_mul_self (k : ℕ) :
+    (-1 : ℂ) ^ (k % 2) * (-1 : ℂ) ^ (k % 2) = 1 := by
+  rcases Nat.mod_two_eq_zero_or_one k with h0 | h1
+  · simp [h0]
+  · simp [h1]
+
+/-- Parity cancellation identity:
+the mod-2 correction exactly cancels the finite-level parity phase. -/
+theorem negOne_pow_mod2_mul_pow_card_cancel (k : ℕ) :
+    (-1 : ℂ) ^ (k % 2) * (-1 : ℂ) ^ k = 1 := by
+  have hk : (-1 : ℂ) ^ k = (-1 : ℂ) ^ (k % 2) :=
+    negOne_pow_eq_negOne_pow_mod2 k
+  calc
+    (-1 : ℂ) ^ (k % 2) * (-1 : ℂ) ^ k
+        = (-1 : ℂ) ^ (k % 2) * (-1 : ℂ) ^ (k % 2) := by rw [hk]
+    _ = 1 := negOne_pow_mod2_mul_self k
+
 /-- Operator-native finite ladder witness:
 each finite level list is exactly the real ordinates detected as operator
 eigenvalues for that level. -/
@@ -519,6 +554,46 @@ theorem norm_operatorXiFiniteLadder_centered_involution
             rw [operatorXiFiniteLadder_centered_involution]
     _ = ‖(-1 : ℂ) ^ (operatorSpecN N).card‖ * ‖operatorXiFiniteLadder N s‖ := norm_mul _ _
     _ = ‖operatorXiFiniteLadder N s‖ := by simp
+
+/-- Phase-normalized finite operator Xi ladder:
+the parity correction removes the `(-1)^|specN|` phase from centered involution. -/
+def operatorPhaseNormalizedXiLadder (N : ℕ) (s : ℂ) : ℂ :=
+  (s - operatorCenterMidpoint N) ^ ((operatorSpecN N).card % 2) * operatorXiFiniteLadder N s
+
+/-- Strict centered involution after phase normalization. -/
+theorem operatorPhaseNormalizedXiLadder_centered_involution
+    (N : ℕ) (s : ℂ) :
+    operatorPhaseNormalizedXiLadder N (operatorCenterInvolutionArg N s) =
+      operatorPhaseNormalizedXiLadder N s := by
+  let k : ℕ := (operatorSpecN N).card
+  let p : ℕ := k % 2
+  let m : ℂ := operatorCenterMidpoint N
+  have haff :
+      operatorCenterInvolutionArg N s - m = (-1 : ℂ) * (s - m) := by
+    simp [operatorCenterInvolutionArg, operatorCenterMidpoint, m]
+    ring
+  have hpow :
+      (operatorCenterInvolutionArg N s - m) ^ p =
+        (-1 : ℂ) ^ p * (s - m) ^ p := by
+    rw [haff, mul_pow]
+  have hXi :
+      operatorXiFiniteLadder N (operatorCenterInvolutionArg N s) =
+        (-1 : ℂ) ^ k * operatorXiFiniteLadder N s := by
+    simpa [k] using (operatorXiFiniteLadder_centered_involution N s)
+  calc
+    operatorPhaseNormalizedXiLadder N (operatorCenterInvolutionArg N s)
+        = (operatorCenterInvolutionArg N s - m) ^ p *
+            operatorXiFiniteLadder N (operatorCenterInvolutionArg N s) := by
+              simp [operatorPhaseNormalizedXiLadder, k, p, m]
+    _ = ((-1 : ℂ) ^ p * (s - m) ^ p) *
+          ((-1 : ℂ) ^ k * operatorXiFiniteLadder N s) := by rw [hpow, hXi]
+    _ = (((-1 : ℂ) ^ p * (-1 : ℂ) ^ k) * ((s - m) ^ p * operatorXiFiniteLadder N s)) := by
+          ring
+    _ = (s - m) ^ p * operatorXiFiniteLadder N s := by
+          rw [negOne_pow_mod2_mul_pow_card_cancel k]
+          simp
+    _ = operatorPhaseNormalizedXiLadder N s := by
+          simp [operatorPhaseNormalizedXiLadder, k, p, m]
 
 /-- Telescoping norm control for complex sequences over a finite step range. -/
 theorem norm_sub_le_sum_steps
