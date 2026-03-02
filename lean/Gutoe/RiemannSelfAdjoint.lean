@@ -76,6 +76,15 @@ def structuralRiemannMatrix (n : ℕ) : Matrix (Fin n) (Fin n) ℚ :=
     else
       0
 
+/-- Reversal+parity conjugation action on finite matrices. -/
+def revParityConjugateMatrix (n : ℕ) (A : Matrix (Fin n) (Fin n) ℚ) :
+    Matrix (Fin n) (Fin n) ℚ :=
+  fun i j => finParitySignQ i * A (Fin.rev i) (Fin.rev j) * finParitySignQ j
+
+/-- Center matrix at finite level `n` (constant diagonal, zero off-diagonal). -/
+def structuralCenterMatrix (n : ℕ) : Matrix (Fin n) (Fin n) ℚ :=
+  fun i j => if i = j then structuralCenterQ n else 0
+
 /-- Finite self-adjointness proxy in this rational matrix lane. -/
 def finiteSelfAdjoint {n : ℕ} (A : Matrix (Fin n) (Fin n) ℚ) : Prop := A.IsSymm
 
@@ -223,5 +232,29 @@ theorem structuralRiemannMatrix_rev_parity_balance
             finParitySignQ i * structuralRiemannMatrix n (Fin.rev i) (Fin.rev j) * finParitySignQ j
             = 0 := by simp [hAij0, hArev0]
         _ = if i = j then structuralCenterQ n else 0 := by simp [hij]
+
+/-- Matrix-form reversal/parity balance identity:
+`A + T(A) = C`, where `A` is the structural tridiagonal operator,
+`T` is reversal/parity conjugation, and `C` is the center matrix. -/
+theorem structuralRiemannMatrix_matrix_balance (n : ℕ) :
+    structuralRiemannMatrix n +
+      revParityConjugateMatrix n (structuralRiemannMatrix n)
+      = structuralCenterMatrix n := by
+  ext i j
+  simpa [revParityConjugateMatrix, structuralCenterMatrix]
+    using structuralRiemannMatrix_rev_parity_balance n i j
+
+/-- Equivalent rearranged matrix identity:
+`T(A) = C - A` for the structural operator. -/
+theorem structuralRiemannMatrix_revParity_eq_center_sub (n : ℕ) :
+    revParityConjugateMatrix n (structuralRiemannMatrix n)
+      = structuralCenterMatrix n - structuralRiemannMatrix n := by
+  ext i j
+  have h := structuralRiemannMatrix_rev_parity_balance n i j
+  have h' :
+      finParitySignQ i * structuralRiemannMatrix n (Fin.rev i) (Fin.rev j) * finParitySignQ j
+        = (if i = j then structuralCenterQ n else 0) - structuralRiemannMatrix n i j := by
+    linarith
+  simpa [revParityConjugateMatrix, structuralCenterMatrix, sub_eq_add_neg] using h'
 
 end Gutoe.RiemannSelfAdjoint

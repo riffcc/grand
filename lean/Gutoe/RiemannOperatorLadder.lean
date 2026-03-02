@@ -26,6 +26,15 @@ open scoped Topology BigOperators
 def structuralRiemannMatrixC (n : ℕ) : Matrix (Fin n) (Fin n) ℂ :=
   fun i j => (structuralRiemannMatrix n i j : ℂ)
 
+/-- Complex reversal/parity conjugation action on finite matrices. -/
+def revParityConjugateMatrixC (n : ℕ) (A : Matrix (Fin n) (Fin n) ℂ) :
+    Matrix (Fin n) (Fin n) ℂ :=
+  fun i j => (finParitySignQ i : ℂ) * A (Fin.rev i) (Fin.rev j) * (finParitySignQ j : ℂ)
+
+/-- Complex center matrix associated to the finite-level structural center. -/
+def structuralCenterMatrixC (n : ℕ) : Matrix (Fin n) (Fin n) ℂ :=
+  fun i j => if i = j then (structuralCenterQ n : ℂ) else 0
+
 /-- Endomorphism induced by the structural matrix on coordinate vectors. -/
 def structuralRiemannEnd (n : ℕ) : Module.End ℂ (Fin n → ℂ) :=
   Matrix.mulVecLin (structuralRiemannMatrixC n)
@@ -51,6 +60,41 @@ theorem structuralRiemannMatrixC_isHermitian (n : ℕ) :
   ext i j
   simp [Matrix.conjTranspose, structuralRiemannMatrixC]
   exact (structuralRiemannMatrix_isSymm n).apply i j
+
+/-- Complex-lifted matrix balance identity:
+`A + T(A) = C`, where `A` is the structural matrix, `T` is reversal/parity
+conjugation, and `C` is the center matrix. -/
+theorem structuralRiemannMatrixC_matrix_balance (n : ℕ) :
+    structuralRiemannMatrixC n +
+      revParityConjugateMatrixC n (structuralRiemannMatrixC n)
+      = structuralCenterMatrixC n := by
+  ext i j
+  by_cases hij : i = j
+  · subst hij
+    have hq :
+        structuralRiemannMatrix n i i +
+          finParitySignQ i * structuralRiemannMatrix n (Fin.rev i) (Fin.rev i) * finParitySignQ i
+            = structuralCenterQ n := by
+      simpa using structuralRiemannMatrix_rev_parity_balance n i i
+    have hqC :
+        (structuralRiemannMatrix n i i : ℂ) +
+          (finParitySignQ i : ℂ) * (structuralRiemannMatrix n (Fin.rev i) (Fin.rev i) : ℂ) *
+            (finParitySignQ i : ℂ)
+            = (structuralCenterQ n : ℂ) := by
+      exact_mod_cast hq
+    simpa [structuralRiemannMatrixC, revParityConjugateMatrixC, structuralCenterMatrixC] using hqC
+  · have hq :
+      structuralRiemannMatrix n i j +
+        finParitySignQ i * structuralRiemannMatrix n (Fin.rev i) (Fin.rev j) * finParitySignQ j
+          = 0 := by
+      simpa [hij] using structuralRiemannMatrix_rev_parity_balance n i j
+    have hqC :
+      (structuralRiemannMatrix n i j : ℂ) +
+        (finParitySignQ i : ℂ) * (structuralRiemannMatrix n (Fin.rev i) (Fin.rev j) : ℂ) *
+          (finParitySignQ j : ℂ)
+          = 0 := by
+      exact_mod_cast hq
+    simpa [structuralRiemannMatrixC, revParityConjugateMatrixC, structuralCenterMatrixC, hij] using hqC
 
 /-- Canonical real eigenvalue enumerator for the structural matrix at level `N+1`. -/
 noncomputable def operatorEigenvalues (N : ℕ) : Fin (N + 1) → ℝ :=
