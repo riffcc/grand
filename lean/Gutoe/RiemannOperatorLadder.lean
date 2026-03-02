@@ -2894,6 +2894,27 @@ def OperatorSameMinPayloadObligation : Prop :=
           (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
         c ∈ operatorGreedyAvailableNat M (j - 1))
 
+/-- The explicit same-min payload obligation is exactly the two-field geometric
+same-min symmetry surface (`interior`, `min+1 available`). -/
+theorem operatorCliffordSameMinSymmetryContract_of_sameMinPayloadObligation
+    (hPayload : OperatorSameMinPayloadObligation) :
+    OperatorCliffordSameMinSymmetryContract := by
+  exact hPayload
+
+/-- Conversely, the geometric same-min symmetry surface directly provides the
+explicit same-min payload obligation. -/
+theorem operatorSameMinPayloadObligation_of_cliffordSameMinSymmetryContract
+    (hCliff : OperatorCliffordSameMinSymmetryContract) :
+    OperatorSameMinPayloadObligation := by
+  exact hCliff
+
+/-- Any instantiated Hodge parity contract immediately provides the explicit
+same-min payload obligation. -/
+theorem operatorSameMinPayloadObligation_of_hodgeParity
+    (hHP : OperatorHodgeParityContract) :
+    OperatorSameMinPayloadObligation := by
+  exact ⟨hHP.interiorInSameMin, hHP.plusOneAvailInSameMin⟩
+
 /-- Constructor: the Hodge parity contract is exactly the concrete operator
 symmetry core plus the same-min branch payload. -/
 theorem operatorHodgeParityContract_of_core_and_sameMinPayload
