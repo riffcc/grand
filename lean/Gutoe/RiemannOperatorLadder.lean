@@ -535,6 +535,60 @@ theorem mathlibRH_of_operator_enumerated_nontrivial_capture
 def operatorXiFiniteLadder : ℕ → (ℂ → ℂ) :=
   XiFiniteLadder operatorSpecN
 
+/-- Concrete operator Hadamard-normalized finite-product ladder. -/
+def operatorXiFiniteHadamardLadder : ℕ → (ℂ → ℂ) :=
+  fun N => XiFiniteHadamard (operatorSpecN N)
+
+/-- One-step Hadamard increment bound specialized to the concrete operator lane
+when adding a fresh ordinate to the level-`N` spectrum. -/
+theorem norm_operatorXiFiniteHadamard_insert_sub_le
+    (N : ℕ) {t : ℝ} (ht : t ∉ operatorSpecN N) (s : ℂ) :
+    ‖XiFiniteHadamard (insert t (operatorSpecN N)) s
+      - operatorXiFiniteHadamardLadder N s‖ ≤
+      ‖hadamardFactor t s - 1‖ * ‖operatorXiFiniteHadamardLadder N s‖ := by
+  simpa [operatorXiFiniteHadamardLadder] using
+    (norm_XiFiniteHadamard_insert_sub_le (operatorSpecN N) ht s)
+
+/-- One-step Hadamard increment bound with explicit second-order control,
+specialized to the concrete operator lane. -/
+theorem norm_operatorXiFiniteHadamard_insert_sub_le_three_mul_sq
+    (N : ℕ) {t : ℝ} (ht : t ∉ operatorSpecN N) (s : ℂ)
+    (hz : ‖s / criticalLinePoint t‖ ≤ 1) :
+    ‖XiFiniteHadamard (insert t (operatorSpecN N)) s
+      - operatorXiFiniteHadamardLadder N s‖ ≤
+      (3 * ‖s / criticalLinePoint t‖ ^ 2) * ‖operatorXiFiniteHadamardLadder N s‖ := by
+  simpa [operatorXiFiniteHadamardLadder] using
+    (norm_XiFiniteHadamard_insert_sub_le_three_mul_sq (operatorSpecN N) ht s hz)
+
+/-- Canonical quadratic majorant profile for Hadamard-step increments. -/
+def hadamardQuadraticProfile (R M c : ℝ) : ℕ → ℝ :=
+  fun n => (3 * (R / (c * (n + 1 : ℝ))) ^ (2 : ℕ)) * M
+
+/-- Summability of the canonical quadratic Hadamard profile. -/
+theorem summable_hadamardQuadraticProfile
+    (R M c : ℝ) (hc : c ≠ 0) :
+    Summable (hadamardQuadraticProfile R M c) := by
+  unfold hadamardQuadraticProfile
+  have hbase : Summable (fun n : ℕ => (1 : ℝ) / ((n : ℝ) ^ (2 : ℕ))) :=
+    (Real.summable_one_div_nat_pow).2 (by norm_num)
+  have hshift : Summable (fun n : ℕ => (1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ))) := by
+    simpa [Nat.cast_add, add_assoc, add_comm, add_left_comm] using
+      (summable_nat_add_iff 1).2 hbase
+  have hcongr :
+      (fun n : ℕ => (3 * (R / (c * (n + 1 : ℝ))) ^ (2 : ℕ)) * M)
+        = (fun n : ℕ =>
+            ((3 * (R / c) ^ (2 : ℕ)) * M) *
+              ((1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ)))) := by
+    funext n
+    have hn1 : ((n + 1 : ℕ) : ℝ) ≠ 0 := by
+      exact_mod_cast Nat.succ_ne_zero n
+    have hnc : c * (((n + 1 : ℕ) : ℝ)) ≠ 0 := mul_ne_zero hc hn1
+    field_simp [hc, hn1, hnc]
+    norm_num [Nat.cast_add] at *
+    ring_nf
+  rw [hcongr]
+  exact hshift.mul_left ((3 * (R / c) ^ (2 : ℕ)) * M)
+
 /-- API-level centered involution identity for the concrete operator Xi ladder. -/
 theorem operatorXiFiniteLadder_centered_involution
     (N : ℕ) (s : ℂ) :
@@ -1113,6 +1167,73 @@ theorem norm_operatorXiFinite_insert_sub_le
         Finset.prod (operatorSpecN N) (fun u => (‖s‖ + ‖criticalLinePoint u‖)) := by
   simpa [operatorXiFiniteLadder, XiFiniteLadder] using
     (norm_XiFinite_insert_sub_le (operatorSpecN N) ht s)
+
+/-- Concrete Hadamard step bound from an insert-step model plus linear lower growth
+of inserted ordinates and a uniform previous-level norm bound on the closed ball. -/
+theorem norm_operatorXiFiniteHadamard_step_le_profile_of_insert_linear_growth
+    (R M c : ℝ)
+    (hR0 : 0 ≤ R) (hM0 : 0 ≤ M) (hc0 : 0 < c) (hRc : R ≤ c)
+    (hinsert : ∀ n : ℕ, ∃ t : ℝ,
+      t ∉ operatorSpecN n ∧
+      operatorSpecN (n + 1) = insert t (operatorSpecN n) ∧
+      c * (n + 1 : ℝ) ≤ ‖criticalLinePoint t‖)
+    (hprod : ∀ n : ℕ, ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      ‖operatorXiFiniteHadamardLadder n z‖ ≤ M) :
+    ∀ n : ℕ, ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      ‖operatorXiFiniteHadamardLadder (n + 1) z - operatorXiFiniteHadamardLadder n z‖
+        ≤ hadamardQuadraticProfile R M c n := by
+  intro n z hz
+  rcases hinsert n with ⟨t, htNot, hstepEq, hgrow⟩
+  have hsR : ‖z‖ ≤ R := by
+    simpa [Metric.mem_closedBall, dist_eq_norm] using hz
+  have hn1pos : (0 : ℝ) < (n + 1 : ℝ) := by
+    exact_mod_cast Nat.succ_pos n
+  have hcmul_pos : 0 < c * (n + 1 : ℝ) := mul_pos hc0 hn1pos
+  have hden_pos : 0 < ‖criticalLinePoint t‖ := lt_of_lt_of_le hcmul_pos hgrow
+  have hc_le_cmul : c ≤ c * (n + 1 : ℝ) := by
+    have h1le : (1 : ℝ) ≤ (n + 1 : ℝ) := by linarith [hn1pos]
+    nlinarith [hc0.le, h1le]
+  have hR_le_den : R ≤ ‖criticalLinePoint t‖ := by
+    exact le_trans hRc (le_trans hc_le_cmul hgrow)
+  have hratio_le_one : ‖z / criticalLinePoint t‖ ≤ 1 := by
+    rw [norm_div]
+    exact div_le_one_of_le₀ (by linarith [hsR, hR_le_den]) (norm_nonneg _)
+  have hratio_le_linear : ‖z / criticalLinePoint t‖ ≤ R / (c * (n + 1 : ℝ)) := by
+    rw [norm_div]
+    have hz_over_den : ‖z‖ / ‖criticalLinePoint t‖ ≤ R / ‖criticalLinePoint t‖ :=
+      div_le_div_of_nonneg_right hsR (norm_nonneg _)
+    have hR_div :
+        R / ‖criticalLinePoint t‖ ≤ R / (c * (n + 1 : ℝ)) := by
+      have hInv :
+          (1 / ‖criticalLinePoint t‖) ≤ (1 / (c * (n + 1 : ℝ))) := by
+        exact one_div_le_one_div_of_le hcmul_pos hgrow
+      simpa [div_eq_mul_inv, mul_assoc, mul_left_comm, mul_comm] using
+        (mul_le_mul_of_nonneg_left hInv hR0)
+    exact le_trans hz_over_den hR_div
+  have hratio_sq :
+      ‖z / criticalLinePoint t‖ ^ (2 : ℕ) ≤
+        (R / (c * (n + 1 : ℝ))) ^ (2 : ℕ) := by
+    nlinarith [norm_nonneg (z / criticalLinePoint t), hratio_le_linear]
+  have hstepInsert :
+      ‖XiFiniteHadamard (insert t (operatorSpecN n)) z - operatorXiFiniteHadamardLadder n z‖
+        ≤ (3 * ‖z / criticalLinePoint t‖ ^ (2 : ℕ)) * ‖operatorXiFiniteHadamardLadder n z‖ :=
+    norm_operatorXiFiniteHadamard_insert_sub_le_three_mul_sq n htNot z hratio_le_one
+  have hstepLadder :
+      ‖operatorXiFiniteHadamardLadder (n + 1) z - operatorXiFiniteHadamardLadder n z‖
+        ≤ (3 * ‖z / criticalLinePoint t‖ ^ (2 : ℕ)) * ‖operatorXiFiniteHadamardLadder n z‖ := by
+    simpa [operatorXiFiniteHadamardLadder, hstepEq] using hstepInsert
+  have hprodN : ‖operatorXiFiniteHadamardLadder n z‖ ≤ M := hprod n z hz
+  have hfac_nonneg : 0 ≤ 3 * ‖z / criticalLinePoint t‖ ^ (2 : ℕ) := by positivity
+  have hfac_le :
+      3 * ‖z / criticalLinePoint t‖ ^ (2 : ℕ) ≤
+        3 * (R / (c * (n + 1 : ℝ))) ^ (2 : ℕ) := by
+    gcongr
+  have hfacR_nonneg : 0 ≤ 3 * (R / (c * (n + 1 : ℝ))) ^ (2 : ℕ) := by positivity
+  have hmul_le :
+      (3 * ‖z / criticalLinePoint t‖ ^ (2 : ℕ)) * ‖operatorXiFiniteHadamardLadder n z‖ ≤
+        (3 * (R / (c * (n + 1 : ℝ))) ^ (2 : ℕ)) * M := by
+    exact mul_le_mul hfac_le hprodN (norm_nonneg _) hfacR_nonneg
+  exact le_trans hstepLadder (by simpa [hadamardQuadraticProfile] using hmul_le)
 
 /-- The concrete operator spectral ladder at level `N` is nonempty. -/
 theorem operatorSpecN_nonempty (N : ℕ) :
