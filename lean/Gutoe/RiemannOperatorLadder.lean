@@ -140,6 +140,118 @@ theorem structuralCenterMatrixC_revParity_fixed (n : ℕ) :
       _ = structuralCenterMatrixC n i j := by
             simp [structuralCenterMatrixC, hij]
 
+/-- Reversal permutation on `Fin n` as an equivalence. -/
+def revPerm (n : ℕ) : Equiv.Perm (Fin n) :=
+  Function.Involutive.toPerm Fin.rev (by intro i; simpa using Fin.rev_rev i)
+
+/-- Complex diagonal parity-sign matrix. -/
+def parityDiagC (n : ℕ) : Matrix (Fin n) (Fin n) ℂ :=
+  Matrix.diagonal (fun i => (finParitySignQ i : ℂ))
+
+/-- The parity-sign diagonal matrix is an involution. -/
+theorem parityDiagC_sq (n : ℕ) : parityDiagC n * parityDiagC n = 1 := by
+  ext i j
+  by_cases hij : i = j
+  · subst hij
+    have hsqC : ((finParitySignQ i * finParitySignQ i : ℚ) : ℂ) = 1 := by
+      exact_mod_cast (finParitySignQ_sq_one i)
+    calc
+      (parityDiagC n * parityDiagC n) i i
+          = (finParitySignQ i : ℂ) * (finParitySignQ i : ℂ) := by
+              simp [parityDiagC]
+      _ = ((finParitySignQ i * finParitySignQ i : ℚ) : ℂ) := by simp
+      _ = 1 := hsqC
+      _ = (1 : Matrix (Fin n) (Fin n) ℂ) i i := by simp
+  · simp [parityDiagC, hij]
+
+/-- Explicit factorization of the reversal/parity conjugation as
+`D * reindex(rev) * D`. -/
+theorem revParityConjugateMatrixC_eq_diag_reindex_diag
+    (n : ℕ) (A : Matrix (Fin n) (Fin n) ℂ) :
+    revParityConjugateMatrixC n A =
+      parityDiagC n * ((Matrix.reindex (revPerm n) (revPerm n)) A) * parityDiagC n := by
+  ext i j
+  simp [revParityConjugateMatrixC, parityDiagC, Matrix.diagonal_mul, Matrix.mul_diagonal,
+    Matrix.reindex_apply, revPerm]
+
+/-- Characteristic polynomial invariance under the reversal/parity conjugation action. -/
+theorem charpoly_revParityConjugateMatrixC
+    (n : ℕ) (A : Matrix (Fin n) (Fin n) ℂ) :
+    (revParityConjugateMatrixC n A).charpoly = A.charpoly := by
+  let e : Equiv.Perm (Fin n) := revPerm n
+  let D : Matrix (Fin n) (Fin n) ℂ := parityDiagC n
+  have hrepr :
+      revParityConjugateMatrixC n A = D * ((Matrix.reindex e e) A) * D := by
+    simpa [e, D] using revParityConjugateMatrixC_eq_diag_reindex_diag n A
+  calc
+    (revParityConjugateMatrixC n A).charpoly
+        = (D * ((Matrix.reindex e e) A) * D).charpoly := by simpa [hrepr]
+    _ = (D * (D * ((Matrix.reindex e e) A))).charpoly := by
+          simpa [Matrix.mul_assoc] using (Matrix.charpoly_mul_comm (D * (Matrix.reindex e e A)) D)
+    _ = (((D * D) * ((Matrix.reindex e e) A))).charpoly := by simp [Matrix.mul_assoc]
+    _ = ((Matrix.reindex e e) A).charpoly := by simp [parityDiagC_sq, D]
+    _ = A.charpoly := by simpa [e] using Matrix.charpoly_reindex e A
+
+/-- Spectrum invariance under reversal/parity conjugation. -/
+theorem spectrum_revParityConjugateMatrixC_eq
+    (n : ℕ) (A : Matrix (Fin n) (Fin n) ℂ) :
+    spectrum ℂ (revParityConjugateMatrixC n A) = spectrum ℂ A := by
+  ext l
+  constructor
+  · intro hl
+    exact (Matrix.mem_spectrum_iff_isRoot_charpoly).2
+      (by simpa [charpoly_revParityConjugateMatrixC n A] using
+        (Matrix.mem_spectrum_iff_isRoot_charpoly).1 hl)
+  · intro hl
+    exact (Matrix.mem_spectrum_iff_isRoot_charpoly).2
+      (by simpa [charpoly_revParityConjugateMatrixC n A] using
+        (Matrix.mem_spectrum_iff_isRoot_charpoly).1 hl)
+
+/-- The center matrix is exactly the matrix-algebra scalar embedding of
+`structuralCenterQ n`. -/
+theorem structuralCenterMatrixC_eq_algebraMap (n : ℕ) :
+    structuralCenterMatrixC n =
+      (algebraMap ℂ (Matrix (Fin n) (Fin n) ℂ)) (structuralCenterQ n : ℂ) := by
+  ext i j
+  by_cases hij : i = j
+  · subst hij
+    simp [structuralCenterMatrixC, Matrix.algebraMap_eq_diagonal]
+  · simp [structuralCenterMatrixC, Matrix.algebraMap_eq_diagonal, hij]
+
+/-- Finite-level spectral reflection around the structural center:
+if `λ ∈ spec(A_n)`, then `c_n - λ ∈ spec(A_n)` with `c_n = structuralCenterQ n`. -/
+theorem structuralRiemannMatrixC_spectrum_reflect
+    (n : ℕ) (l : ℂ)
+    (hl : l ∈ spectrum ℂ (structuralRiemannMatrixC n)) :
+    ((structuralCenterQ n : ℂ) - l) ∈ spectrum ℂ (structuralRiemannMatrixC n) := by
+  let A : Matrix (Fin n) (Fin n) ℂ := structuralRiemannMatrixC n
+  let c : ℂ := (structuralCenterQ n : ℂ)
+  have hT : l ∈ spectrum ℂ (revParityConjugateMatrixC n A) := by
+    simpa [spectrum_revParityConjugateMatrixC_eq n A] using hl
+  have hCA : l ∈ spectrum ℂ (structuralCenterMatrixC n - A) := by
+    simpa [A, structuralRiemannMatrixC_revParity_eq_center_sub n] using hT
+  have hNotUnitY :
+      ¬ IsUnit ((algebraMap ℂ (Matrix (Fin n) (Fin n) ℂ)) l - (structuralCenterMatrixC n - A)) :=
+    (spectrum.mem_iff).1 hCA
+  have hEqNeg :
+      ((algebraMap ℂ (Matrix (Fin n) (Fin n) ℂ)) l - (structuralCenterMatrixC n - A))
+        = - (((algebraMap ℂ (Matrix (Fin n) (Fin n) ℂ)) (c - l)) - A) := by
+    rw [structuralCenterMatrixC_eq_algebraMap n]
+    ext i j
+    by_cases hij : i = j
+    · subst hij
+      simp [Matrix.algebraMap_eq_diagonal]
+      ring
+    · simp [Matrix.algebraMap_eq_diagonal, hij]
+  have hNotUnitX :
+      ¬ IsUnit (((algebraMap ℂ (Matrix (Fin n) (Fin n) ℂ)) (c - l)) - A) := by
+    intro hX
+    apply hNotUnitY
+    rw [hEqNeg]
+    exact hX.neg
+  have hMemX : (c - l) ∈ spectrum ℂ A := (spectrum.mem_iff).2 hNotUnitX
+  simpa [A, c] using hMemX
+
 /-- Canonical real eigenvalue enumerator for the structural matrix at level `N+1`. -/
 noncomputable def operatorEigenvalues (N : ℕ) : Fin (N + 1) → ℝ :=
   (structuralRiemannMatrixC_isHermitian (N + 1)).eigenvalues
