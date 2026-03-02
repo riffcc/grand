@@ -1507,18 +1507,27 @@ theorem operatorSturmStepCompatibility_of_edgeLock
 This is the induction-step core: assuming `|A-B| ≤ 1` at level `M`, the next
 gap stays within `±1` provided the two outward boundary patterns are excluded
 at this `(M,x)`. -/
-theorem sturmCenter_gap_step_preserved_of_boundary_exclusions
+theorem sturmCenter_gap_step_preserved_of_boundary_exclusions_split_upper
     (M : ℕ) (x : ℝ)
     (hGapM :
       operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
       operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1)
-    (hUpper :
+    (hUpperPrev :
       let A := operatorSturmSignVariationCount M x
       let B := operatorCenterCountLE M x
       let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
                     operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
       let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
-      A = B + 1 → ¬ (a = 1 ∧ b = 0))
+      let prev := (if operatorSturmSign (operatorSturmP M x) ≠
+                     operatorSturmSign (operatorSturmP (M + 1) x) then 1 else 0)
+      A = B + 1 → prev = 0 → ¬ (a = 1 ∧ b = 0))
+    (hUpperZero :
+      let A := operatorSturmSignVariationCount M x
+      let B := operatorCenterCountLE M x
+      let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                    operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+      let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+      A = B + 1 → operatorSturmP (M + 1) x = 0 → ¬ (a = 1 ∧ b = 0))
     (hLower :
       let A := operatorSturmSignVariationCount M x
       let B := operatorCenterCountLE M x
@@ -1557,8 +1566,21 @@ theorem sturmCenter_gap_step_preserved_of_boundary_exclusions
         rcases ha_cases with ha0 | ha1
         · omega
         · rcases hb_cases with hb0 | hb1
-          · exfalso
-            exact (hUpper hA_eq) ⟨ha1, hb0⟩
+          · have hPrev0_of_nonzero :
+                operatorSturmP (M + 1) x ≠ 0 →
+                  (if operatorSturmSign (operatorSturmP M x) ≠
+                        operatorSturmSign (operatorSturmP (M + 1) x) then 1 else 0) = 0 := by
+              intro hp1nz
+              exact operatorSturm_prev_edge_indicator_zero_of_upper_pattern_and_nonzero
+                M x (by simpa [a] using ha1) (by simpa [b] using hb0) hp1nz
+            by_cases hp1nz : operatorSturmP (M + 1) x ≠ 0
+            · exfalso
+              exact (hUpperPrev hA_eq (hPrev0_of_nonzero hp1nz)) ⟨ha1, hb0⟩
+            · exfalso
+              have hp1z : operatorSturmP (M + 1) x = 0 := by
+                by_contra hp1ne
+                exact hp1nz hp1ne
+              exact (hUpperZero hA_eq hp1z) ⟨ha1, hb0⟩
           · omega
       have hA_add' : A + a ≤ B + b + 1 := by omega
       exact hA_add'
@@ -1580,6 +1602,36 @@ theorem sturmCenter_gap_step_preserved_of_boundary_exclusions
   constructor
   · simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hA'_le_B'1
   · simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hB'_le_A'1
+
+/-- One-step `±1` gap preservation from local boundary exclusions.
+This is the induction-step core: assuming `|A-B| ≤ 1` at level `M`, the next
+gap stays within `±1` provided the two outward boundary patterns are excluded
+at this `(M,x)`. -/
+theorem sturmCenter_gap_step_preserved_of_boundary_exclusions
+    (M : ℕ) (x : ℝ)
+    (hGapM :
+      operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
+      operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1)
+    (hUpper :
+      let A := operatorSturmSignVariationCount M x
+      let B := operatorCenterCountLE M x
+      let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                    operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+      let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+      A = B + 1 → ¬ (a = 1 ∧ b = 0))
+    (hLower :
+      let A := operatorSturmSignVariationCount M x
+      let B := operatorCenterCountLE M x
+      let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                    operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+      let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+      B = A + 1 → ¬ (b = 1 ∧ a = 0)) :
+    operatorSturmSignVariationCount (M + 1) x ≤ operatorCenterCountLE (M + 1) x + 1 ∧
+    operatorCenterCountLE (M + 1) x ≤ operatorSturmSignVariationCount (M + 1) x + 1 := by
+  exact sturmCenter_gap_step_preserved_of_boundary_exclusions_split_upper M x hGapM
+    (fun Aeq prevEq hab => (hUpper Aeq) hab)
+    (fun Aeq hp1z hab => (hUpper Aeq) hab)
+    hLower
 
 /-- Finite-step preservation of the `±1` gap under minimal step-compatibility. -/
 theorem sturmCenter_gap_step_preserved_of_stepCompatibility
