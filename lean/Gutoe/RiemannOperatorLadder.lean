@@ -817,6 +817,32 @@ theorem operatorCenterCandidatesOrdered_card_le_three
     _ ≤ T.card := Finset.card_le_card hsubset
     _ ≤ 3 := hT_card_le_three
 
+/-- Unordered-lane candidate-center cardinality bound, transferred from the
+ordered eigenvalue lane via the reindex equivalence. -/
+theorem operatorCenterCandidates_card_le_three
+    (M : ℕ) (i : Fin (M + 1)) :
+    (operatorCenterCandidates M i).card ≤ 3 := by
+  let j : Fin (Fintype.card (Fin (M + 1))) := operatorEigenvaluesReindexToOrdered M i
+  have hij :
+      operatorEigenvalues M i = operatorEigenvaluesOrdered M j := by
+    simpa [j] using operatorEigenvalues_eq_ordered_reindex M i
+  have hsetEq :
+      operatorCenterCandidates M i = operatorCenterCandidatesOrdered M j := by
+    ext k
+    constructor <;> intro hk
+    · have hk' := Finset.mem_filter.mp hk
+      refine Finset.mem_filter.mpr ?_
+      refine ⟨hk'.1, ?_⟩
+      simpa [operatorCenterCandidates, operatorCenterCandidatesOrdered, hij] using hk'.2
+    · have hk' := Finset.mem_filter.mp hk
+      refine Finset.mem_filter.mpr ?_
+      refine ⟨hk'.1, ?_⟩
+      simpa [operatorCenterCandidates, operatorCenterCandidatesOrdered, hij] using hk'.2
+  calc
+    (operatorCenterCandidates M i).card = (operatorCenterCandidatesOrdered M j).card := by
+      simpa [hsetEq]
+    _ ≤ 3 := operatorCenterCandidatesOrdered_card_le_three M j
+
 /-- Hall-style finite-level center-gap condition:
 every finite subfamily of eigenvalue candidate-center sets has union cardinality
 at least the subfamily cardinality. -/
