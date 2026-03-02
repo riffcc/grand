@@ -2694,21 +2694,13 @@ theorem operatorCenterGapPermutationInvariant_of_sameMinEndgameObligations
       hMaxAboveInSameMin hNoPrevPlusOneInSameMin
 
 /-- Geometric-algebraic same-min symmetry contract (Clifford-lane interface):
-in every same-min branch, the predecessor candidate interval is interior
-(`0 < min` and `max < M`) and the canonical center `min+1` is available.
+in every same-min branch we require the structural non-collapse inequality
+`max(j-1) > min(j-1)` and canonical `min+1` availability.
 
 This is the minimal structural package that feeds the two explicit seams:
-`maxAbove` (via interior non-collapse) and `noPrev` (via availability bridge). -/
+`maxAbove` and `noPrev` (via availability bridge). -/
 def OperatorCliffordSameMinSymmetryContract : Prop :=
-  (∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
-    ∀ hjm1 : j - 1 < operatorGreedyCard M,
-      (∀ k : ℕ, ∀ hk : k < j,
-        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
-          operatorGreedyAvailableNat M k) →
-      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
-        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
-      0 < (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ∧
-      (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 < M)
+  OperatorSameMinMaxAboveObligation
   ∧
   (∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
     ∀ hjm1 : j - 1 < operatorGreedyCard M,
@@ -2727,21 +2719,7 @@ lane by discharging both explicit same-min seams (`maxAbove`, `noPrev`). -/
 theorem operatorCenterGapPermutationInvariant_of_cliffordSameMinSymmetryContract
     (hCliff : OperatorCliffordSameMinSymmetryContract) :
     OperatorCenterGapPermutationInvariant := by
-  rcases hCliff with ⟨hInteriorInSameMin, hPlusOneAvailInSameMin⟩
-  have hMaxAboveInSameMin :
-      ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
-      ∀ hjm1 : j - 1 < operatorGreedyCard M,
-        (∀ k : ℕ, ∀ hk : k < j,
-          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
-            operatorGreedyAvailableNat M k) →
-        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
-          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
-        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
-          (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 := by
-    intro M j hj hjpos hjm1 hPrefix hSameMin
-    rcases hInteriorInSameMin M j hj hjpos hjm1 hPrefix hSameMin with
-      ⟨hminPos, hmaxLt⟩
-    exact operatorMaxAboveInSameMin_of_interior M j hj hjpos hjm1 hminPos hmaxLt
+  rcases hCliff with ⟨hMaxAboveInSameMin, hPlusOneAvailInSameMin⟩
   have hNoPrevPlusOneInSameMin : OperatorSameMinPlusOneNoPrevObligation :=
     operatorSameMinPlusOneNoPrevObligation_of_plusOneAvailInSameMin
       hPlusOneAvailInSameMin
@@ -2762,11 +2740,7 @@ theorem operatorMaxAboveInSameMin_of_cliffordSameMinSymmetryContract
         (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
       (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
         (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 := by
-  rcases hCliff with ⟨hInteriorInSameMin, _hPlusOneAvailInSameMin⟩
-  intro M j hj hjpos hjm1 hPrefix hSameMin
-  rcases hInteriorInSameMin M j hj hjpos hjm1 hPrefix hSameMin with
-    ⟨hminPos, hmaxLt⟩
-  exact operatorMaxAboveInSameMin_of_interior M j hj hjpos hjm1 hminPos hmaxLt
+  exact And.left hCliff
 
 /-- Obligation instantiator: extract same-min `min+1` availability from the
 Clifford same-min symmetry contract. -/
@@ -2813,9 +2787,9 @@ theorem operatorSameMinPlusOneNoPrevObligation_clifford
 /-- Hodge/even-odd contract for the same-min branch.
 
 This names the minimal constructive payload expected from the Cl(1,3) parity
-lane: interior non-collapse (`0 < min`, `max < M`) and canonical `min+1`
-availability in every same-min branch, grounded in concrete operator symmetry
-(`T(A)=C-A` and centered spectral reflection). -/
+lane: same-min structural non-collapse (`max>min`) and canonical `min+1`
+availability, grounded in concrete operator symmetry (`T(A)=C-A` and centered
+spectral reflection). -/
 structure OperatorHodgeParityContract : Prop where
   revParityCenterSub :
     ∀ n : ℕ,
@@ -2825,16 +2799,8 @@ structure OperatorHodgeParityContract : Prop where
     ∀ n : ℕ, ∀ l : ℂ,
       l ∈ spectrum ℂ (structuralRiemannMatrixC n) →
       ((structuralCenterQ n : ℂ) - l) ∈ spectrum ℂ (structuralRiemannMatrixC n)
-  interiorInSameMin :
-    ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
-    ∀ hjm1 : j - 1 < operatorGreedyCard M,
-      (∀ k : ℕ, ∀ hk : k < j,
-        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
-          operatorGreedyAvailableNat M k) →
-      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
-        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
-      0 < (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ∧
-      (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 < M
+  maxAboveInSameMin :
+    OperatorSameMinMaxAboveObligation
   plusOneAvailInSameMin :
     ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
     ∀ hjm1 : j - 1 < operatorGreedyCard M,
@@ -2872,15 +2838,7 @@ theorem operatorHodgeParityCore_default : OperatorHodgeParityCore := by
 symmetry core into the full Hodge parity contract. This keeps the open seam
 named as a proposition rather than hidden behind placeholder proofs. -/
 def OperatorSameMinPayloadObligation : Prop :=
-  (∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
-    ∀ hjm1 : j - 1 < operatorGreedyCard M,
-      (∀ k : ℕ, ∀ hk : k < j,
-        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
-          operatorGreedyAvailableNat M k) →
-      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
-        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
-      0 < (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ∧
-      (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 < M)
+  OperatorSameMinMaxAboveObligation
   ∧
   (∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
     ∀ hjm1 : j - 1 < operatorGreedyCard M,
@@ -2913,22 +2871,14 @@ same-min payload obligation. -/
 theorem operatorSameMinPayloadObligation_of_hodgeParity
     (hHP : OperatorHodgeParityContract) :
     OperatorSameMinPayloadObligation := by
-  exact ⟨hHP.interiorInSameMin, hHP.plusOneAvailInSameMin⟩
+  exact ⟨hHP.maxAboveInSameMin, hHP.plusOneAvailInSameMin⟩
 
 /-- Constructor: the Hodge parity contract is exactly the concrete operator
 symmetry core plus the same-min branch payload. -/
 theorem operatorHodgeParityContract_of_core_and_sameMinPayload
     (hCore : OperatorHodgeParityCore)
-    (hInteriorInSameMin :
-      ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
-      ∀ hjm1 : j - 1 < operatorGreedyCard M,
-        (∀ k : ℕ, ∀ hk : k < j,
-          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
-            operatorGreedyAvailableNat M k) →
-        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
-          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
-        0 < (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ∧
-        (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 < M)
+    (hMaxAboveInSameMin :
+      OperatorSameMinMaxAboveObligation)
     (hPlusOneAvailInSameMin :
       ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
       ∀ hjm1 : j - 1 < operatorGreedyCard M,
@@ -2946,7 +2896,7 @@ theorem operatorHodgeParityContract_of_core_and_sameMinPayload
   exact
     { revParityCenterSub := hRev
       spectrumReflectCentered := hSpec
-      interiorInSameMin := hInteriorInSameMin
+      maxAboveInSameMin := hMaxAboveInSameMin
       plusOneAvailInSameMin := hPlusOneAvailInSameMin }
 
 /-- Canonical construction of the full Hodge parity contract from concrete core
@@ -2955,25 +2905,22 @@ theorem operatorHodgeParityContract_of_core
     (hCore : OperatorHodgeParityCore)
     (hPayload : OperatorSameMinPayloadObligation) :
     OperatorHodgeParityContract := by
-  rcases hPayload with ⟨hInteriorInSameMin, hPlusOneAvailInSameMin⟩
+  rcases hPayload with ⟨hMaxAboveInSameMin, hPlusOneAvailInSameMin⟩
   exact operatorHodgeParityContract_of_core_and_sameMinPayload
-    hCore hInteriorInSameMin hPlusOneAvailInSameMin
+    hCore hMaxAboveInSameMin hPlusOneAvailInSameMin
 
 /-- Hodge parity contract instantiates the existing Clifford same-min symmetry
 contract surface. -/
 theorem operatorCliffordSameMinSymmetryContract_of_hodgeParity
     (hHP : OperatorHodgeParityContract) :
     OperatorCliffordSameMinSymmetryContract := by
-  refine ⟨hHP.interiorInSameMin, hHP.plusOneAvailInSameMin⟩
+  refine ⟨hHP.maxAboveInSameMin, hHP.plusOneAvailInSameMin⟩
 
 /-- Step-1 explicit obligation directly from the Hodge parity contract. -/
 theorem operatorSameMinMaxAboveObligation_of_hodgeParity
     (hHP : OperatorHodgeParityContract) :
     OperatorSameMinMaxAboveObligation := by
-  intro M j hj hjpos hjm1 hPrefix hSameMin
-  rcases hHP.interiorInSameMin M j hj hjpos hjm1 hPrefix hSameMin with
-    ⟨hminPos, hmaxLt⟩
-  exact operatorMaxAboveInSameMin_of_interior M j hj hjpos hjm1 hminPos hmaxLt
+  exact hHP.maxAboveInSameMin
 
 /-- Step-2 explicit obligation directly from the Hodge parity contract. -/
 theorem operatorSameMinPlusOneNoPrevObligation_of_hodgeParity
