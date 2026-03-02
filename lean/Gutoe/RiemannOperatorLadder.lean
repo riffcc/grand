@@ -1100,6 +1100,75 @@ theorem operatorCenterCandidatesOrdered_singleton_top_reflects_to_bottom
     hall_bot _ hmax_mem
   exact ⟨hmin0, hmax0⟩
 
+/-- Boundary-singleton transfer under reflected ordered eigenvalue values
+(converse direction):
+if index `j` has collapsed candidate interval `{0}`, then the reflected index
+`j'` has collapsed candidate interval `{M}`. -/
+theorem operatorCenterCandidatesOrdered_singleton_bottom_reflects_to_top
+    (M : ℕ)
+    (j j' : Fin (Fintype.card (Fin (M + 1))))
+    (hRef :
+      operatorEigenvaluesOrdered M j' =
+        (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j)
+    (hMinBot : (operatorEigenvalueOrderedCenterChoiceMin M j).1 = 0)
+    (hMaxBot : (operatorEigenvalueOrderedCenterChoiceMax M j).1 = 0) :
+    (operatorEigenvalueOrderedCenterChoiceMin M j').1 = M ∧
+      (operatorEigenvalueOrderedCenterChoiceMax M j').1 = M := by
+  let kTop : Fin (M + 1) := ⟨M, Nat.lt_succ_self M⟩
+  let kBot : Fin (M + 1) := ⟨0, Nat.succ_pos M⟩
+  have hkBot_mem : kBot ∈ operatorCenterCandidatesOrdered M j := by
+    have hmem : operatorEigenvalueOrderedCenterChoiceMin M j ∈ operatorCenterCandidatesOrdered M j :=
+      operatorEigenvalueOrderedCenterChoiceMin_mem M j
+    have hEqBot : operatorEigenvalueOrderedCenterChoiceMin M j = kBot := by
+      apply Fin.ext
+      simpa [kBot] using hMinBot
+    simpa [hEqBot] using hmem
+  have hkTop_mem : kTop ∈ operatorCenterCandidatesOrdered M j' := by
+    have hmem :=
+      operatorCenterCandidatesOrdered_mem_reflect_of_reflectedValue M j j' hRef kBot hkBot_mem
+    have hEqRef : operatorCenterIndexReflect M kBot = kTop := by
+      apply Fin.ext
+      simp [operatorCenterIndexReflect, kTop, kBot]
+    simpa [hEqRef] using hmem
+  have hall_top :
+      ∀ i : Fin (M + 1),
+        i ∈ operatorCenterCandidatesOrdered M j' → i.1 = M := by
+    intro i hi
+    have hback :
+        operatorCenterIndexReflect M i ∈ operatorCenterCandidatesOrdered M j := by
+      have hiff :=
+        operatorCenterCandidatesOrdered_mem_reflect_iff_of_reflectedValue M j j' hRef
+          (operatorCenterIndexReflect M i)
+      have hi' :
+          operatorCenterIndexReflect M (operatorCenterIndexReflect M i) ∈
+            operatorCenterCandidatesOrdered M j' := by
+        simpa [operatorCenterIndexReflect_involutive M i] using hi
+      exact hiff.2 hi'
+    have hbetween :
+        (operatorEigenvalueOrderedCenterChoiceMin M j).1 ≤
+          (operatorCenterIndexReflect M i).1 ∧
+        (operatorCenterIndexReflect M i).1 ≤
+          (operatorEigenvalueOrderedCenterChoiceMax M j).1 :=
+      (operatorCenterCandidatesOrdered_mem_iff_between_min_max M j
+        (operatorCenterIndexReflect M i)).1 hback
+    have href_val : (operatorCenterIndexReflect M i).1 = 0 := by
+      omega
+    have hi_val : i.1 = M := by
+      have href_eq : M - i.1 = 0 := by
+        simpa [operatorCenterIndexReflect] using href_val
+      have hi_le_M : i.1 ≤ M := Nat.le_of_lt_succ i.2
+      omega
+    exact hi_val
+  have hmin_mem : operatorEigenvalueOrderedCenterChoiceMin M j' ∈ operatorCenterCandidatesOrdered M j' :=
+    operatorEigenvalueOrderedCenterChoiceMin_mem M j'
+  have hmax_mem : operatorEigenvalueOrderedCenterChoiceMax M j' ∈ operatorCenterCandidatesOrdered M j' :=
+    operatorEigenvalueOrderedCenterChoiceMax_mem M j'
+  have hminM : (operatorEigenvalueOrderedCenterChoiceMin M j').1 = M :=
+    hall_top _ hmin_mem
+  have hmaxM : (operatorEigenvalueOrderedCenterChoiceMax M j').1 = M :=
+    hall_top _ hmax_mem
+  exact ⟨hminM, hmaxM⟩
+
 /-- The ordered candidate interval has width at most `2` in index units. -/
 theorem operatorCenterCandidatesOrdered_width_le_two
     (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
@@ -5073,6 +5142,27 @@ theorem operatorEigenvaluesOrdered_reflect_exists
             simpa using operatorEigenvalues_eq_ordered_reindex M i'
     _ = (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j := by
           simpa using hi'
+
+/-- Existence form of reflected boundary collapse:
+if ordered index `j` has collapsed candidate interval `{0}`, then there exists
+a reflected ordered index whose candidate interval collapses to `{M}`. -/
+theorem operatorCenterCandidatesOrdered_singleton_bottom_reflect_exists_top
+    (M : ℕ)
+    (j : Fin (Fintype.card (Fin (M + 1))))
+    (hMinBot : (operatorEigenvalueOrderedCenterChoiceMin M j).1 = 0)
+    (hMaxBot : (operatorEigenvalueOrderedCenterChoiceMax M j).1 = 0) :
+    ∃ j' : Fin (Fintype.card (Fin (M + 1))),
+      operatorEigenvaluesOrdered M j' =
+        (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j ∧
+      (operatorEigenvalueOrderedCenterChoiceMin M j').1 = M ∧
+      (operatorEigenvalueOrderedCenterChoiceMax M j').1 = M := by
+  rcases operatorEigenvaluesOrdered_reflect_exists M j with ⟨j', hRef⟩
+  have hTop :
+      (operatorEigenvalueOrderedCenterChoiceMin M j').1 = M ∧
+        (operatorEigenvalueOrderedCenterChoiceMax M j').1 = M :=
+    operatorCenterCandidatesOrdered_singleton_bottom_reflects_to_top
+      M j j' hRef hMinBot hMaxBot
+  exact ⟨j', hRef, hTop.1, hTop.2⟩
 
 /-- Index-order bridge for the antitone ordered eigenvalue lane:
 if one ordered value is strictly smaller than another, then its index is
