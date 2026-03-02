@@ -2868,40 +2868,31 @@ theorem operatorHodgeParityCore_default : OperatorHodgeParityCore := by
   · intro n l hl
     exact structuralRiemannMatrixC_spectrum_reflect n l hl
 
-/-- Core-to-payload bridge target (open seam):
-derive same-min interior/non-collapse and canonical `min+1` availability from
-the concrete operator symmetry core. -/
-theorem sameMinPayload_of_core
-    (hCore : OperatorHodgeParityCore) :
-    (∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
-      ∀ hjm1 : j - 1 < operatorGreedyCard M,
-        (∀ k : ℕ, ∀ hk : k < j,
-          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
-            operatorGreedyAvailableNat M k) →
-        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
-          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
-        0 < (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ∧
-        (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 < M)
-    ∧
-    (∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
-      ∀ hjm1 : j - 1 < operatorGreedyCard M,
-        (∀ k : ℕ, ∀ hk : k < j,
-          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
-            operatorGreedyAvailableNat M k) →
-        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
-          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
-        ∃ c : Fin (M + 1),
-          c.1 =
-            (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
-          c ∈ operatorGreedyAvailableNat M (j - 1)) := by
-  -- TEMP seam: this is the explicit core -> greedy payload bridge.
-  -- We keep this as the single open target while the RH closure plumbing stays
-  -- executable and locally testable.
-  refine ⟨?_, ?_⟩
-  · intro M j hj hjpos hjm1 hPrefix hSameMin
-    sorry
-  · intro M j hj hjpos hjm1 hPrefix hSameMin
-    sorry
+/-- Explicit same-min payload obligation required to lift the concrete operator
+symmetry core into the full Hodge parity contract. This keeps the open seam
+named as a proposition rather than hidden behind placeholder proofs. -/
+def OperatorSameMinPayloadObligation : Prop :=
+  (∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+    ∀ hjm1 : j - 1 < operatorGreedyCard M,
+      (∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) →
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+      0 < (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ∧
+      (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 < M)
+  ∧
+  (∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+    ∀ hjm1 : j - 1 < operatorGreedyCard M,
+      (∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) →
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+      ∃ c : Fin (M + 1),
+        c.1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+        c ∈ operatorGreedyAvailableNat M (j - 1))
 
 /-- Constructor: the Hodge parity contract is exactly the concrete operator
 symmetry core plus the same-min branch payload. -/
@@ -2940,9 +2931,10 @@ theorem operatorHodgeParityContract_of_core_and_sameMinPayload
 /-- Canonical construction of the full Hodge parity contract from concrete core
 symmetry, using the core-to-payload bridge target. -/
 theorem operatorHodgeParityContract_of_core
-    (hCore : OperatorHodgeParityCore) :
+    (hCore : OperatorHodgeParityCore)
+    (hPayload : OperatorSameMinPayloadObligation) :
     OperatorHodgeParityContract := by
-  rcases sameMinPayload_of_core hCore with ⟨hInteriorInSameMin, hPlusOneAvailInSameMin⟩
+  rcases hPayload with ⟨hInteriorInSameMin, hPlusOneAvailInSameMin⟩
   exact operatorHodgeParityContract_of_core_and_sameMinPayload
     hCore hInteriorInSameMin hPlusOneAvailInSameMin
 
