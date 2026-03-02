@@ -2725,6 +2725,50 @@ theorem operatorCenterGapPermutationInvariant_of_cliffordSameMinSymmetryContract
     operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sameMin_plusOneNoPrev_and_maxAbove
       hMaxAboveInSameMin hNoPrevPlusOneInSameMin
 
+/-- Obligation instantiator: extract same-min `maxAbove` from the Clifford
+same-min symmetry contract. -/
+theorem operatorMaxAboveInSameMin_of_cliffordSameMinSymmetryContract
+    (hCliff : OperatorCliffordSameMinSymmetryContract) :
+    ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+    ∀ hjm1 : j - 1 < operatorGreedyCard M,
+      (∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) →
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+        (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 := by
+  rcases hCliff with ⟨hInteriorInSameMin, _hPlusOneAvailInSameMin⟩
+  intro M j hj hjpos hjm1 hPrefix hSameMin
+  rcases hInteriorInSameMin M j hj hjpos hjm1 hPrefix hSameMin with
+    ⟨hminPos, hmaxLt⟩
+  exact operatorMaxAboveInSameMin_of_interior M j hj hjpos hjm1 hminPos hmaxLt
+
+/-- Obligation instantiator: extract same-min `min+1` availability from the
+Clifford same-min symmetry contract. -/
+theorem operatorPlusOneAvailInSameMin_of_cliffordSameMinSymmetryContract
+    (hCliff : OperatorCliffordSameMinSymmetryContract) :
+    ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+    ∀ hjm1 : j - 1 < operatorGreedyCard M,
+      (∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) →
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+      ∃ c : Fin (M + 1),
+        c.1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+        c ∈ operatorGreedyAvailableNat M (j - 1) := by
+  exact (And.right hCliff)
+
+/-- Obligation instantiator: extract explicit same-min no-prev seam from the
+Clifford same-min symmetry contract. -/
+theorem operatorSameMinPlusOneNoPrevObligation_of_cliffordSameMinSymmetryContract
+    (hCliff : OperatorCliffordSameMinSymmetryContract) :
+    OperatorSameMinPlusOneNoPrevObligation := by
+  exact operatorSameMinPlusOneNoPrevObligation_of_plusOneAvailInSameMin
+    (operatorPlusOneAvailInSameMin_of_cliffordSameMinSymmetryContract hCliff)
+
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
 center-gap contract holds. -/
@@ -6363,6 +6407,24 @@ theorem mathlibRH_of_clifford_operator_endgame
     operatorCenterGapPermutationInvariant_of_cliffordSameMinSymmetryContract hCliff
   exact mathlibRH_of_operator_three_conditional_obligations ⟨hGap, hKernel, hConv⟩
 
+/-- Obligation instantiator: from Clifford same-min symmetry + the minimal
+operator two-obligation surface, recover the Clifford RH endgame bundle. -/
+theorem operatorCliffordRHEndgameObligation_of_clifford_and_two_conditional
+    (hCliff : OperatorCliffordSameMinSymmetryContract)
+    (h2 : OperatorRHTwoConditionalObligations) :
+    OperatorCliffordRHEndgameObligation := by
+  rcases h2 with ⟨hKernel, hConv⟩
+  exact ⟨hCliff, hKernel, hConv⟩
+
+/-- RH closure adapter: Clifford same-min symmetry + the minimal operator
+two-obligation surface. -/
+theorem mathlibRH_of_clifford_and_two_conditional
+    (hCliff : OperatorCliffordSameMinSymmetryContract)
+    (h2 : OperatorRHTwoConditionalObligations) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_clifford_operator_endgame
+    (operatorCliffordRHEndgameObligation_of_clifford_and_two_conditional hCliff h2)
+
 /-- RH closure from the concrete operator Hurwitz kernel plus a summable
 nonnegative step profile and pointwise convergence to `XiTarget`. This packages
 the local-uniform promotion in one theorem so the remaining analytic inputs are
@@ -6415,6 +6477,28 @@ theorem mathlibRH_of_operator_overconstrained_endgame
   rcases hEnd with ⟨hKernel, hExist, hUnique⟩
   exact mathlibRH_of_operator_hurwitzKernel_and_limitExists_uniqueness
     hKernel hExist hUnique
+
+/-- Obligation instantiator: Clifford same-min symmetry plus the operator
+overconstrained endgame obligations instantiate the Clifford RH endgame bundle. -/
+theorem operatorCliffordRHEndgameObligation_of_clifford_and_overconstrained
+    (hCliff : OperatorCliffordSameMinSymmetryContract)
+    (hEnd : OperatorOverconstrainedEndgameObligation) :
+    OperatorCliffordRHEndgameObligation := by
+  rcases hEnd with ⟨hKernel, hExist, hUnique⟩
+  have hConv : OperatorXiFiniteLocallyUniformConvergence :=
+    operatorXiFiniteLocallyUniformConvergence_of_limitExists_and_uniqueness
+      hExist hUnique
+  exact ⟨hCliff, hKernel, hConv⟩
+
+/-- RH closure adapter: Clifford same-min symmetry plus operator overconstrained
+endgame obligations. -/
+theorem mathlibRH_of_clifford_and_overconstrained_endgame
+    (hCliff : OperatorCliffordSameMinSymmetryContract)
+    (hEnd : OperatorOverconstrainedEndgameObligation) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_clifford_operator_endgame
+    (operatorCliffordRHEndgameObligation_of_clifford_and_overconstrained
+      hCliff hEnd)
 
 /-- Single hard obligation once Hurwitz kernel is fixed:
 existence + uniqueness of the locally-uniform operator-ladder limit. -/
