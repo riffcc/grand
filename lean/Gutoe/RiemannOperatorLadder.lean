@@ -1074,6 +1074,75 @@ theorem operatorOrderedTieBreakCenter_mem_of_offset_le_width
   exact (operatorCenterCandidatesOrdered_mem_iff_between_min_max M j
     (operatorOrderedTieBreakCenter M j)).2 ⟨hMin_le_tie, hTie_le_max⟩
 
+/-- Clamped tie-break offset:
+start from reverse-index raw offset and clamp to individual candidate width. -/
+def operatorOrderedTieBreakOffsetClamped
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) : ℕ :=
+  let e : Fin (M + 1) ≃ Fin (Fintype.card (Fin (M + 1))) :=
+    operatorEigenvaluesReindexToOrderedEquiv M
+  let kmax := (operatorEigenvalueOrderedCenterChoiceMax M j).1
+  let kmin := (operatorEigenvalueOrderedCenterChoiceMin M j).1
+  let width := kmax - kmin
+  let rawOffset := kmax - (M - (e.symm j).1)
+  Nat.min rawOffset width
+
+/-- Clamped ordered tie-break center:
+`max(j) - offset(j)` with clamped per-index offset. -/
+noncomputable def operatorOrderedTieBreakCenterClamped
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) : Fin (M + 1) :=
+  let kmax : ℕ := (operatorEigenvalueOrderedCenterChoiceMax M j).1
+  let off : ℕ := operatorOrderedTieBreakOffsetClamped M j
+  ⟨kmax - off, by
+    have hkmax_lt : kmax < M + 1 := (operatorEigenvalueOrderedCenterChoiceMax M j).2
+    exact lt_of_le_of_lt (Nat.sub_le _ _) hkmax_lt⟩
+
+/-- `hTieLeMax` for the clamped tie-break is immediate by construction. -/
+theorem operatorOrderedTieBreakCenterClamped_le_max
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    (operatorOrderedTieBreakCenterClamped M j).1
+      ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1 := by
+  dsimp [operatorOrderedTieBreakCenterClamped]
+  exact Nat.sub_le _ _
+
+/-- `hOffsetWidth` for the clamped tie-break is immediate by construction. -/
+theorem operatorOrderedTieBreakOffsetClamped_le_width
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    operatorOrderedTieBreakOffsetClamped M j
+      ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1
+          - (operatorEigenvalueOrderedCenterChoiceMin M j).1 := by
+  unfold operatorOrderedTieBreakOffsetClamped
+  exact Nat.min_le_right _ _
+
+/-- The clamped tie-break center is always admissible in the ordered candidate interval. -/
+theorem operatorOrderedTieBreakCenterClamped_mem
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    operatorOrderedTieBreakCenterClamped M j ∈ operatorCenterCandidatesOrdered M j := by
+  have hTie_le_max :
+      (operatorOrderedTieBreakCenterClamped M j).1
+        ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1 :=
+    operatorOrderedTieBreakCenterClamped_le_max M j
+  have hMax_mem :
+      operatorEigenvalueOrderedCenterChoiceMax M j ∈ operatorCenterCandidatesOrdered M j :=
+    operatorEigenvalueOrderedCenterChoiceMax_mem M j
+  have hMin_le_max :
+      (operatorEigenvalueOrderedCenterChoiceMin M j).1
+        ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1 := by
+    exact Finset.min'_le (operatorCenterCandidatesOrdered M j)
+      (operatorEigenvalueOrderedCenterChoiceMax M j) hMax_mem
+  have hOffset_le_width :
+      operatorOrderedTieBreakOffsetClamped M j
+        ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1
+            - (operatorEigenvalueOrderedCenterChoiceMin M j).1 :=
+    operatorOrderedTieBreakOffsetClamped_le_width M j
+  have hMin_le_tie :
+      (operatorEigenvalueOrderedCenterChoiceMin M j).1
+        ≤ (operatorOrderedTieBreakCenterClamped M j).1 := by
+    unfold operatorOrderedTieBreakCenterClamped
+    dsimp
+    omega
+  exact (operatorCenterCandidatesOrdered_mem_iff_between_min_max M j
+    (operatorOrderedTieBreakCenterClamped M j)).2 ⟨hMin_le_tie, hTie_le_max⟩
+
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
 center-gap contract holds. -/
