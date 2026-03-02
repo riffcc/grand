@@ -435,6 +435,24 @@ theorem operatorEigenvaluesOrdered_antitone (N : ℕ) :
     (Matrix.IsHermitian.eigenvalues₀_antitone
       (hA := structuralRiemannMatrixC_isHermitian (N + 1)))
 
+/-- Canonical reindex map from the `Fin (N+1)` lane to the `eigenvalues₀` lane. -/
+noncomputable def operatorEigenvaluesReindexToOrdered (N : ℕ) :
+    Fin (N + 1) → Fin (Fintype.card (Fin (N + 1))) :=
+  (Fintype.equivOfCardEq (Fintype.card_fin _)).symm
+
+/-- Equivalence form of the canonical reindex map from the `Fin (N+1)` lane to
+the `eigenvalues₀` lane. -/
+noncomputable def operatorEigenvaluesReindexToOrderedEquiv (N : ℕ) :
+    Fin (N + 1) ≃ Fin (Fintype.card (Fin (N + 1))) :=
+  (Fintype.equivOfCardEq (Fintype.card_fin _)).symm
+
+/-- Current operator eigenvalue enumeration is exactly the ordered lane composed
+with the canonical reindex map used by Mathlib's `eigenvalues` definition. -/
+theorem operatorEigenvalues_eq_ordered_reindex (N : ℕ) (i : Fin (N + 1)) :
+    operatorEigenvalues N i =
+      operatorEigenvaluesOrdered N (operatorEigenvaluesReindexToOrdered N i) := by
+  rfl
+
 /-- Every concrete indexed operator eigenvalue is Gershgorin-close to some structural
 diagonal center with explicit radius `12/11`. -/
 theorem operatorEigenvalue_exists_center_gap_le_twelve_over_eleven
@@ -542,6 +560,76 @@ theorem operatorEigenvalue_exists_center_gap_real_le_twelve_over_eleven
       _ ≤ ((12 : ℝ) / 11) := hgap''
   refine ⟨k, ?_⟩
   simpa [c] using habs
+
+/-- Ordered-lane real Gershgorin gap witness:
+each ordered eigenvalue is within `12/11` of some structural center. -/
+theorem operatorEigenvalueOrdered_exists_center_gap_real_le_twelve_over_eleven
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    ∃ k : Fin (M + 1),
+      |operatorEigenvaluesOrdered M j - ((k.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+  let e : Fin (M + 1) ≃ Fin (Fintype.card (Fin (M + 1))) :=
+    operatorEigenvaluesReindexToOrderedEquiv M
+  let i : Fin (M + 1) := e.symm j
+  rcases operatorEigenvalue_exists_center_gap_real_le_twelve_over_eleven M i with ⟨k, hk⟩
+  refine ⟨k, ?_⟩
+  have hi :
+      operatorEigenvalues M i = operatorEigenvaluesOrdered M j := by
+    calc
+      operatorEigenvalues M i
+          = operatorEigenvaluesOrdered M (operatorEigenvaluesReindexToOrdered M i) := by
+            simpa using operatorEigenvalues_eq_ordered_reindex M i
+      _ = operatorEigenvaluesOrdered M (e i) := by rfl
+      _ = operatorEigenvaluesOrdered M j := by simp [i]
+  simpa [hi] using hk
+
+/-- Chosen center index for each ordered eigenvalue on level `M`, extracted from
+the ordered-lane Gershgorin real-gap witness. -/
+noncomputable def operatorEigenvalueOrderedCenterChoice
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) : Fin (M + 1) :=
+  Classical.choose (operatorEigenvalueOrdered_exists_center_gap_real_le_twelve_over_eleven M j)
+
+/-- Gap certificate for the chosen ordered-lane center index. -/
+theorem operatorEigenvalueOrderedCenterChoice_spec
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    |operatorEigenvaluesOrdered M j
+      - (((operatorEigenvalueOrderedCenterChoice M j).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+  exact Classical.choose_spec
+    (operatorEigenvalueOrdered_exists_center_gap_real_le_twelve_over_eleven M j)
+
+/-- Ordered-lane jump exclusion:
+for `i < j`, the chosen center index cannot increase by `3` or more. -/
+theorem operatorEigenvalueOrderedCenterChoice_no_up_jump_three
+    (M : ℕ)
+    {i j : Fin (Fintype.card (Fin (M + 1)))} (hij : i < j)
+    (hjump :
+      (operatorEigenvalueOrderedCenterChoice M i).1 + 3
+        ≤ (operatorEigenvalueOrderedCenterChoice M j).1) :
+    False := by
+  let ki : ℕ := (operatorEigenvalueOrderedCenterChoice M i).1
+  let kj : ℕ := (operatorEigenvalueOrderedCenterChoice M j).1
+  let ci : ℝ := (ki : ℝ) + (29 : ℝ) / 16
+  let cj : ℝ := (kj : ℝ) + (29 : ℝ) / 16
+  have hgi :
+      |operatorEigenvaluesOrdered M i - ci| ≤ (12 : ℝ) / 11 := by
+    simpa [ki, ci] using operatorEigenvalueOrderedCenterChoice_spec M i
+  have hgj :
+      |operatorEigenvaluesOrdered M j - cj| ≤ (12 : ℝ) / 11 := by
+    simpa [kj, cj] using operatorEigenvalueOrderedCenterChoice_spec M j
+  have hi_upper : operatorEigenvaluesOrdered M i ≤ ci + (12 : ℝ) / 11 := by
+    linarith [(abs_le.mp hgi).2]
+  have hj_lower : cj - (12 : ℝ) / 11 ≤ operatorEigenvaluesOrdered M j := by
+    linarith [(abs_le.mp hgj).1]
+  have hkj_ge : (ki : ℝ) + 3 ≤ (kj : ℝ) := by exact_mod_cast hjump
+  have hcj_ge : ci + 3 ≤ cj := by
+    dsimp [ci, cj]
+    linarith
+  have hstrict : ci + (12 : ℝ) / 11 < cj - (12 : ℝ) / 11 := by
+    linarith [hcj_ge]
+  have hlt : operatorEigenvaluesOrdered M i < operatorEigenvaluesOrdered M j := by
+    linarith [hi_upper, hj_lower, hstrict]
+  have hanti := operatorEigenvaluesOrdered_antitone M
+  have hle : operatorEigenvaluesOrdered M j ≤ operatorEigenvaluesOrdered M i := hanti hij.le
+  exact not_lt_of_ge hle hlt
 
 /-- Hall-style finite-level center-gap condition:
 every finite subfamily of eigenvalue candidate-center sets has union cardinality
