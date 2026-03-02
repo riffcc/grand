@@ -827,6 +827,72 @@ theorem exists_operatorEigenvalue_in_halfWindow_of_sturm
   · simpa [lower] using hiLower
   · simpa [upper] using hiUpper
 
+/-- Sturm-route to permutation-invariant center-gap:
+global counting-function equality forces a bijective pairing between indexed
+eigenvalues and structural centers, with explicit half-window gap `≤ 1/2`
+(hence `≤ 12/11`). -/
+theorem operatorCenterGapPermutationInvariant_of_sturm
+    (hS : OperatorSturmCountContract) :
+    OperatorCenterGapPermutationInvariant := by
+  intro M
+  classical
+  let φ : Fin (M + 1) → Fin (M + 1) :=
+    fun k => Classical.choose (exists_operatorEigenvalue_in_halfWindow_of_sturm hS M k)
+  have hφ_window :
+      ∀ k : Fin (M + 1),
+        operatorCenterAt k.1 - (1 : ℝ) / 2 < operatorEigenvalues M (φ k) ∧
+          operatorEigenvalues M (φ k) ≤ operatorCenterAt k.1 + (1 : ℝ) / 2 := by
+    intro k
+    exact Classical.choose_spec (exists_operatorEigenvalue_in_halfWindow_of_sturm hS M k)
+  have hφ_inj : Function.Injective φ := by
+    intro k1 k2 hk
+    have hk1 := hφ_window k1
+    have hk2 := hφ_window k2
+    have hk1' : operatorCenterAt k1.1 - (1 : ℝ) / 2 < operatorEigenvalues M (φ k2) ∧
+        operatorEigenvalues M (φ k2) ≤ operatorCenterAt k1.1 + (1 : ℝ) / 2 := by
+      simpa [hk] using hk1
+    have hk2' : operatorCenterAt k2.1 - (1 : ℝ) / 2 < operatorEigenvalues M (φ k2) ∧
+        operatorEigenvalues M (φ k2) ≤ operatorCenterAt k2.1 + (1 : ℝ) / 2 := hk2
+    have h12 : k1.1 ≤ k2.1 := by
+      have hlt : (k1.1 : ℝ) < (k2.1 : ℝ) + 1 := by
+        dsimp [operatorCenterAt] at hk1' hk2' ⊢
+        linarith [hk1'.1, hk2'.2]
+      exact Nat.lt_succ_iff.mp (by exact_mod_cast hlt)
+    have h21 : k2.1 ≤ k1.1 := by
+      have hlt : (k2.1 : ℝ) < (k1.1 : ℝ) + 1 := by
+        dsimp [operatorCenterAt] at hk1' hk2' ⊢
+        linarith [hk2'.1, hk1'.2]
+      exact Nat.lt_succ_iff.mp (by exact_mod_cast hlt)
+    exact Fin.ext (Nat.le_antisymm h12 h21)
+  have hφ_bij : Function.Bijective φ := by
+    exact (Fintype.bijective_iff_injective_and_card φ).2 ⟨hφ_inj, by simp⟩
+  let e : Fin (M + 1) ≃ Fin (M + 1) := Equiv.ofBijective φ hφ_bij
+  refine ⟨e.symm, ?_⟩
+  intro i
+  let k : Fin (M + 1) := e.symm i
+  have hkφ : φ k = i := by
+    dsimp [k]
+    exact e.apply_symm_apply i
+  have hkWin :
+      operatorCenterAt k.1 - (1 : ℝ) / 2 < operatorEigenvalues M i ∧
+        operatorEigenvalues M i ≤ operatorCenterAt k.1 + (1 : ℝ) / 2 := by
+    have hkWin0 := hφ_window k
+    simpa [hkφ] using hkWin0
+  have habs_half :
+      |operatorEigenvalues M i - operatorCenterAt k.1| ≤ (1 : ℝ) / 2 := by
+    refine abs_le.mpr ?_
+    constructor
+    · have hlow : operatorCenterAt k.1 - (1 : ℝ) / 2 ≤ operatorEigenvalues M i := le_of_lt hkWin.1
+      linarith
+    · linarith [hkWin.2]
+  have hhalf_le_twelve : (1 : ℝ) / 2 ≤ (12 : ℝ) / 11 := by norm_num
+  calc
+    |operatorEigenvalues M i - (((e.symm i).1 : ℝ) + (29 : ℝ) / 16)|
+        = |operatorEigenvalues M i - operatorCenterAt k.1| := by
+            simp [k, operatorCenterAt]
+    _ ≤ (1 : ℝ) / 2 := habs_half
+    _ ≤ (12 : ℝ) / 11 := hhalf_le_twelve
+
 /-- Sturm-route counting consequence:
 if eigenvalue and center counting functions agree at every threshold, then the
 eigenvalue counting function also increases by at most `3` across the structural
@@ -2236,6 +2302,16 @@ theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_weylCenterGap
       Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
   exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_centerGapPermutationInvariant
     (operatorCenterGapPermutationInvariant_of_weylCenterGap hW)
+
+/-- Sturm-route finite-level uniform inverse-square bound:
+counting-function equality implies a permutation-invariant center-gap pairing,
+which yields the same Path-B uniform summability bound used by the RH lane. -/
+theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm
+    (hS : OperatorSturmCountContract) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
+  exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_centerGapPermutationInvariant
+    (operatorCenterGapPermutationInvariant_of_sturm hS)
 
 /-- Cardinality growth control for the concrete operator spectral ladder. -/
 theorem card_operatorSpecN_le (N : ℕ) :
