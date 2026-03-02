@@ -5313,6 +5313,92 @@ theorem operatorEigenvaluesOrdered_reflect_index_gt_of_gt_centerHalf
     operatorEigenvaluesOrdered_index_lt_of_value_lt M hval
   exact ⟨j', hj', hjlt⟩
 
+/-- Micro-lemma 1 (bottom-collapse exclusion at the first ordered index):
+for `M ≥ 4`, if the first ordered candidate minimum is `0`, then its maximum
+is strictly positive; equivalently, the first ordered candidate interval cannot
+collapse to `{0}`. -/
+theorem operatorFirstOrdered_max_pos_of_min_zero_of_ge4
+    (M : ℕ) (hM4 : 4 ≤ M)
+    (hMin0 :
+      (operatorEigenvalueOrderedCenterChoiceMin M
+        ⟨0, by simp⟩).1 = 0) :
+    0 < (operatorEigenvalueOrderedCenterChoiceMax M
+      ⟨0, by simp⟩).1 := by
+  by_contra hnot
+  have hMax0 :
+      (operatorEigenvalueOrderedCenterChoiceMax M ⟨0, by simp⟩).1 = 0 :=
+    Nat.eq_zero_of_not_pos hnot
+  let j0 : Fin (Fintype.card (Fin (M + 1))) := ⟨0, by simp⟩
+  rcases operatorEigenvaluesOrdered_reflect_index_lt_of_singleton_bottom
+      M j0 hM4
+      (by simpa [j0] using hMin0)
+      (by simpa [j0] using hMax0) with ⟨j', _hjRef, hjlt⟩
+  have hjltNat : j'.1 < 0 := by simpa [j0] using hjlt
+  exact (Nat.not_lt_zero _ ) hjltNat
+
+/-- Micro-lemma 2 (`j = 1` top-boundary exclusion from concrete `12/11`
+Gershgorin geometry): for `M ≥ 4`, if the first ordered candidate minimum is
+`0`, then the first ordered candidate maximum is strictly below `M`. -/
+theorem operatorFirstOrdered_max_lt_top_of_min_zero_of_ge4
+    (M : ℕ) (hM4 : 4 ≤ M)
+    (hMin0 :
+      (operatorEigenvalueOrderedCenterChoiceMin M
+        ⟨0, by simp⟩).1 = 0) :
+    (operatorEigenvalueOrderedCenterChoiceMax M
+      ⟨0, by simp⟩).1 < M := by
+  by_contra hNotLt
+  have hge : M ≤ (operatorEigenvalueOrderedCenterChoiceMax M ⟨0, by simp⟩).1 :=
+    Nat.le_of_not_gt hNotLt
+  have hle :
+      (operatorEigenvalueOrderedCenterChoiceMax M ⟨0, by simp⟩).1 ≤ M :=
+    Nat.le_of_lt_succ (operatorEigenvalueOrderedCenterChoiceMax M ⟨0, by simp⟩).2
+  have hMaxEqM :
+      (operatorEigenvalueOrderedCenterChoiceMax M ⟨0, by simp⟩).1 = M :=
+    le_antisymm hle hge
+  let j0 : Fin (Fintype.card (Fin (M + 1))) := ⟨0, by simp⟩
+  let k0 : Fin (M + 1) := ⟨0, Nat.succ_pos M⟩
+  let kM : Fin (M + 1) := ⟨M, Nat.lt_succ_self M⟩
+  have hk0_mem :
+      k0 ∈ operatorCenterCandidatesOrdered M j0 := by
+    have hmin_mem :
+        operatorEigenvalueOrderedCenterChoiceMin M j0 ∈
+          operatorCenterCandidatesOrdered M j0 :=
+      operatorEigenvalueOrderedCenterChoiceMin_mem M j0
+    have hEq0 : operatorEigenvalueOrderedCenterChoiceMin M j0 = k0 := by
+      apply Fin.ext
+      simpa [j0, k0] using hMin0
+    simpa [hEq0] using hmin_mem
+  have hkM_mem :
+      kM ∈ operatorCenterCandidatesOrdered M j0 := by
+    have hmax_mem :
+        operatorEigenvalueOrderedCenterChoiceMax M j0 ∈
+          operatorCenterCandidatesOrdered M j0 :=
+      operatorEigenvalueOrderedCenterChoiceMax_mem M j0
+    have hEqM : operatorEigenvalueOrderedCenterChoiceMax M j0 = kM := by
+      apply Fin.ext
+      simpa [j0, kM] using hMaxEqM
+    simpa [hEqM] using hmax_mem
+  have hk0_abs :
+      |operatorEigenvaluesOrdered M j0 - ((k0.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 :=
+    (Finset.mem_filter.mp hk0_mem).2
+  have hkM_abs :
+      |operatorEigenvaluesOrdered M j0 - ((kM.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 :=
+    (Finset.mem_filter.mp hkM_mem).2
+  have h0U :
+      operatorEigenvaluesOrdered M j0 - ((k0.1 : ℝ) + (29 : ℝ) / 16) ≤ (12 : ℝ) / 11 :=
+    (abs_le.mp hk0_abs).2
+  have hML :
+      -((12 : ℝ) / 11) ≤ operatorEigenvaluesOrdered M j0 - ((kM.1 : ℝ) + (29 : ℝ) / 16) := by
+    simpa using (abs_le.mp hkM_abs).1
+  have hMle : (M : ℝ) ≤ (24 : ℝ) / 11 := by
+    have hk0eval : ((k0.1 : ℝ) + (29 : ℝ) / 16) = (29 : ℝ) / 16 := by
+      simp [k0]
+    have hkMeval : ((kM.1 : ℝ) + (29 : ℝ) / 16) = (M : ℝ) + (29 : ℝ) / 16 := by
+      simp [kM]
+    linarith [h0U, hML, hk0eval, hkMeval]
+  have hMreal : (4 : ℝ) ≤ M := by exact_mod_cast hM4
+  linarith
+
 /-- Set-level invariance of `operatorSpecSet` under center reflection. -/
 theorem operatorSpecSet_image_reflect_structuralCenter (N : ℕ) :
     (operatorSpecSet N).image (fun t => (structuralCenterQ (N + 1) : ℝ) - t) =
