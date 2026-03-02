@@ -1744,6 +1744,150 @@ theorem operatorMin_not_mem_available_implies_pred_choice_of_min_available_prefi
   have hi : i = j - 1 := by omega
   simpa [hi] using hEq
 
+/-- Same-min branch micro-kernel:
+if `min(j-1)=min(j)` and there is any available candidate above that minimum at
+step `j-1`, then the greedy predecessor choice cannot equal `min(j)`. -/
+theorem operatorPredChoice_ne_futureMin_of_sameMin_and_aboveAvailable
+    (M : ℕ) (j : ℕ) (hj : j < operatorGreedyCard M)
+    (hjm1 : j - 1 < operatorGreedyCard M)
+    (hSameMin :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1)
+    (hAboveAvail :
+      ∃ c : Fin (M + 1),
+        c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ ∧
+        c ∈ operatorGreedyAvailableNat M (j - 1) ∧
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 < c.1) :
+    operatorGreedyChoiceNat M (j - 1) ≠
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ := by
+  rcases hAboveAvail with ⟨c, hcCand, hcAvail, hmin_lt_c⟩
+  let CandAvail : Finset (Fin (M + 1)) :=
+    ((operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩).filter
+      (fun k => k ∈ operatorGreedyAvailableNat M (j - 1)))
+  have hcIn : c ∈ CandAvail := by
+    exact Finset.mem_filter.mpr ⟨by simpa [hjm1] using hcCand, hcAvail⟩
+  have hCA : CandAvail.Nonempty := ⟨c, hcIn⟩
+  have hchoice :
+      operatorGreedyChoiceNat M (j - 1) = CandAvail.max' hCA := by
+    let P : Prop := CandAvail.Nonempty
+    let F : P → Fin (M + 1) := fun h => CandAvail.max' h
+    let G : ¬P → Fin (M + 1) := fun _ =>
+      if hA : (operatorGreedyAvailableNat M (j - 1)).Nonempty then
+        (operatorGreedyAvailableNat M (j - 1)).max' hA
+      else
+        ⟨0, Nat.succ_pos M⟩
+    have hdif : dite P F G = F hCA := dif_pos hCA
+    simpa [operatorGreedyChoiceNat, hjm1, CandAvail, P, F, G] using hdif
+  have hcle :
+      c.1 ≤ (CandAvail.max' hCA).1 := by
+    exact Finset.le_max' CandAvail c hcIn
+  have hgt_choice :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+        (operatorGreedyChoiceNat M (j - 1)).1 := by
+    have hchoiceVal : (operatorGreedyChoiceNat M (j - 1)).1 = (CandAvail.max' hCA).1 := by
+      simpa [hchoice]
+    have hgtMax :
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+          (CandAvail.max' hCA).1 := lt_of_lt_of_le hmin_lt_c hcle
+    simpa [hchoiceVal] using hgtMax
+  intro hEq
+  have hleEq :
+      (operatorGreedyChoiceNat M (j - 1)).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 := by
+    calc
+      (operatorGreedyChoiceNat M (j - 1)).1
+          = (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 := by simpa [hEq]
+      _ = (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 := by
+          simpa [hSameMin]
+  exact (not_lt_of_ge (le_of_eq hleEq)) hgt_choice
+
+/-- Two-case predecessor exclusion reduction:
+the predecessor non-collision obligation follows from a single same-min branch
+obligation; the strict-min branch is discharged structurally from
+`greedy ≥ min` + antitone minima. -/
+theorem operatorPredExcl_of_sameMinBranch
+    (M : ℕ)
+    (hSameMinBranch :
+      ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      ∀ hjm1 : j - 1 < operatorGreedyCard M,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        operatorGreedyChoiceNat M (j - 1) ≠
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩) :
+    ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      (∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) →
+      operatorGreedyChoiceNat M (j - 1) ≠
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ := by
+  intro j hj hjpos hPrefix
+  have hjm1Card : j - 1 < operatorGreedyCard M := by omega
+  have hminPrevAvail :
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1Card⟩ ∈
+        operatorGreedyAvailableNat M (j - 1) := by
+    exact hPrefix (j - 1) (by omega)
+  have hgreedy_ge_prevmin :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1Card⟩).1 ≤
+        (operatorGreedyChoiceNat M (j - 1)).1 :=
+    operatorGreedyChoiceNat_ge_min_of_min_available M (j - 1) hjm1Card hminPrevAvail
+  have hantiMin := operatorEigenvalueOrderedCenterChoiceMin_antitone M
+  have hmin_j_le_prev :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 ≤
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1Card⟩).1 := by
+    exact hantiMin (show (⟨j - 1, hjm1Card⟩ : Fin (operatorGreedyCard M)) ≤ ⟨j, hj⟩ by
+      exact Nat.sub_le j 1)
+  by_cases hEqMin :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1Card⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1
+  · exact hSameMinBranch j hj hjpos hjm1Card hPrefix hEqMin
+  · have hltMin :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 <
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1Card⟩).1 := by
+      exact lt_of_le_of_ne hmin_j_le_prev (Ne.symm hEqMin)
+    intro hEq
+    have hgeViaEq :
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1Card⟩).1 ≤
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 := by
+      calc
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1Card⟩).1
+            ≤ (operatorGreedyChoiceNat M (j - 1)).1 := hgreedy_ge_prevmin
+        _ = (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 := by
+            simpa [hEq]
+    exact (not_le_of_gt hltMin) hgeViaEq
+
+/-- Predecessor exclusion from an explicit same-min witness condition:
+if every same-min branch provides an available candidate strictly above that
+minimum at step `j-1`, then predecessor exclusion follows globally. -/
+theorem operatorPredExcl_of_sameMin_aboveAvailable
+    (M : ℕ)
+    (hAboveInSameMin :
+      ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      ∀ hjm1 : j - 1 < operatorGreedyCard M,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        ∃ c : Fin (M + 1),
+          c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ ∧
+          c ∈ operatorGreedyAvailableNat M (j - 1) ∧
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 < c.1) :
+    ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      (∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) →
+      operatorGreedyChoiceNat M (j - 1) ≠
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ := by
+  refine operatorPredExcl_of_sameMinBranch M ?_
+  intro j hj hjpos hjm1 hPrefix hSameMin
+  have hAbove :=
+    hAboveInSameMin j hj hjpos hjm1 hPrefix hSameMin
+  exact operatorPredChoice_ne_futureMin_of_sameMin_and_aboveAvailable
+    M j hj hjm1 hSameMin hAbove
+
 /-- Strong-induction closure:
 if the predecessor step never chooses `min(j)` under the prefix min-availability
 hypothesis, then `min(j)` is available at every step. -/
