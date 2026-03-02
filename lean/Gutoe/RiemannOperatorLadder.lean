@@ -928,6 +928,18 @@ theorem operatorCenterCandidatesOrdered_mem_iff_between_min_max
       (k := operatorEigenvalueOrderedCenterChoiceMax M j)
       (m := i) hmin_mem hmax_mem hi.1 hi.2
 
+/-- The ordered candidate interval has width at most `2` in index units. -/
+theorem operatorCenterCandidatesOrdered_width_le_two
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    (operatorEigenvalueOrderedCenterChoiceMax M j).1
+      ≤ (operatorEigenvalueOrderedCenterChoiceMin M j).1 + 2 := by
+  have hmin_mem : operatorEigenvalueOrderedCenterChoiceMin M j ∈ operatorCenterCandidatesOrdered M j :=
+    operatorEigenvalueOrderedCenterChoiceMin_mem M j
+  have hbounds :=
+    operatorCenterCandidatesOrdered_index_bounds_of_max M j
+      (i := operatorEigenvalueOrderedCenterChoiceMin M j) hmin_mem
+  omega
+
 /-- Hall-style finite-level center-gap condition:
 every finite subfamily of eigenvalue candidate-center sets has union cardinality
 at least the subfamily cardinality. -/
