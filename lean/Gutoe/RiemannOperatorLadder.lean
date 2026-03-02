@@ -738,6 +738,105 @@ theorem operatorSturm_prev_edge_indicator_zero_of_upper_pattern_and_nonzero
     · exact lt_of_not_ge hle
   exact operatorSturm_prev_edge_indicator_zero_of_center_gt_and_flip M x hcx hflip hp1nz
 
+/-- Recurrence-local sign separation above (or at) the next center:
+if the terminal edge does not flip and `p_{M+1}(x) ≠ 0`, then `p_M(x)` and
+`p_{M+1}(x)` have opposite signs. -/
+theorem operatorSturm_prev_sign_ne_of_center_le_and_noflip_nonzero
+    (M : ℕ) (x : ℝ)
+    (hcx : operatorCenterAt (M + 1) ≤ x)
+    (hnoflip : operatorSturmSign (operatorSturmP (M + 1) x) =
+      operatorSturmSign (operatorSturmP (M + 2) x))
+    (hp1nz : operatorSturmP (M + 1) x ≠ 0) :
+    operatorSturmSign (operatorSturmP M x) ≠
+      operatorSturmSign (operatorSturmP (M + 1) x) := by
+  have hc_nonpos : operatorCenterAt (M + 1) - x ≤ 0 := sub_nonpos.mpr hcx
+  have hd_pos : 0 < (operatorSturmOff ^ (2 : ℕ)) := operatorSturmOff_sq_pos
+  have hrec := operatorSturmP_step_center M x
+  have hp1_cases :
+      operatorSturmP (M + 1) x < 0 ∨ 0 < operatorSturmP (M + 1) x :=
+    lt_or_gt_of_ne hp1nz
+  rcases hp1_cases with hp1_neg | hp1_pos
+  · have hs1 : operatorSturmSign (operatorSturmP (M + 1) x) = -1 :=
+      operatorSturmSign_eq_neg_one_of_neg hp1_neg
+    have hs2 : operatorSturmSign (operatorSturmP (M + 2) x) = -1 := by
+      simpa [hs1] using hnoflip.symm
+    have hp2_neg : operatorSturmP (M + 2) x < 0 := by
+      by_contra hp2_nonneg
+      exact (operatorSturmSign_ne_neg_one_of_nonneg (not_lt.mp hp2_nonneg)) hs2
+    have hterm_nonneg :
+        0 ≤ (operatorCenterAt (M + 1) - x) * operatorSturmP (M + 1) x :=
+      mul_nonneg_of_nonpos_of_nonpos hc_nonpos (le_of_lt hp1_neg)
+    have hmul_pos : 0 < (operatorSturmOff ^ (2 : ℕ)) * operatorSturmP M x := by
+      linarith [hrec, hp2_neg, hterm_nonneg]
+    have hp0_pos : 0 < operatorSturmP M x := by
+      nlinarith [hd_pos, hmul_pos]
+    have hs0 : operatorSturmSign (operatorSturmP M x) = 1 :=
+      operatorSturmSign_eq_one_of_pos hp0_pos
+    intro hEq
+    have : (1 : Int) = -1 := by simpa [hs0, hs1] using hEq
+    exact (by decide : (1 : Int) ≠ -1) this
+  · have hs1 : operatorSturmSign (operatorSturmP (M + 1) x) = 1 :=
+      operatorSturmSign_eq_one_of_pos hp1_pos
+    have hs2 : operatorSturmSign (operatorSturmP (M + 2) x) = 1 := by
+      simpa [hs1] using hnoflip.symm
+    have hp2_pos : 0 < operatorSturmP (M + 2) x := by
+      by_contra hp2_nonpos
+      exact (operatorSturmSign_ne_one_of_nonpos (le_of_not_gt hp2_nonpos)) hs2
+    have hterm_nonpos :
+        (operatorCenterAt (M + 1) - x) * operatorSturmP (M + 1) x ≤ 0 :=
+      mul_nonpos_of_nonpos_of_nonneg hc_nonpos (le_of_lt hp1_pos)
+    have hmul_neg : (operatorSturmOff ^ (2 : ℕ)) * operatorSturmP M x < 0 := by
+      linarith [hrec, hp2_pos, hterm_nonpos]
+    have hp0_neg : operatorSturmP M x < 0 := by
+      nlinarith [hd_pos, hmul_neg]
+    have hs0 : operatorSturmSign (operatorSturmP M x) = -1 :=
+      operatorSturmSign_eq_neg_one_of_neg hp0_neg
+    intro hEq
+    have : (-1 : Int) = 1 := by simpa [hs0, hs1] using hEq
+    exact (by decide : (-1 : Int) ≠ 1) this
+
+/-- Indicator form of the previous-sign separation above (or at) center:
+if the terminal edge does not flip and `p_{M+1}(x) ≠ 0`, the previous edge
+indicator is forced to `1`. -/
+theorem operatorSturm_prev_edge_indicator_one_of_center_le_and_noflip_nonzero
+    (M : ℕ) (x : ℝ)
+    (hcx : operatorCenterAt (M + 1) ≤ x)
+    (hnoflip : operatorSturmSign (operatorSturmP (M + 1) x) =
+      operatorSturmSign (operatorSturmP (M + 2) x))
+    (hp1nz : operatorSturmP (M + 1) x ≠ 0) :
+    (if operatorSturmSign (operatorSturmP M x) ≠
+          operatorSturmSign (operatorSturmP (M + 1) x) then 1 else 0) = 1 := by
+  have hneq :
+      operatorSturmSign (operatorSturmP M x) ≠
+        operatorSturmSign (operatorSturmP (M + 1) x) :=
+    operatorSturm_prev_sign_ne_of_center_le_and_noflip_nonzero M x hcx hnoflip hp1nz
+  simp [hneq]
+
+/-- Lower-boundary pattern connector:
+if the local increment indicators satisfy `(b,a)=(1,0)` and `p_{M+1}(x) ≠ 0`,
+then the previous edge indicator is forced to `1` by recurrence-local sign
+separation. -/
+theorem operatorSturm_prev_edge_indicator_one_of_lower_pattern_and_nonzero
+    (M : ℕ) (x : ℝ)
+    (hb1 : (if operatorCenterAt (M + 1) ≤ x then 1 else 0) = 1)
+    (ha0 : (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0) = 0)
+    (hp1nz : operatorSturmP (M + 1) x ≠ 0) :
+    (if operatorSturmSign (operatorSturmP M x) ≠
+          operatorSturmSign (operatorSturmP (M + 1) x) then 1 else 0) = 1 := by
+  have hcx : operatorCenterAt (M + 1) ≤ x := by
+    by_cases hle : operatorCenterAt (M + 1) ≤ x
+    · exact hle
+    · simp [hle] at hb1
+  have hnoflip : operatorSturmSign (operatorSturmP (M + 1) x) =
+      operatorSturmSign (operatorSturmP (M + 2) x) := by
+    by_cases hneq : operatorSturmSign (operatorSturmP (M + 1) x) ≠
+        operatorSturmSign (operatorSturmP (M + 2) x)
+    · simp [hneq] at ha0
+    · exact not_not.mp hneq
+  exact operatorSturm_prev_edge_indicator_one_of_center_le_and_noflip_nonzero
+    M x hcx hnoflip hp1nz
+
 /-- Finite sign-variation count on consecutive Sturm recurrence values
 `p₀(x), p₁(x), ..., p_{M+1}(x)`. -/
 def operatorSturmSignVariationCount (M : ℕ) (x : ℝ) : ℕ :=
@@ -1528,13 +1627,22 @@ theorem sturmCenter_gap_step_preserved_of_boundary_exclusions_split_upper
                     operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
       let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
       A = B + 1 → operatorSturmP (M + 1) x = 0 → ¬ (a = 1 ∧ b = 0))
-    (hLower :
+    (hLowerPrev :
       let A := operatorSturmSignVariationCount M x
       let B := operatorCenterCountLE M x
       let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
                     operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
       let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
-      B = A + 1 → ¬ (b = 1 ∧ a = 0)) :
+      let prev := (if operatorSturmSign (operatorSturmP M x) ≠
+                     operatorSturmSign (operatorSturmP (M + 1) x) then 1 else 0)
+      B = A + 1 → prev = 1 → ¬ (b = 1 ∧ a = 0))
+    (hLowerZero :
+      let A := operatorSturmSignVariationCount M x
+      let B := operatorCenterCountLE M x
+      let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                    operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+      let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+      B = A + 1 → operatorSturmP (M + 1) x = 0 → ¬ (b = 1 ∧ a = 0)) :
     operatorSturmSignVariationCount (M + 1) x ≤ operatorCenterCountLE (M + 1) x + 1 ∧
     operatorCenterCountLE (M + 1) x ≤ operatorSturmSignVariationCount (M + 1) x + 1 := by
   let A : ℕ := operatorSturmSignVariationCount M x
@@ -1595,7 +1703,21 @@ theorem sturmCenter_gap_step_preserved_of_boundary_exclusions_split_upper
         · omega
         · rcases ha_cases with ha0 | ha1
           · exfalso
-            exact (hLower hB_eq) ⟨hb1, ha0⟩
+            have hPrev1_of_nonzero :
+                  operatorSturmP (M + 1) x ≠ 0 →
+                    (if operatorSturmSign (operatorSturmP M x) ≠
+                          operatorSturmSign (operatorSturmP (M + 1) x) then 1 else 0) = 1 := by
+                intro hp1nz
+                exact operatorSturm_prev_edge_indicator_one_of_lower_pattern_and_nonzero
+                  M x (by simpa [b] using hb1) (by simpa [a] using ha0) hp1nz
+            by_cases hp1nz : operatorSturmP (M + 1) x ≠ 0
+            · exfalso
+              exact (hLowerPrev hB_eq (hPrev1_of_nonzero hp1nz)) ⟨hb1, ha0⟩
+            · exfalso
+              have hp1z : operatorSturmP (M + 1) x = 0 := by
+                by_contra hp1ne
+                exact hp1nz hp1ne
+              exact (hLowerZero hB_eq hp1z) ⟨hb1, ha0⟩
           · omega
       have hB_add' : B + b ≤ A + a + 1 := by omega
       exact hB_add'
@@ -1631,7 +1753,8 @@ theorem sturmCenter_gap_step_preserved_of_boundary_exclusions
   exact sturmCenter_gap_step_preserved_of_boundary_exclusions_split_upper M x hGapM
     (fun Aeq prevEq hab => (hUpper Aeq) hab)
     (fun Aeq hp1z hab => (hUpper Aeq) hab)
-    hLower
+    (fun Beq prevEq hba => (hLower Beq) hba)
+    (fun Beq hp1z hba => (hLower Beq) hba)
 
 /-- Finite-step preservation of the `±1` gap under minimal step-compatibility. -/
 theorem sturmCenter_gap_step_preserved_of_stepCompatibility
