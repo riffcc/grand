@@ -1616,6 +1616,89 @@ theorem operatorGreedyChoiceNat_ge_min_of_min_available
     simpa [hchoice]
   simpa [hchoice_val] using hbetween
 
+/-- Local-prefix reduction:
+under prefix minimum-availability up to `j-1`, any equality
+`greedy(i) = min(j)` must occur at the adjacent index `i = j-1`. -/
+theorem operatorGreedyChoiceNat_eq_future_min_implies_adjacent_of_min_available_prefix
+    (M : ℕ) (j : ℕ) (hj : j < operatorGreedyCard M)
+    (hminAvailPrefix :
+      ∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) :
+    ∀ i : ℕ, i < j →
+      operatorGreedyChoiceNat M i =
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ →
+      i + 1 = j := by
+  intro i hij hEq
+  have hiCard : i < operatorGreedyCard M := lt_trans hij hj
+  have hiSuccCard : i + 1 < operatorGreedyCard M := by omega
+  have hmin_i_avail0 :=
+    hminAvailPrefix i hij
+  have hmin_i_avail :
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨i, hiCard⟩ ∈
+        operatorGreedyAvailableNat M i := by
+    simpa using hmin_i_avail0
+  have hmin_i_le_greedy :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨i, hiCard⟩).1 ≤
+        (operatorGreedyChoiceNat M i).1 :=
+    operatorGreedyChoiceNat_ge_min_of_min_available M i hiCard hmin_i_avail
+  have hmin_antitone := operatorEigenvalueOrderedCenterChoiceMin_antitone M
+  have hmin_j_le_i :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 ≤
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨i, hiCard⟩).1 := by
+    exact hmin_antitone (show (⟨i, hiCard⟩ : Fin (operatorGreedyCard M)) ≤ ⟨j, hj⟩ by
+      exact Nat.le_of_lt hij)
+  have hmin_i_le_j :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨i, hiCard⟩).1 ≤
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 := by
+    calc
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨i, hiCard⟩).1
+          ≤ (operatorGreedyChoiceNat M i).1 := hmin_i_le_greedy
+      _ = (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 := by
+          simpa [hEq]
+  have hmin_eq :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨i, hiCard⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 := by
+    exact le_antisymm hmin_i_le_j hmin_j_le_i
+  by_contra hNotAdj
+  have hi1ltj : i + 1 < j := by omega
+  have hmin_i1_avail0 :=
+    hminAvailPrefix (i + 1) hi1ltj
+  have hmin_i1_avail :
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨i + 1, hiSuccCard⟩ ∈
+        operatorGreedyAvailableNat M (i + 1) := by
+    simpa using hmin_i1_avail0
+  have hmin_i1_le_i :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨i + 1, hiSuccCard⟩).1 ≤
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨i, hiCard⟩).1 := by
+    exact hmin_antitone
+      (show (⟨i, hiCard⟩ : Fin (operatorGreedyCard M)) ≤ ⟨i + 1, hiSuccCard⟩ by
+        exact Nat.le_succ i)
+  have hmin_j_le_i1 :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 ≤
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨i + 1, hiSuccCard⟩).1 := by
+    exact hmin_antitone
+      (show (⟨i + 1, hiSuccCard⟩ : Fin (operatorGreedyCard M)) ≤ ⟨j, hj⟩ by
+        exact Nat.le_of_lt hi1ltj)
+  have hmin_i1_eq_j :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨i + 1, hiSuccCard⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 := by
+    apply le_antisymm
+    · calc
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨i + 1, hiSuccCard⟩).1
+            ≤ (operatorEigenvalueOrderedCenterChoiceMin M ⟨i, hiCard⟩).1 := hmin_i1_le_i
+        _ = (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 := hmin_eq
+    · exact hmin_j_le_i1
+  have hnot_i1 :
+      operatorGreedyChoiceNat M i ∉ operatorGreedyAvailableNat M (i + 1) := by
+    simpa using operatorGreedyChoiceNat_not_mem_available_succ M i hiCard
+  have hEq_i1 :
+      operatorGreedyChoiceNat M i =
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨i + 1, hiSuccCard⟩ := by
+    apply Fin.ext
+    simpa [hEq, hmin_i1_eq_j]
+  exact hnot_i1 (hEq_i1 ▸ hmin_i1_avail)
+
 /-- Packaged `hCandAvail` from the single target property
 `min(j) ∈ available(j)` at each ordered step. -/
 theorem operatorGreedy_hCandAvail_of_min_available
