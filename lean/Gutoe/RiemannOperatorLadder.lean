@@ -2814,8 +2814,17 @@ theorem operatorSameMinPlusOneNoPrevObligation_clifford
 
 This names the minimal constructive payload expected from the Cl(1,3) parity
 lane: interior non-collapse (`0 < min`, `max < M`) and canonical `min+1`
-availability in every same-min branch. -/
+availability in every same-min branch, grounded in concrete operator symmetry
+(`T(A)=C-A` and centered spectral reflection). -/
 structure OperatorHodgeParityContract : Prop where
+  revParityCenterSub :
+    ∀ n : ℕ,
+      revParityConjugateMatrixC n (structuralRiemannMatrixC n)
+        = structuralCenterMatrixC n - structuralRiemannMatrixC n
+  spectrumReflectCentered :
+    ∀ n : ℕ, ∀ l : ℂ,
+      l ∈ spectrum ℂ (structuralRiemannMatrixC n) →
+      ((structuralCenterQ n : ℂ) - l) ∈ spectrum ℂ (structuralRiemannMatrixC n)
   interiorInSameMin :
     ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
     ∀ hjm1 : j - 1 < operatorGreedyCard M,
@@ -2838,6 +2847,60 @@ structure OperatorHodgeParityContract : Prop where
         c.1 =
           (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
         c ∈ operatorGreedyAvailableNat M (j - 1)
+
+/-- Concrete operator-symmetry core required by the Hodge parity lane:
+the finite structural matrix satisfies centered reversal/parity balance and the
+induced centered spectral reflection. -/
+def OperatorHodgeParityCore : Prop :=
+  (∀ n : ℕ,
+    revParityConjugateMatrixC n (structuralRiemannMatrixC n)
+      = structuralCenterMatrixC n - structuralRiemannMatrixC n)
+  ∧
+  (∀ n : ℕ, ∀ l : ℂ,
+    l ∈ spectrum ℂ (structuralRiemannMatrixC n) →
+    ((structuralCenterQ n : ℂ) - l) ∈ spectrum ℂ (structuralRiemannMatrixC n))
+
+/-- The operator already provides the Hodge parity core by construction. -/
+theorem operatorHodgeParityCore_default : OperatorHodgeParityCore := by
+  refine ⟨?_, ?_⟩
+  · intro n
+    exact structuralRiemannMatrixC_revParity_eq_center_sub n
+  · intro n l hl
+    exact structuralRiemannMatrixC_spectrum_reflect n l hl
+
+/-- Constructor: the Hodge parity contract is exactly the concrete operator
+symmetry core plus the same-min branch payload. -/
+theorem operatorHodgeParityContract_of_core_and_sameMinPayload
+    (hCore : OperatorHodgeParityCore)
+    (hInteriorInSameMin :
+      ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      ∀ hjm1 : j - 1 < operatorGreedyCard M,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        0 < (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ∧
+        (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 < M)
+    (hPlusOneAvailInSameMin :
+      ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      ∀ hjm1 : j - 1 < operatorGreedyCard M,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        ∃ c : Fin (M + 1),
+          c.1 =
+            (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+          c ∈ operatorGreedyAvailableNat M (j - 1)) :
+    OperatorHodgeParityContract := by
+  rcases hCore with ⟨hRev, hSpec⟩
+  exact
+    { revParityCenterSub := hRev
+      spectrumReflectCentered := hSpec
+      interiorInSameMin := hInteriorInSameMin
+      plusOneAvailInSameMin := hPlusOneAvailInSameMin }
 
 /-- Hodge parity contract instantiates the existing Clifford same-min symmetry
 contract surface. -/
