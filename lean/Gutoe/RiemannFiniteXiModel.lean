@@ -12,6 +12,7 @@ open Gutoe.RiemannLimitBridge
 open Gutoe.RiemannConvergenceTransfer
 
 noncomputable section
+open scoped BigOperators
 
 /-- Finite spectral set as a `Set`. -/
 def finiteSpecSet (spec : Finset ℝ) : Set ℝ := fun t => t ∈ spec
@@ -20,6 +21,91 @@ def finiteSpecSet (spec : Finset ℝ) : Set ℝ := fun t => t ∈ spec
     one zero factor per spectral ordinate. -/
 def XiFinite (spec : Finset ℝ) : ℂ → ℂ :=
   fun s => Finset.prod spec (fun t => (s - criticalLinePoint t : ℂ))
+
+/-- Basic growth envelope for finite Xi products:
+the norm is bounded by the product of factor envelopes. -/
+theorem norm_XiFinite_le_factorized_envelope
+    (spec : Finset ℝ) (s : ℂ) :
+    ‖XiFinite spec s‖ ≤
+      Finset.prod spec (fun t => (‖s‖ + ‖criticalLinePoint t‖)) := by
+  classical
+  unfold XiFinite
+  refine Finset.induction_on spec ?h0 ?hstep
+  · simp
+  · intro a spec ha ih
+    have henvelope_nonneg : 0 ≤ ‖s‖ + ‖criticalLinePoint a‖ := by
+      exact add_nonneg (norm_nonneg _) (norm_nonneg _)
+    calc
+      ‖Finset.prod (insert a spec) (fun t => (s - criticalLinePoint t : ℂ))‖
+          = ‖s - criticalLinePoint a‖ *
+              ‖Finset.prod spec (fun t => (s - criticalLinePoint t : ℂ))‖ := by
+            simp [Finset.prod_insert, ha]
+      _ ≤ (‖s‖ + ‖criticalLinePoint a‖) *
+            ‖Finset.prod spec (fun t => (s - criticalLinePoint t : ℂ))‖ := by
+            exact mul_le_mul_of_nonneg_right (norm_sub_le s (criticalLinePoint a))
+              (norm_nonneg _)
+      _ ≤ (‖s‖ + ‖criticalLinePoint a‖) *
+            Finset.prod spec (fun t => (‖s‖ + ‖criticalLinePoint t‖)) := by
+            exact mul_le_mul_of_nonneg_left ih henvelope_nonneg
+      _ = Finset.prod (insert a spec) (fun t => (‖s‖ + ‖criticalLinePoint t‖)) := by
+            simp [Finset.prod_insert, ha]
+
+/-- Cardinality growth corollary for finite Xi products under a uniform ordinate bound. -/
+theorem norm_XiFinite_le_pow_card_of_ordinate_bound
+    (spec : Finset ℝ) (s : ℂ) (B : ℝ)
+    (hB : ∀ t ∈ spec, ‖criticalLinePoint t‖ ≤ B) :
+    ‖XiFinite spec s‖ ≤ (‖s‖ + B) ^ spec.card := by
+  have hEnvelope :
+      ‖XiFinite spec s‖ ≤
+        Finset.prod spec (fun t => (‖s‖ + ‖criticalLinePoint t‖)) :=
+    norm_XiFinite_le_factorized_envelope spec s
+  have hProdLeAux :
+      ∀ s' : Finset ℝ,
+        (∀ t ∈ s', ‖criticalLinePoint t‖ ≤ B) →
+        Finset.prod s' (fun t => (‖s‖ + ‖criticalLinePoint t‖))
+          ≤ Finset.prod s' (fun _t => (‖s‖ + B)) := by
+    intro s'
+    refine Finset.induction_on s' ?h0 ?hstep
+    · intro _hBs
+      simp
+    · intro a s' ha ih hBs
+      have hBa : ‖criticalLinePoint a‖ ≤ B := hBs a (by simp [ha])
+      have hBs' : ∀ t ∈ s', ‖criticalLinePoint t‖ ≤ B := by
+        intro t ht
+        exact hBs t (by simp [ht])
+      have hfactor : ‖s‖ + ‖criticalLinePoint a‖ ≤ ‖s‖ + B := by
+        linarith [hBa]
+      have hconst_nonneg : 0 ≤ ‖s‖ + B := by
+        have hleft_nonneg : 0 ≤ ‖s‖ + ‖criticalLinePoint a‖ := by
+          exact add_nonneg (norm_nonneg _) (norm_nonneg _)
+        exact le_trans hleft_nonneg hfactor
+      have hprod_nonneg :
+          0 ≤ Finset.prod s' (fun t => (‖s‖ + ‖criticalLinePoint t‖)) := by
+        refine Finset.prod_nonneg ?_
+        intro t ht
+        exact add_nonneg (norm_nonneg _) (norm_nonneg _)
+      calc
+        Finset.prod (insert a s') (fun t => (‖s‖ + ‖criticalLinePoint t‖))
+            = (‖s‖ + ‖criticalLinePoint a‖) *
+                Finset.prod s' (fun t => (‖s‖ + ‖criticalLinePoint t‖)) := by
+                  simp [Finset.prod_insert, ha]
+        _ ≤ (‖s‖ + B) * Finset.prod s' (fun t => (‖s‖ + ‖criticalLinePoint t‖)) := by
+              exact mul_le_mul_of_nonneg_right hfactor hprod_nonneg
+        _ ≤ (‖s‖ + B) * Finset.prod s' (fun _t => (‖s‖ + B)) := by
+              exact mul_le_mul_of_nonneg_left (ih hBs') hconst_nonneg
+        _ = (‖s‖ + B) ^ (s'.card + 1) := by
+              simpa [pow_succ, mul_comm, mul_left_comm, mul_assoc]
+        _ = Finset.prod (insert a s') (fun _t => (‖s‖ + B)) := by
+              simpa [ha]
+  have hProdLe :
+      Finset.prod spec (fun t => (‖s‖ + ‖criticalLinePoint t‖))
+        ≤ Finset.prod spec (fun _t => (‖s‖ + B)) :=
+    hProdLeAux spec hB
+  calc
+    ‖XiFinite spec s‖
+        ≤ Finset.prod spec (fun t => (‖s‖ + ‖criticalLinePoint t‖)) := hEnvelope
+    _ ≤ Finset.prod spec (fun _t => (‖s‖ + B)) := hProdLe
+    _ = (‖s‖ + B) ^ spec.card := by simp
 
 theorem XiFinite_zero_of_mem
     (spec : Finset ℝ) {t : ℝ}

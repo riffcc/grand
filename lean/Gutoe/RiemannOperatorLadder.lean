@@ -187,6 +187,24 @@ theorem xiFinite_operatorSpecN_zero_ne (N : ℕ) :
   intro t ht
   simp [criticalLinePoint_ne_zero t]
 
+/-- Concrete operator-level envelope bound for finite Xi factors. -/
+theorem norm_operatorXiFiniteLadder_le_factorized_envelope
+    (N : ℕ) (s : ℂ) :
+    ‖operatorXiFiniteLadder N s‖ ≤
+      Finset.prod (operatorSpecN N) (fun t => (‖s‖ + ‖criticalLinePoint t‖)) := by
+  simpa [operatorXiFiniteLadder, XiFiniteLadder] using
+    (norm_XiFinite_le_factorized_envelope (operatorSpecN N) s)
+
+/-- Concrete operator-level cardinality growth bound under a uniform
+ordinate envelope at level `N`. -/
+theorem norm_operatorXiFiniteLadder_le_pow_card_of_ordinate_bound
+    (N : ℕ) (s : ℂ) (B : ℝ)
+    (hB : ∀ t ∈ operatorSpecN N, ‖criticalLinePoint t‖ ≤ B) :
+    ‖operatorXiFiniteLadder N s‖ ≤ (‖s‖ + B) ^ (operatorSpecN N).card := by
+  simpa [operatorXiFiniteLadder, XiFiniteLadder] using
+    (norm_XiFinite_le_pow_card_of_ordinate_bound
+      (operatorSpecN N) s B hB)
+
 /-- Finite zero witnesses for the operator Xi ladder:
 every finite-level zero is exactly a critical-line point listed in `operatorSpecN N`. -/
 theorem finiteZeroWitness_operatorXiFiniteLadder :
@@ -390,18 +408,6 @@ theorem operatorHurwitz_iff_operatorApproximateCapture :
   constructor
   · exact operatorApproximateCapture_of_hurwitzTransfer
   · exact operatorHurwitzTransfer_of_operatorApproximateCapture
-
-/-- Instantiation theorem: once the abstract Hurwitz kernel is provided, the
-operator lane gets the concrete Hurwitz-output transfer automatically. -/
-theorem operatorHurwitzTransfer_of_hurwitzKernel
-    (hKernel : HurwitzZeroApproxKernel XiTarget operatorXiFiniteLadder)
-    (hconv : TendstoLocallyUniformly operatorXiFiniteLadder XiTarget
-      (Filter.atTop : Filter ℕ)) :
-    OperatorHurwitzZeroApproxTransfer := by
-  exact hurwitzTransfer_of_kernel hKernel hconv
-    (fun N => differentiable_operatorXiFiniteLadder N)
-    (fun s hs => differentiableAt_XiTarget_of_zero hs)
-    (fun N => xiFinite_operatorSpecN_zero_ne N)
 
 /-- RH closure from approximate operator-spectrum capture.
 This is the exact interface needed for a future Hurwitz-style transfer lemma. -/
