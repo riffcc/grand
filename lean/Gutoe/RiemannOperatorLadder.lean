@@ -6866,6 +6866,22 @@ theorem operatorApproxZero_iff_operator_set_capture :
     (nontrivial_capture_iff_xiTarget_capture operatorSpecN).symm).trans
       operator_enumerated_capture_iff_operator_set_capture
 
+/-- Direct obligation instantiator:
+set-capture on the concrete operator spectrum lane yields the zero-tolerance
+operator approximation obligation. -/
+theorem operatorApproxZeroConvergence_of_operator_set_capture
+    (hCap : OperatorSetNontrivialCapture) :
+    OperatorApproxZeroConvergence := by
+  exact (operatorApproxZero_iff_operator_set_capture).2 hCap
+
+/-- RH closure routed through explicit instantiation of
+`OperatorApproxZeroConvergence` from operator set-capture. -/
+theorem riemannHypothesis_of_operator_set_capture_via_operatorApproxZero
+    (hCap : OperatorSetNontrivialCapture) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_operator_approxZero
+    (operatorApproxZeroConvergence_of_operator_set_capture hCap)
+
 /-- A finite operator-ladder witness immediately yields set-capture on the
 explicit operator spectrum lane. -/
 theorem operator_set_capture_of_operator_ladder
