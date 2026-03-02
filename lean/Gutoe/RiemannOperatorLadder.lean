@@ -1439,6 +1439,19 @@ theorem operatorSturmCountContract_of_signVariationBridge_and_stepCompatibility
   · simpa [hEigSturm M x] using hGapSC.1
   · simpa [hEigSturm M x] using hGapSC.2
 
+/-- Under the eigenvalue↔Sturm bridge, the corrected Sturm-route contract and
+minimal step-compatibility are equivalent. -/
+theorem operatorSturmCountContract_iff_stepCompatibility_of_signVariationBridge
+    (hEigSturm :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorEigenvalueCountLE M x = operatorSturmSignVariationCount M x) :
+    OperatorSturmCountContract ↔ OperatorSturmStepCompatibility := by
+  constructor
+  · intro hS
+    exact operatorSturmStepCompatibility_of_signVariationBridge_and_sturmContract hEigSturm hS
+  · intro hCompat
+    exact operatorSturmCountContract_of_signVariationBridge_and_stepCompatibility hEigSturm hCompat
+
 /-- Structural center-window occupancy bound:
 for fixed center index `k`, at most three structural centers can lie in the
 radius-`12/11` window around `operatorCenterAt k` (namely indices `k-1,k,k+1`
