@@ -1944,6 +1944,65 @@ theorem operatorGreedyChoiceNat_ne_future_min_of_min_available_prefix
       M j hj hminAvailPrefix i (lt_of_lt_of_le (Nat.lt_succ_self i) (Nat.le_of_lt hij)) hEq
   omega
 
+/-- Top-boundary exclusion (long-branch form):
+if `j ≥ 2`, same-min holds at `(j-1,j)`, and predecessor minimum is at the top
+boundary `M`, then this contradicts prefix min-availability via the
+`no-future-min-before-adjacent` lemma. -/
+theorem operatorSameMin_topBoundary_impossible_of_prefix
+    (M : ℕ) (j : ℕ) (hj : j < operatorGreedyCard M)
+    (hjge2 : 2 ≤ j)
+    (hjm1 : j - 1 < operatorGreedyCard M)
+    (hjm2 : j - 2 < operatorGreedyCard M)
+    (hPrefix :
+      ∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k)
+    (hSameMin :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1)
+    (hPrevTop :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 = M) :
+    False := by
+  have hcurTop :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 = M := by
+    omega
+  have hminAnti := operatorEigenvalueOrderedCenterChoiceMin_antitone M
+  have hprev_le_prev2 :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ≤
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 2, hjm2⟩).1 := by
+    have hidx : (j - 2) ≤ (j - 1) := by omega
+    exact hminAnti (show (⟨j - 2, hjm2⟩ : Fin (operatorGreedyCard M)) ≤ ⟨j - 1, hjm1⟩ from hidx)
+  have hprev2Top :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 2, hjm2⟩).1 = M := by
+    have hprev2_le_M :
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 2, hjm2⟩).1 ≤ M :=
+      Nat.le_of_lt_succ (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 2, hjm2⟩).2
+    omega
+  have hmin_prev2_avail :
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 2, hjm2⟩ ∈
+        operatorGreedyAvailableNat M (j - 2) := by
+    exact hPrefix (j - 2) (by omega)
+  have hchoice_ge_prev2 :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 2, hjm2⟩).1 ≤
+        (operatorGreedyChoiceNat M (j - 2)).1 :=
+    operatorGreedyChoiceNat_ge_min_of_min_available M (j - 2) hjm2 hmin_prev2_avail
+  have hchoice_prev2_eq_top :
+      (operatorGreedyChoiceNat M (j - 2)).1 = M := by
+    have hchoice_prev2_le_M : (operatorGreedyChoiceNat M (j - 2)).1 ≤ M :=
+      Nat.le_of_lt_succ (operatorGreedyChoiceNat M (j - 2)).2
+    omega
+  have hchoice_eq_curMin :
+      operatorGreedyChoiceNat M (j - 2) =
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ := by
+    apply Fin.ext
+    omega
+  have hNoFuture :
+      operatorGreedyChoiceNat M (j - 2) ≠
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ :=
+    operatorGreedyChoiceNat_ne_future_min_of_min_available_prefix
+      M j hj hPrefix (j - 2) (by omega)
+  exact hNoFuture hchoice_eq_curMin
+
 /-- If `min(j)` is unavailable under prefix minimum-availability up to `j-1`,
 then the immediate predecessor `j-1` must be the step that chose it. -/
 theorem operatorMin_not_mem_available_implies_pred_choice_of_min_available_prefix
