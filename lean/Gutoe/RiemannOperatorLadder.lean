@@ -6,6 +6,7 @@ import Gutoe.RiemannLimitBridge
 import Gutoe.RiemannConvergenceTransfer
 import Gutoe.RiemannFinalTarget
 import Gutoe.RiemannFiniteXiModel
+import Gutoe.RiemannHurwitzKernel
 
 namespace Gutoe.RiemannOperatorLadder
 
@@ -16,6 +17,7 @@ open Gutoe.RiemannLimitBridge
 open Gutoe.RiemannConvergenceTransfer
 open Gutoe.RiemannFinalTarget
 open Gutoe.RiemannFiniteXiModel
+open Gutoe.RiemannHurwitzKernel
 
 noncomputable section
 open scoped Topology
@@ -177,18 +179,6 @@ theorem differentiable_operatorXiFiniteLadder (N : ℕ) :
   simpa [operatorXiFiniteLadder, XiFiniteLadder] using
     (differentiable_XiFinite (operatorSpecN N))
 
-/-- `XiTarget = completedRiemannZeta` is differentiable at each of its zeros. -/
-theorem differentiableAt_XiTarget_of_zero
-    {s : ℂ} (hs : XiTarget s = 0) :
-    DifferentiableAt ℂ XiTarget s := by
-  have h0 : s ≠ 0 := by
-    intro hs0
-    exact xiTargetNonvanishingObligations.1 (by simpa [hs0] using hs)
-  have h1 : s ≠ 1 := by
-    intro hs1
-    exact xiTargetNonvanishingObligations.2.1 (by simpa [hs1] using hs)
-  simpa [XiTarget] using differentiableAt_completedZeta h0 h1
-
 /-- The finite operator Xi products are nontrivial: they never vanish at `0`. -/
 theorem xiFinite_operatorSpecN_zero_ne (N : ℕ) :
     XiFinite (operatorSpecN N) 0 ≠ 0 := by
@@ -196,6 +186,13 @@ theorem xiFinite_operatorSpecN_zero_ne (N : ℕ) :
   refine Finset.prod_ne_zero_iff.mpr ?_
   intro t ht
   simp [criticalLinePoint_ne_zero t]
+
+/-- Finite zero witnesses for the operator Xi ladder:
+every finite-level zero is exactly a critical-line point listed in `operatorSpecN N`. -/
+theorem finiteZeroWitness_operatorXiFiniteLadder :
+    FiniteZeroWitness operatorXiFiniteLadder operatorSpecN := by
+  intro N z hz0
+  exact (XiFinite_zero_iff_exists (operatorSpecN N) z).1 hz0
 
 /-- Constant tolerance profile for the concrete operator ladder. -/
 def operatorTolConst (τ : ℝ) : ℕ → ℝ := fun _ => τ
@@ -363,11 +360,16 @@ surface used by the RH closure theorem. -/
 theorem operatorApproximateCapture_of_hurwitzTransfer
     (hHurwitz : OperatorHurwitzZeroApproxTransfer) :
     OperatorApproximateCapture := by
+  have hApproxN : ApproximateCriticalCapture XiTarget operatorSpecN :=
+    approximateCriticalCapture_of_hurwitzTransfer_and_witness
+      (Xi := XiTarget)
+      (XiN := operatorXiFiniteLadder)
+      (specN := operatorSpecN)
+      hHurwitz
+      finiteZeroWitness_operatorXiFiniteLadder
   intro s hsXi ε hε
-  rcases hHurwitz s hsXi ε hε with ⟨N, z, hz0, hdist⟩
-  rcases (XiFinite_zero_iff_exists (operatorSpecN N) z).1 hz0 with ⟨t, htN, hzEq⟩
-  refine ⟨N, t, (mem_operatorSpecN_iff_mem_operatorSpecSet N t).1 htN, ?_⟩
-  simpa [hzEq] using hdist
+  rcases hApproxN s hsXi ε hε with ⟨N, t, htN, hdist⟩
+  exact ⟨N, t, (mem_operatorSpecN_iff_mem_operatorSpecSet N t).1 htN, hdist⟩
 
 /-- The approximate-capture surface also yields the Hurwitz-output surface:
 finite-level critical-line witnesses are concrete finite-product zeros. -/
@@ -389,33 +391,17 @@ theorem operatorHurwitz_iff_operatorApproximateCapture :
   · exact operatorApproximateCapture_of_hurwitzTransfer
   · exact operatorHurwitzTransfer_of_operatorApproximateCapture
 
-/-- Abstract Hurwitz kernel (engineering target):
-if a locally-uniform limit theorem with zero-nearby transfer is available for
-`F → f`, then every zero of `f` is approximated by zeros of finite levels `F N`. -/
-def HurwitzZeroApproxKernel
-    (F : ℕ → (ℂ → ℂ))
-    (f : ℂ → ℂ) : Prop :=
-  TendstoLocallyUniformly F f (Filter.atTop : Filter ℕ) →
-    (∀ N : ℕ, Differentiable ℂ (F N)) →
-    (∀ s : ℂ, f s = 0 → DifferentiableAt ℂ f s) →
-    (∀ N : ℕ, F N 0 ≠ 0) →
-    ∀ s : ℂ, f s = 0 → ∀ ε : ℝ, 0 < ε →
-      ∃ N : ℕ, ∃ z : ℂ, F N z = 0 ∧ ‖s - z‖ < ε
-
 /-- Instantiation theorem: once the abstract Hurwitz kernel is provided, the
 operator lane gets the concrete Hurwitz-output transfer automatically. -/
 theorem operatorHurwitzTransfer_of_hurwitzKernel
-    (hKernel : HurwitzZeroApproxKernel operatorXiFiniteLadder XiTarget)
+    (hKernel : HurwitzZeroApproxKernel XiTarget operatorXiFiniteLadder)
     (hconv : TendstoLocallyUniformly operatorXiFiniteLadder XiTarget
       (Filter.atTop : Filter ℕ)) :
     OperatorHurwitzZeroApproxTransfer := by
-  intro s hsXi ε hε
-  rcases hKernel hconv
-      (fun N => differentiable_operatorXiFiniteLadder N)
-      (fun s hs => differentiableAt_XiTarget_of_zero hs)
-      (fun N => xiFinite_operatorSpecN_zero_ne N)
-      s hsXi ε hε with ⟨N, z, hz0, hdist⟩
-  exact ⟨N, z, hz0, hdist⟩
+  exact hurwitzTransfer_of_kernel hKernel hconv
+    (fun N => differentiable_operatorXiFiniteLadder N)
+    (fun s hs => differentiableAt_XiTarget_of_zero hs)
+    (fun N => xiFinite_operatorSpecN_zero_ne N)
 
 /-- RH closure from approximate operator-spectrum capture.
 This is the exact interface needed for a future Hurwitz-style transfer lemma. -/

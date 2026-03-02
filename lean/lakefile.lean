@@ -138,6 +138,7 @@ lean_lib Gutoe where
              `Gutoe.RiemannLimitBridge,
              `Gutoe.RiemannConvergenceTransfer,
              `Gutoe.RiemannFinalTarget,
+             `Gutoe.RiemannHurwitzKernel,
              `Gutoe.RiemannTargetFiniteLadder,
              `Gutoe.RiemannConcreteLadder,
              `Gutoe.RiemannWeylEndgame,
