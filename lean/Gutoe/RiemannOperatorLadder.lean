@@ -177,6 +177,18 @@ theorem differentiable_operatorXiFiniteLadder (N : ℕ) :
   simpa [operatorXiFiniteLadder, XiFiniteLadder] using
     (differentiable_XiFinite (operatorSpecN N))
 
+/-- `XiTarget = completedRiemannZeta` is differentiable at each of its zeros. -/
+theorem differentiableAt_XiTarget_of_zero
+    {s : ℂ} (hs : XiTarget s = 0) :
+    DifferentiableAt ℂ XiTarget s := by
+  have h0 : s ≠ 0 := by
+    intro hs0
+    exact xiTargetNonvanishingObligations.1 (by simpa [hs0] using hs)
+  have h1 : s ≠ 1 := by
+    intro hs1
+    exact xiTargetNonvanishingObligations.2.1 (by simpa [hs1] using hs)
+  simpa [XiTarget] using differentiableAt_completedZeta h0 h1
+
 /-- The finite operator Xi products are nontrivial: they never vanish at `0`. -/
 theorem xiFinite_operatorSpecN_zero_ne (N : ℕ) :
     XiFinite (operatorSpecN N) 0 ≠ 0 := by
@@ -376,6 +388,34 @@ theorem operatorHurwitz_iff_operatorApproximateCapture :
   constructor
   · exact operatorApproximateCapture_of_hurwitzTransfer
   · exact operatorHurwitzTransfer_of_operatorApproximateCapture
+
+/-- Abstract Hurwitz kernel (engineering target):
+if a locally-uniform limit theorem with zero-nearby transfer is available for
+`F → f`, then every zero of `f` is approximated by zeros of finite levels `F N`. -/
+def HurwitzZeroApproxKernel
+    (F : ℕ → (ℂ → ℂ))
+    (f : ℂ → ℂ) : Prop :=
+  TendstoLocallyUniformly F f (Filter.atTop : Filter ℕ) →
+    (∀ N : ℕ, Differentiable ℂ (F N)) →
+    (∀ s : ℂ, f s = 0 → DifferentiableAt ℂ f s) →
+    (∀ N : ℕ, F N 0 ≠ 0) →
+    ∀ s : ℂ, f s = 0 → ∀ ε : ℝ, 0 < ε →
+      ∃ N : ℕ, ∃ z : ℂ, F N z = 0 ∧ ‖s - z‖ < ε
+
+/-- Instantiation theorem: once the abstract Hurwitz kernel is provided, the
+operator lane gets the concrete Hurwitz-output transfer automatically. -/
+theorem operatorHurwitzTransfer_of_hurwitzKernel
+    (hKernel : HurwitzZeroApproxKernel operatorXiFiniteLadder XiTarget)
+    (hconv : TendstoLocallyUniformly operatorXiFiniteLadder XiTarget
+      (Filter.atTop : Filter ℕ)) :
+    OperatorHurwitzZeroApproxTransfer := by
+  intro s hsXi ε hε
+  rcases hKernel hconv
+      (fun N => differentiable_operatorXiFiniteLadder N)
+      (fun s hs => differentiableAt_XiTarget_of_zero hs)
+      (fun N => xiFinite_operatorSpecN_zero_ne N)
+      s hsXi ε hε with ⟨N, z, hz0, hdist⟩
+  exact ⟨N, z, hz0, hdist⟩
 
 /-- RH closure from approximate operator-spectrum capture.
 This is the exact interface needed for a future Hurwitz-style transfer lemma. -/
