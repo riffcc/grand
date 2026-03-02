@@ -1942,29 +1942,17 @@ theorem operatorSameMin_aboveAvailable_of_plusOneAvailable
     (hSameMin :
       (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
         (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1)
-    (hMaxAbove :
-      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
-        (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1)
-    (hPlusOneAvail :
+    (hPlusOneCandAvail :
       ∃ c : Fin (M + 1),
         c.1 =
           (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+        c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ ∧
         c ∈ operatorGreedyAvailableNat M (j - 1)) :
     ∃ c : Fin (M + 1),
       c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ ∧
       c ∈ operatorGreedyAvailableNat M (j - 1) ∧
       (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 < c.1 := by
-  rcases hPlusOneAvail with ⟨c, hcEq, hcAvail⟩
-  have hmin_le_c :
-      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ≤ c.1 := by
-    omega
-  have hc_le_max :
-      c.1 ≤ (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 := by
-    omega
-  have hcCand :
-      c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ := by
-    exact (operatorCenterCandidatesOrdered_mem_iff_between_min_max M ⟨j - 1, hjm1⟩ c).2
-      ⟨hmin_le_c, hc_le_max⟩
+  rcases hPlusOneCandAvail with ⟨c, hcEq, hcCand, hcAvail⟩
   have hmin_lt_c :
       (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 < c.1 := by
     omega
@@ -1975,7 +1963,7 @@ this is the direct 5-step route
 `min+1 ∈ candidates ∩ available ⇒ greedy(j-1) > min(j)`. -/
 theorem operatorPredExcl_of_sameMin_plusOneAvailable
     (M : ℕ)
-    (hMaxAboveInSameMin :
+    (hPlusOneCandAvailInSameMin :
       ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
       ∀ hjm1 : j - 1 < operatorGreedyCard M,
         (∀ k : ℕ, ∀ hk : k < j,
@@ -1983,21 +1971,10 @@ theorem operatorPredExcl_of_sameMin_plusOneAvailable
             operatorGreedyAvailableNat M k) →
         (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
           (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
-        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
-          (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1)
-    (hPlusOneAvailInSameMin :
-      ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
-      ∀ hjm1 : j - 1 < operatorGreedyCard M,
-        (∀ k : ℕ, ∀ hk : k < j,
-          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
-            operatorGreedyAvailableNat M k) →
-        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
-          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
-        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
-          (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 →
         ∃ c : Fin (M + 1),
           c.1 =
             (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+          c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ ∧
           c ∈ operatorGreedyAvailableNat M (j - 1)) :
     ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
       (∀ k : ℕ, ∀ hk : k < j,
@@ -2007,18 +1984,15 @@ theorem operatorPredExcl_of_sameMin_plusOneAvailable
         operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ := by
   refine operatorPredExcl_of_sameMin_aboveAvailable M ?_
   intro j hj hjpos hjm1 hPrefix hSameMin
-  have hMaxAbove :
-      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
-        (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 :=
-    hMaxAboveInSameMin j hj hjpos hjm1 hPrefix hSameMin
-  have hPlusOneAvail :
+  have hPlusOneCandAvail :
       ∃ c : Fin (M + 1),
         c.1 =
           (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+        c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ ∧
         c ∈ operatorGreedyAvailableNat M (j - 1) :=
-    hPlusOneAvailInSameMin j hj hjpos hjm1 hPrefix hSameMin hMaxAbove
+    hPlusOneCandAvailInSameMin j hj hjpos hjm1 hPrefix hSameMin
   exact operatorSameMin_aboveAvailable_of_plusOneAvailable
-    M j hj hjm1 hSameMin hMaxAbove hPlusOneAvail
+    M j hj hjm1 hSameMin hPlusOneCandAvail
 
 /-- Clean same-min predecessor exclusion from predecessor-max availability.
 This isolates the core six-line argument and leaves endpoint/interior arithmetic
