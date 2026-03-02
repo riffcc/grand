@@ -548,6 +548,71 @@ theorem operatorSturmP_step (n : ℕ) (x : ℝ) :
         - (operatorSturmOff ^ (2 : ℕ)) * operatorSturmP n x := by
   rfl
 
+/-- Ternary sign marker used for finite Sturm sign-variation counting. -/
+def operatorSturmSign (r : ℝ) : Int :=
+  if r > 0 then 1 else if r < 0 then -1 else 0
+
+/-- Finite sign-variation count on consecutive Sturm recurrence values
+`p₀(x), p₁(x), ..., p_{M+1}(x)`. -/
+def operatorSturmSignVariationCount (M : ℕ) (x : ℝ) : ℕ :=
+  (((Finset.range (M + 1)).filter
+      (fun k =>
+        operatorSturmSign (operatorSturmP k x) ≠
+          operatorSturmSign (operatorSturmP (k + 1) x))).card)
+
+theorem operatorSturmSignVariationCount_le (M : ℕ) (x : ℝ) :
+    operatorSturmSignVariationCount M x ≤ M + 1 := by
+  unfold operatorSturmSignVariationCount
+  calc
+    (((Finset.range (M + 1)).filter
+        (fun k =>
+          operatorSturmSign (operatorSturmP k x) ≠
+            operatorSturmSign (operatorSturmP (k + 1) x))).card)
+        ≤ (Finset.range (M + 1)).card := by
+            simpa using (Finset.card_filter_le
+              (s := Finset.range (M + 1))
+              (p := fun k =>
+                operatorSturmSign (operatorSturmP k x) ≠
+                  operatorSturmSign (operatorSturmP (k + 1) x)))
+    _ = M + 1 := by simp
+
+/-- Appending one recurrence step can change the finite sign-variation count
+by at most one. -/
+theorem operatorSturmSignVariationCount_succ_le (M : ℕ) (x : ℝ) :
+    operatorSturmSignVariationCount (M + 1) x ≤
+      operatorSturmSignVariationCount M x + 1 := by
+  classical
+  let P : ℕ → Prop := fun k =>
+    operatorSturmSign (operatorSturmP k x) ≠
+      operatorSturmSign (operatorSturmP (k + 1) x)
+  have hsplit :
+      ((Finset.range (M + 2)).filter P).card
+        ≤ ((Finset.range (M + 1)).filter P).card + 1 := by
+    have hsub :
+        ((Finset.range (M + 1)).filter P) ⊆ ((Finset.range (M + 2)).filter P) := by
+      intro k hk
+      have hk' := Finset.mem_filter.mp hk
+      have hklt : k < M + 1 := Finset.mem_range.mp hk'.1
+      have hklt' : k < M + 2 := by omega
+      exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hklt', hk'.2⟩
+    have hadd :
+        ((Finset.range (M + 2)).filter P)
+          ⊆ insert (M + 1) ((Finset.range (M + 1)).filter P) := by
+      intro k hk
+      have hk' := Finset.mem_filter.mp hk
+      have hklt : k < M + 2 := Finset.mem_range.mp hk'.1
+      by_cases hEq : k = M + 1
+      · exact Finset.mem_insert.mpr (Or.inl hEq)
+      · have hlt : k < M + 1 := by omega
+        exact Finset.mem_insert.mpr (Or.inr (Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hlt, hk'.2⟩))
+    calc
+      ((Finset.range (M + 2)).filter P).card
+          ≤ (insert (M + 1) ((Finset.range (M + 1)).filter P)).card := Finset.card_le_card hadd
+      _ ≤ (((Finset.range (M + 1)).filter P).card) + 1 := by
+            simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using Finset.card_insert_le (a := M + 1) (s := ((Finset.range (M + 1)).filter P))
+  simpa [operatorSturmSignVariationCount, P]
+    using hsplit
+
 /-- Gershgorin-window separation geometry used by the Sturm route:
 if indices are at least `3` apart (forward), radius-`12/11` windows are strictly separated. -/
 theorem operatorCenterWindow_separated_of_add_three_le
@@ -570,6 +635,80 @@ def operatorCenterCountLE (M : ℕ) (x : ℝ) : ℕ :=
   Finset.card
     ((Finset.univ : Finset (Fin (M + 1))).filter
       (fun i => operatorCenterAt i.1 ≤ x))
+
+/-- `operatorCenterCountLE` as a concrete filtered-cardinality over `range (M+1)`. -/
+theorem operatorCenterCountLE_eq_range_filter_card (M : ℕ) (x : ℝ) :
+    operatorCenterCountLE M x =
+      ((Finset.range (M + 1)).filter (fun k => operatorCenterAt k ≤ x)).card := by
+  unfold operatorCenterCountLE
+  classical
+  let Sfin : Finset (Fin (M + 1)) :=
+    (Finset.univ : Finset (Fin (M + 1))).filter (fun i => operatorCenterAt i.1 ≤ x)
+  let Snat : Finset ℕ := (Finset.range (M + 1)).filter (fun k => operatorCenterAt k ≤ x)
+  have himage_eq : Sfin.image (fun i : Fin (M + 1) => i.1) = Snat := by
+    ext k
+    constructor
+    · intro hk
+      rcases Finset.mem_image.mp hk with ⟨i, hi, rfl⟩
+      have hi' := Finset.mem_filter.mp hi
+      exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr i.2, hi'.2⟩
+    · intro hk
+      have hk' := Finset.mem_filter.mp hk
+      refine Finset.mem_image.mpr ?_
+      refine ⟨⟨k, Finset.mem_range.mp hk'.1⟩, ?_, rfl⟩
+      exact Finset.mem_filter.mpr ⟨by simp, hk'.2⟩
+  have hcard_img :
+      (Sfin.image (fun i : Fin (M + 1) => i.1)).card = Sfin.card := by
+    simpa using Finset.card_image_of_injOn (s := Sfin) (f := fun i : Fin (M + 1) => i.1)
+      (by intro a ha b hb hab; exact Fin.ext hab)
+  calc
+    Sfin.card = (Sfin.image (fun i : Fin (M + 1) => i.1)).card := hcard_img.symm
+    _ = Snat.card := by simpa [himage_eq]
+
+/-- Appending one structural center index changes center-count at most by one. -/
+theorem operatorCenterCountLE_succ_le_add_one (M : ℕ) (x : ℝ) :
+    operatorCenterCountLE (M + 1) x ≤ operatorCenterCountLE M x + 1 := by
+  classical
+  let P : ℕ → Prop := fun k => operatorCenterAt k ≤ x
+  have hstep :
+      ((Finset.range (M + 2)).filter P).card
+        ≤ ((Finset.range (M + 1)).filter P).card + 1 := by
+    have hadd :
+        ((Finset.range (M + 2)).filter P)
+          ⊆ insert (M + 1) ((Finset.range (M + 1)).filter P) := by
+      intro k hk
+      have hk' := Finset.mem_filter.mp hk
+      have hklt : k < M + 2 := Finset.mem_range.mp hk'.1
+      by_cases hEq : k = M + 1
+      · exact Finset.mem_insert.mpr (Or.inl hEq)
+      · have hlt : k < M + 1 := by omega
+        exact Finset.mem_insert.mpr (Or.inr (Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hlt, hk'.2⟩))
+    calc
+      ((Finset.range (M + 2)).filter P).card
+          ≤ (insert (M + 1) ((Finset.range (M + 1)).filter P)).card := Finset.card_le_card hadd
+      _ ≤ (((Finset.range (M + 1)).filter P).card) + 1 := by
+            simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc]
+              using Finset.card_insert_le (a := M + 1) (s := ((Finset.range (M + 1)).filter P))
+  rw [operatorCenterCountLE_eq_range_filter_card, operatorCenterCountLE_eq_range_filter_card]
+  simpa [P] using hstep
+
+/-- Center-count monotonicity under level extension `M ↦ M+1`. -/
+theorem operatorCenterCountLE_mono_succ (M : ℕ) (x : ℝ) :
+    operatorCenterCountLE M x ≤ operatorCenterCountLE (M + 1) x := by
+  classical
+  rw [operatorCenterCountLE_eq_range_filter_card, operatorCenterCountLE_eq_range_filter_card]
+  refine Finset.card_le_card ?_
+  intro k hk
+  have hk' := Finset.mem_filter.mp hk
+  have hklt : k < M + 1 := Finset.mem_range.mp hk'.1
+  have hklt' : k < M + 2 := by omega
+  exact Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hklt', hk'.2⟩
+
+/-- One-step center-count increment is bounded by `1`. -/
+theorem operatorCenterCountLE_succ_sub_le_one (M : ℕ) (x : ℝ) :
+    operatorCenterCountLE (M + 1) x - operatorCenterCountLE M x ≤ 1 := by
+  have hle := operatorCenterCountLE_succ_le_add_one M x
+  omega
 
 /-- Sturm-route contract (corrected):
 eigenvalue and center counting functions differ by at most one at every threshold
