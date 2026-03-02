@@ -498,15 +498,59 @@ def OperatorCenterGapPermutationInvariant : Prop :=
   ∀ M : ℕ, ∃ σ : Fin (M + 1) ≃ Fin (M + 1), ∀ i : Fin (M + 1),
     |operatorEigenvalues M i - (((σ i).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11
 
+/-- Candidate center indices for the `i`-th finite-level eigenvalue:
+all structural centers within radius `12/11` in the real gap metric. -/
+def operatorCenterCandidates (M : ℕ) (i : Fin (M + 1)) : Finset (Fin (M + 1)) :=
+  Finset.univ.filter (fun k =>
+    |operatorEigenvalues M i - ((k.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11)
+
+/-- Hall-style finite-level center-gap condition:
+every finite subfamily of eigenvalue candidate-center sets has union cardinality
+at least the subfamily cardinality. -/
+def OperatorCenterGapHallCondition : Prop :=
+  ∀ M : ℕ, ∀ s : Finset (Fin (M + 1)),
+    s.card ≤ (s.biUnion (operatorCenterCandidates M)).card
+
+/-- Hall condition yields permutation-invariant center-gap pairing. -/
+theorem operatorCenterGapPermutationInvariant_of_hallCondition
+    (hHall : OperatorCenterGapHallCondition) :
+    OperatorCenterGapPermutationInvariant := by
+  intro M
+  classical
+  let t : Fin (M + 1) → Finset (Fin (M + 1)) := operatorCenterCandidates M
+  have hcard : ∀ s : Finset (Fin (M + 1)), s.card ≤ (s.biUnion t).card := by
+    intro s
+    simpa [t] using hHall M s
+  rcases (Finset.all_card_le_biUnion_card_iff_existsInjective' t).1 hcard with
+      ⟨f, hf, hmem⟩
+  have hsurj : Function.Surjective f := (Finite.injective_iff_surjective).1 hf
+  let σ : Fin (M + 1) ≃ Fin (M + 1) := Equiv.ofBijective f ⟨hf, hsurj⟩
+  refine ⟨σ, ?_⟩
+  intro i
+  have hfi : f i ∈ t i := hmem i
+  simpa [t, operatorCenterCandidates, σ] using hfi
+
+/-- Ordered Weyl center-gap implies Hall condition by taking the diagonal index
+as a witness in each candidate-center set. -/
+theorem operatorCenterGapHallCondition_of_weylCenterGap
+    (hW : OperatorWeylCenterGap) :
+    OperatorCenterGapHallCondition := by
+  intro M s
+  have hsubset : s ⊆ s.biUnion (operatorCenterCandidates M) := by
+    intro i hi
+    refine Finset.mem_biUnion.mpr ?_
+    refine ⟨i, hi, ?_⟩
+    refine Finset.mem_filter.mpr ?_
+    exact ⟨Finset.mem_univ i, by simpa using hW M i⟩
+  exact Finset.card_le_card hsubset
+
 /-- Ordered Weyl center-gap implies the permutation-invariant center-gap
 via the identity permutation. -/
 theorem operatorCenterGapPermutationInvariant_of_weylCenterGap
     (hW : OperatorWeylCenterGap) :
     OperatorCenterGapPermutationInvariant := by
-  intro M
-  refine ⟨Equiv.refl _, ?_⟩
-  intro i
-  simpa using hW M i
+  exact operatorCenterGapPermutationInvariant_of_hallCondition
+    (operatorCenterGapHallCondition_of_weylCenterGap hW)
 
 /-- Structural center on the real axis for the `k`-th Gershgorin lane. -/
 def operatorCenterAt (k : ℕ) : ℝ := (k : ℝ) + (29 : ℝ) / 16
