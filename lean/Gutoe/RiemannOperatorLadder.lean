@@ -1289,6 +1289,26 @@ theorem operatorLargeOrdinate_lower (N : ℕ) :
     (((N + 1 : ℕ) : ℝ) / 2) ≤ operatorLargeOrdinate N := by
   exact (Classical.choose_spec (exists_mem_operatorSpecN_ge_linear_half N)).2
 
+/-- The complex critical-line norm at the canonical large ordinate is at least
+the same explicit linear half-growth lower bound. -/
+theorem operatorLargeOrdinate_criticalLine_norm_lower (N : ℕ) :
+    (((N + 1 : ℕ) : ℝ) / 2) ≤ ‖criticalLinePoint (operatorLargeOrdinate N)‖ := by
+  have hlin : (((N + 1 : ℕ) : ℝ) / 2) ≤ operatorLargeOrdinate N :=
+    operatorLargeOrdinate_lower N
+  have hnonneg_t : 0 ≤ operatorLargeOrdinate N := by
+    have hhalf_nonneg : 0 ≤ (((N + 1 : ℕ) : ℝ) / 2) := by positivity
+    exact le_trans hhalf_nonneg hlin
+  have him_to_norm :
+      operatorLargeOrdinate N ≤ ‖criticalLinePoint (operatorLargeOrdinate N)‖ := by
+    have habs_im : |(criticalLinePoint (operatorLargeOrdinate N)).im|
+        ≤ ‖criticalLinePoint (operatorLargeOrdinate N)‖ :=
+      Complex.abs_im_le_norm (criticalLinePoint (operatorLargeOrdinate N))
+    have habs_im_eq :
+        |(criticalLinePoint (operatorLargeOrdinate N)).im| = operatorLargeOrdinate N := by
+      simpa [criticalLinePoint_im, abs_of_nonneg hnonneg_t]
+    simpa [habs_im_eq] using habs_im
+  exact le_trans hlin him_to_norm
+
 /-- The inverse-square series over the canonical large-ordinate selector is summable. -/
 theorem summable_one_div_abs_sq_operatorLargeOrdinate :
     Summable (fun N : ℕ => (1 : ℝ) / (|operatorLargeOrdinate N| ^ (2 : ℕ))) := by
@@ -1340,6 +1360,44 @@ theorem summable_one_div_abs_sq_operatorLargeOrdinate :
           ≤ (1 : ℝ) / ((((n + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ)) := hrecip
       _ = (4 : ℝ) * ((1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ))) := hhalf_rewrite
   exact Summable.of_nonneg_of_le hnonneg hle hmajor
+
+/-- Uniform inverse-square summability through critical-line norms at the
+canonical large-ordinate selector (Path-B ready majorant). -/
+theorem summable_one_div_normSq_criticalLine_operatorLargeOrdinate :
+    Summable (fun N : ℕ =>
+      (1 : ℝ) / (‖criticalLinePoint (operatorLargeOrdinate N)‖ ^ (2 : ℕ))) := by
+  have hnonneg :
+      ∀ N : ℕ,
+        0 ≤ (1 : ℝ) / (‖criticalLinePoint (operatorLargeOrdinate N)‖ ^ (2 : ℕ)) := by
+    intro N
+    positivity
+  have hle :
+      ∀ N : ℕ,
+        (1 : ℝ) / (‖criticalLinePoint (operatorLargeOrdinate N)‖ ^ (2 : ℕ))
+          ≤ (1 : ℝ) / (|operatorLargeOrdinate N| ^ (2 : ℕ)) := by
+    intro N
+    let t : ℝ := operatorLargeOrdinate N
+    have hnorm_ge_abs : |t| ≤ ‖criticalLinePoint t‖ := by
+      have habs_im : |(criticalLinePoint t).im| ≤ ‖criticalLinePoint t‖ :=
+        Complex.abs_im_le_norm (criticalLinePoint t)
+      simpa [criticalLinePoint_im] using habs_im
+    have hpow : |t| ^ (2 : ℕ) ≤ ‖criticalLinePoint t‖ ^ (2 : ℕ) := by
+      nlinarith [hnorm_ge_abs, abs_nonneg t, norm_nonneg (criticalLinePoint t)]
+    have hlin : (((N + 1 : ℕ) : ℝ) / 2) ≤ t := by
+      simpa [t] using operatorLargeOrdinate_lower N
+    have hhalf_pos : 0 < (((N + 1 : ℕ) : ℝ) / 2) := by positivity
+    have ht_pos : 0 < |t| := by
+      have ht_nonzero : t ≠ 0 := by
+        linarith [hlin, hhalf_pos]
+      exact abs_pos.mpr ht_nonzero
+    have hpow_pos : 0 < |t| ^ (2 : ℕ) := by positivity
+    have hrecip :
+        (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))
+          ≤ (1 : ℝ) / (|t| ^ (2 : ℕ)) := by
+      exact one_div_le_one_div_of_le hpow_pos hpow
+    simpa [t] using hrecip
+  exact Summable.of_nonneg_of_le hnonneg hle
+    summable_one_div_abs_sq_operatorLargeOrdinate
 
 /-- Cardinality growth control for the concrete operator spectral ladder. -/
 theorem card_operatorSpecN_le (N : ℕ) :
