@@ -1744,6 +1744,44 @@ theorem operatorMin_not_mem_available_implies_pred_choice_of_min_available_prefi
   have hi : i = j - 1 := by omega
   simpa [hi] using hEq
 
+/-- Strong-induction closure:
+if the predecessor step never chooses `min(j)` under the prefix min-availability
+hypothesis, then `min(j)` is available at every step. -/
+theorem operatorEigenvalueOrderedCenterChoiceMin_mem_available_of_pred_exclusion
+    (M : ℕ)
+    (hPredExcl :
+      ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        operatorGreedyChoiceNat M (j - 1) ≠
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩) :
+    ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M,
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ ∈
+        operatorGreedyAvailableNat M j := by
+  intro j
+  refine Nat.strongRecOn j ?_
+  intro j ih
+  intro hj
+  by_cases hj0 : j = 0
+  · subst hj0
+    simpa [operatorGreedyAvailableNat] using
+      (Finset.mem_univ (operatorEigenvalueOrderedCenterChoiceMin M ⟨0, hj⟩))
+  · have hjpos : 0 < j := Nat.pos_of_ne_zero hj0
+    have hPrefix :
+        ∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k := by
+      intro k hk
+      exact ih k hk (lt_trans hk hj)
+    by_contra hnot
+    have hPredChoice :
+        operatorGreedyChoiceNat M (j - 1) =
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ :=
+      operatorMin_not_mem_available_implies_pred_choice_of_min_available_prefix
+        M j hj hjpos hPrefix hnot
+    exact (hPredExcl j hj hjpos hPrefix) hPredChoice
+
 /-- Packaged `hCandAvail` from the single target property
 `min(j) ∈ available(j)` at each ordered step. -/
 theorem operatorGreedy_hCandAvail_of_min_available
@@ -1757,6 +1795,23 @@ theorem operatorGreedy_hCandAvail_of_min_available
         (fun k => k ∈ operatorGreedyAvailableNat M n)).Nonempty) := by
   intro n hn
   exact operatorGreedyCandAvail_nonempty_of_min_available M n hn (hminAvail n hn)
+
+/-- Global greedy closure from predecessor exclusion:
+the candidate-available branch is nonempty at every ordered step. -/
+theorem operatorGreedy_hCandAvail_of_pred_exclusion
+    (M : ℕ)
+    (hPredExcl :
+      ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        operatorGreedyChoiceNat M (j - 1) ≠
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩) :
+    ∀ n : ℕ, ∀ hn : n < operatorGreedyCard M,
+      (((operatorCenterCandidatesOrdered M ⟨n, hn⟩).filter
+        (fun k => k ∈ operatorGreedyAvailableNat M n)).Nonempty) := by
+  exact operatorGreedy_hCandAvail_of_min_available M
+    (operatorEigenvalueOrderedCenterChoiceMin_mem_available_of_pred_exclusion M hPredExcl)
 
 /-- Two-stage reduction:
 if no earlier step can choose the future ordered minimum center, the greedy
@@ -1883,6 +1938,22 @@ theorem operatorCenterGapPermutationInvariant_of_operatorGreedyMinAvailable
   refine operatorCenterGapPermutationInvariant_of_operatorGreedyCenter ?_
   intro M n hn
   exact operatorGreedy_hCandAvail_of_min_available M (hminAvail M) n hn
+
+/-- Global closure to permutation-invariant center-gap from predecessor exclusion:
+if each level satisfies the predecessor non-collision condition under prefix
+minimum-availability, the greedy route closes the full center-gap contract. -/
+theorem operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion
+    (hPredExcl :
+      ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        operatorGreedyChoiceNat M (j - 1) ≠
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩) :
+    OperatorCenterGapPermutationInvariant := by
+  refine operatorCenterGapPermutationInvariant_of_operatorGreedyCenter ?_
+  intro M n hn
+  exact operatorGreedy_hCandAvail_of_pred_exclusion M (hPredExcl M) n hn
 
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
