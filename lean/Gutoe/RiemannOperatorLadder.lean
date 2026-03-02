@@ -625,6 +625,28 @@ theorem operatorEigenvalueOrderedCenterChoiceMax_spec
     operatorEigenvalueOrderedCenterChoiceMax_mem M j
   exact (Finset.mem_filter.mp hmem).2
 
+/-- Canonical deterministic ordered-lane lower endpoint selector: pick the minimal
+admissible candidate center index. -/
+noncomputable def operatorEigenvalueOrderedCenterChoiceMin
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) : Fin (M + 1) :=
+  (operatorCenterCandidatesOrdered M j).min' (operatorCenterCandidatesOrdered_nonempty M j)
+
+/-- Membership certificate for the minimal ordered-lane center choice. -/
+theorem operatorEigenvalueOrderedCenterChoiceMin_mem
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    operatorEigenvalueOrderedCenterChoiceMin M j ∈ operatorCenterCandidatesOrdered M j := by
+  exact Finset.min'_mem (operatorCenterCandidatesOrdered M j)
+    (operatorCenterCandidatesOrdered_nonempty M j)
+
+/-- Gap certificate for the minimal ordered-lane center choice. -/
+theorem operatorEigenvalueOrderedCenterChoiceMin_spec
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    |operatorEigenvaluesOrdered M j
+      - (((operatorEigenvalueOrderedCenterChoiceMin M j).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+  have hmem : operatorEigenvalueOrderedCenterChoiceMin M j ∈ operatorCenterCandidatesOrdered M j :=
+    operatorEigenvalueOrderedCenterChoiceMin_mem M j
+  exact (Finset.mem_filter.mp hmem).2
+
 /-- Gap certificate for the chosen ordered-lane center index. -/
 theorem operatorEigenvalueOrderedCenterChoice_spec
     (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
@@ -874,6 +896,37 @@ theorem operatorCenterCandidatesOrdered_mem_of_between
     constructor <;> linarith [hm_lo, hm_hi]
   refine Finset.mem_filter.mpr ?_
   exact ⟨Finset.mem_univ m, hm_abs⟩
+
+/-- Exact interval characterization of ordered candidate sets:
+membership is equivalent to lying between the canonical min and max selectors. -/
+theorem operatorCenterCandidatesOrdered_mem_iff_between_min_max
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1))))
+    (i : Fin (M + 1)) :
+    i ∈ operatorCenterCandidatesOrdered M j ↔
+      (operatorEigenvalueOrderedCenterChoiceMin M j).1 ≤ i.1 ∧
+        i.1 ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1 := by
+  constructor
+  · intro hi
+    have hmin_mem : operatorEigenvalueOrderedCenterChoiceMin M j ∈ operatorCenterCandidatesOrdered M j :=
+      operatorEigenvalueOrderedCenterChoiceMin_mem M j
+    have hmax_mem : operatorEigenvalueOrderedCenterChoiceMax M j ∈ operatorCenterCandidatesOrdered M j :=
+      operatorEigenvalueOrderedCenterChoiceMax_mem M j
+    have hmin_le_i_fin :
+        operatorEigenvalueOrderedCenterChoiceMin M j ≤ i :=
+      Finset.min'_le (operatorCenterCandidatesOrdered M j) i hi
+    have hi_le_max_fin :
+        i ≤ operatorEigenvalueOrderedCenterChoiceMax M j :=
+      Finset.le_max' (operatorCenterCandidatesOrdered M j) i hi
+    exact ⟨hmin_le_i_fin, hi_le_max_fin⟩
+  · intro hi
+    have hmin_mem : operatorEigenvalueOrderedCenterChoiceMin M j ∈ operatorCenterCandidatesOrdered M j :=
+      operatorEigenvalueOrderedCenterChoiceMin_mem M j
+    have hmax_mem : operatorEigenvalueOrderedCenterChoiceMax M j ∈ operatorCenterCandidatesOrdered M j :=
+      operatorEigenvalueOrderedCenterChoiceMax_mem M j
+    exact operatorCenterCandidatesOrdered_mem_of_between M j
+      (i := operatorEigenvalueOrderedCenterChoiceMin M j)
+      (k := operatorEigenvalueOrderedCenterChoiceMax M j)
+      (m := i) hmin_mem hmax_mem hi.1 hi.2
 
 /-- Hall-style finite-level center-gap condition:
 every finite subfamily of eigenvalue candidate-center sets has union cardinality
