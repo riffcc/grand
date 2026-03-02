@@ -864,6 +864,95 @@ theorem sturmCenter_gap_step_preserved
   · simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hA'_le_B'1
   · simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hB'_le_A'1
 
+/-- Minimal step-compatibility form needed for `±1`-gap preservation:
+at the upper boundary (`A = B + 1`), the Sturm increment cannot exceed the center
+increment; symmetrically at the lower boundary (`B = A + 1`). -/
+def OperatorSturmStepCompatibility : Prop :=
+  ∀ M : ℕ, ∀ x : ℝ,
+    let A := operatorSturmSignVariationCount M x
+    let B := operatorCenterCountLE M x
+    let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                  operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+    let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+    (A = B + 1 → a ≤ b) ∧ (B = A + 1 → b ≤ a)
+
+/-- Strong edge-lock implies the minimal step-compatibility condition. -/
+theorem operatorSturmStepCompatibility_of_edgeLock
+    (hEdgeLock :
+      ∀ M : ℕ, ∀ x : ℝ,
+        (operatorSturmSignVariationCount M x = operatorCenterCountLE M x + 1 →
+          operatorCenterAt (M + 1) ≤ x) ∧
+        (operatorCenterCountLE M x = operatorSturmSignVariationCount M x + 1 →
+          operatorSturmSign (operatorSturmP (M + 1) x) ≠
+            operatorSturmSign (operatorSturmP (M + 2) x))) :
+    OperatorSturmStepCompatibility := by
+  intro M x
+  dsimp
+  constructor
+  · intro hAB
+    have hx : operatorCenterAt (M + 1) ≤ x := (hEdgeLock M x).1 hAB
+    split_ifs <;> omega
+  · intro hBA
+    have hx :
+        operatorSturmSign (operatorSturmP (M + 1) x) ≠
+          operatorSturmSign (operatorSturmP (M + 2) x) := (hEdgeLock M x).2 hBA
+    split_ifs <;> omega
+
+/-- Finite-step preservation of the `±1` gap under minimal step-compatibility. -/
+theorem sturmCenter_gap_step_preserved_of_stepCompatibility
+    (M : ℕ) (x : ℝ)
+    (hGapM :
+      operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
+      operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1)
+    (hCompat : OperatorSturmStepCompatibility) :
+    operatorSturmSignVariationCount (M + 1) x ≤ operatorCenterCountLE (M + 1) x + 1 ∧
+    operatorCenterCountLE (M + 1) x ≤ operatorSturmSignVariationCount (M + 1) x + 1 := by
+  let A : ℕ := operatorSturmSignVariationCount M x
+  let B : ℕ := operatorCenterCountLE M x
+  let a : ℕ :=
+    if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+          operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0
+  let b : ℕ := if operatorCenterAt (M + 1) ≤ x then 1 else 0
+  have hA' : operatorSturmSignVariationCount (M + 1) x = A + a := by
+    unfold A a
+    simpa using operatorSturmSignVariationCount_succ_eq_add_indicator M x
+  have hB' : operatorCenterCountLE (M + 1) x = B + b := by
+    unfold B b
+    simpa using operatorCenterCountLE_succ_eq_add_indicator M x
+  have ha_le_one : a ≤ 1 := by
+    unfold a
+    split_ifs <;> omega
+  have hb_le_one : b ≤ 1 := by
+    unfold b
+    split_ifs <;> omega
+  have hA_le_B1 : A ≤ B + 1 := hGapM.1
+  have hB_le_A1 : B ≤ A + 1 := hGapM.2
+  have hCompatAB : A = B + 1 → a ≤ b := by
+    simpa [A, B, a, b] using (hCompat M x).1
+  have hCompatBA : B = A + 1 → b ≤ a := by
+    simpa [A, B, a, b] using (hCompat M x).2
+  have hA'_le_B'1 : A + a ≤ B + b + 1 := by
+    by_cases hAB : A ≤ B
+    · have hA_add : A + a ≤ B + a := Nat.add_le_add_right hAB a
+      have hA_add' : A + a ≤ B + 1 := le_trans hA_add (by omega)
+      exact le_trans hA_add' (by omega)
+    · have hA_eq : A = B + 1 := by omega
+      have hab : a ≤ b := hCompatAB hA_eq
+      have hA_add' : A + a ≤ B + b + 1 := by omega
+      exact hA_add'
+  have hB'_le_A'1 : B + b ≤ A + a + 1 := by
+    by_cases hBA : B ≤ A
+    · have hB_add : B + b ≤ A + b := Nat.add_le_add_right hBA b
+      have hB_add' : B + b ≤ A + 1 := le_trans hB_add (by omega)
+      exact le_trans hB_add' (by omega)
+    · have hB_eq : B = A + 1 := by omega
+      have hba : b ≤ a := hCompatBA hB_eq
+      have hB_add' : B + b ≤ A + a + 1 := by omega
+      exact hB_add'
+  constructor
+  · simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hA'_le_B'1
+  · simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hB'_le_A'1
+
 /-- Reduction theorem: if eigenvalue count equals Sturm sign-variation count and
 the edge-lock implications hold at every level, then the Sturm-route contract
 (`|Δcount| ≤ 1`) follows for all thresholds. -/
@@ -897,6 +986,35 @@ theorem operatorSturmCountContract_of_signVariationBridge_and_edgeLock
       · exact le_trans hA0 (by omega)
       · exact le_trans hB0 (by omega)
     · exact sturmCenter_gap_step_preserved M x ih (hEdgeLock M x)
+  constructor
+  · simpa [hEigSturm M x] using hGapSC.1
+  · simpa [hEigSturm M x] using hGapSC.2
+
+/-- Same reduction as above, but with the minimal step-compatibility obligation. -/
+theorem operatorSturmCountContract_of_signVariationBridge_and_stepCompatibility
+    (hEigSturm :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorEigenvalueCountLE M x = operatorSturmSignVariationCount M x)
+    (hCompat : OperatorSturmStepCompatibility) :
+    OperatorSturmCountContract := by
+  intro M x
+  have hGapSC : operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
+      operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1 := by
+    induction' M with M ih
+    · have hA0 : operatorSturmSignVariationCount 0 x ≤ 1 := by
+        simpa using operatorSturmSignVariationCount_le 0 x
+      have hB0 : operatorCenterCountLE 0 x ≤ 1 := by
+        rw [operatorCenterCountLE_eq_range_filter_card]
+        calc
+          ((Finset.range (0 + 1)).filter (fun k => operatorCenterAt k ≤ x)).card
+              ≤ (Finset.range (0 + 1)).card := by
+                simpa using (Finset.card_filter_le (s := Finset.range (0 + 1))
+                  (p := fun k => operatorCenterAt k ≤ x))
+          _ = 1 := by simp
+      constructor
+      · exact le_trans hA0 (by omega)
+      · exact le_trans hB0 (by omega)
+    · exact sturmCenter_gap_step_preserved_of_stepCompatibility M x ih hCompat
   constructor
   · simpa [hEigSturm M x] using hGapSC.1
   · simpa [hEigSturm M x] using hGapSC.2
