@@ -786,6 +786,121 @@ def OperatorSturmCountContract : Prop :=
     operatorEigenvalueCountLE M x ≤ operatorCenterCountLE M x + 1 ∧
     operatorCenterCountLE M x ≤ operatorEigenvalueCountLE M x + 1
 
+/-- Finite-step preservation of the `±1` gap between Sturm sign-variation count
+and center count, provided the edge-lock implications hold at level `M`. -/
+theorem sturmCenter_gap_step_preserved
+    (M : ℕ) (x : ℝ)
+    (hGapM :
+      operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
+      operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1)
+    (hEdgeLock :
+      (operatorSturmSignVariationCount M x = operatorCenterCountLE M x + 1 →
+        operatorCenterAt (M + 1) ≤ x) ∧
+      (operatorCenterCountLE M x = operatorSturmSignVariationCount M x + 1 →
+        operatorSturmSign (operatorSturmP (M + 1) x) ≠
+          operatorSturmSign (operatorSturmP (M + 2) x))) :
+    operatorSturmSignVariationCount (M + 1) x ≤ operatorCenterCountLE (M + 1) x + 1 ∧
+    operatorCenterCountLE (M + 1) x ≤ operatorSturmSignVariationCount (M + 1) x + 1 := by
+  let A : ℕ := operatorSturmSignVariationCount M x
+  let B : ℕ := operatorCenterCountLE M x
+  let a : ℕ :=
+    if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+          operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0
+  let b : ℕ := if operatorCenterAt (M + 1) ≤ x then 1 else 0
+  have hA' : operatorSturmSignVariationCount (M + 1) x = A + a := by
+    unfold A a
+    simpa using operatorSturmSignVariationCount_succ_eq_add_indicator M x
+  have hB' : operatorCenterCountLE (M + 1) x = B + b := by
+    unfold B b
+    simpa using operatorCenterCountLE_succ_eq_add_indicator M x
+  have ha_le_one : a ≤ 1 := by
+    unfold a
+    split_ifs <;> omega
+  have hb_le_one : b ≤ 1 := by
+    unfold b
+    split_ifs <;> omega
+  have hA_le_B1 : A ≤ B + 1 := hGapM.1
+  have hB_le_A1 : B ≤ A + 1 := hGapM.2
+  have hA1_to_b1 :
+      A = B + 1 → b = 1 := by
+    intro hEq
+    have hx : operatorCenterAt (M + 1) ≤ x := hEdgeLock.1 (by simpa [A, B] using hEq)
+    unfold b
+    simp [hx]
+  have hB1_to_a1 :
+      B = A + 1 → a = 1 := by
+    intro hEq
+    have hx :
+        operatorSturmSign (operatorSturmP (M + 1) x) ≠
+          operatorSturmSign (operatorSturmP (M + 2) x) :=
+      hEdgeLock.2 (by simpa [A, B] using hEq)
+    unfold a
+    simp [hx]
+  have hA'_le_B'1 : A + a ≤ B + b + 1 := by
+    by_cases hAB : A ≤ B
+    · have hA_add : A + a ≤ B + a := Nat.add_le_add_right hAB a
+      have hA_add' : A + a ≤ B + 1 := le_trans hA_add (by omega)
+      exact le_trans hA_add' (by omega)
+    · have hBA_lt : B < A := Nat.lt_of_not_ge hAB
+      have hA_eq : A = B + 1 := by omega
+      have hb1 : b = 1 := hA1_to_b1 hA_eq
+      have hA_add' : A + a ≤ B + 2 := by omega
+      have hA_add'' : A + a ≤ B + b + 1 := by
+        omega
+      exact hA_add''
+  have hB'_le_A'1 : B + b ≤ A + a + 1 := by
+    by_cases hBA : B ≤ A
+    · have hB_add : B + b ≤ A + b := Nat.add_le_add_right hBA b
+      have hB_add' : B + b ≤ A + 1 := le_trans hB_add (by omega)
+      exact le_trans hB_add' (by omega)
+    · have hAB_lt : A < B := Nat.lt_of_not_ge hBA
+      have hB_eq : B = A + 1 := by omega
+      have ha1 : a = 1 := hB1_to_a1 hB_eq
+      have hB_add' : B + b ≤ A + 2 := by omega
+      have hB_add'' : B + b ≤ A + a + 1 := by
+        omega
+      exact hB_add''
+  constructor
+  · simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hA'_le_B'1
+  · simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hB'_le_A'1
+
+/-- Reduction theorem: if eigenvalue count equals Sturm sign-variation count and
+the edge-lock implications hold at every level, then the Sturm-route contract
+(`|Δcount| ≤ 1`) follows for all thresholds. -/
+theorem operatorSturmCountContract_of_signVariationBridge_and_edgeLock
+    (hEigSturm :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorEigenvalueCountLE M x = operatorSturmSignVariationCount M x)
+    (hEdgeLock :
+      ∀ M : ℕ, ∀ x : ℝ,
+        (operatorSturmSignVariationCount M x = operatorCenterCountLE M x + 1 →
+          operatorCenterAt (M + 1) ≤ x) ∧
+        (operatorCenterCountLE M x = operatorSturmSignVariationCount M x + 1 →
+          operatorSturmSign (operatorSturmP (M + 1) x) ≠
+            operatorSturmSign (operatorSturmP (M + 2) x))) :
+    OperatorSturmCountContract := by
+  intro M x
+  have hGapSC : operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
+      operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1 := by
+    induction' M with M ih
+    · have hA0 : operatorSturmSignVariationCount 0 x ≤ 1 := by
+        simpa using operatorSturmSignVariationCount_le 0 x
+      have hB0 : operatorCenterCountLE 0 x ≤ 1 := by
+        rw [operatorCenterCountLE_eq_range_filter_card]
+        calc
+          ((Finset.range (0 + 1)).filter (fun k => operatorCenterAt k ≤ x)).card
+              ≤ (Finset.range (0 + 1)).card := by
+                simpa using (Finset.card_filter_le (s := Finset.range (0 + 1))
+                  (p := fun k => operatorCenterAt k ≤ x))
+          _ = 1 := by simp
+      constructor
+      · exact le_trans hA0 (by omega)
+      · exact le_trans hB0 (by omega)
+    · exact sturmCenter_gap_step_preserved M x ih (hEdgeLock M x)
+  constructor
+  · simpa [hEigSturm M x] using hGapSC.1
+  · simpa [hEigSturm M x] using hGapSC.2
+
 /-- Structural center-window occupancy bound:
 for fixed center index `k`, at most three structural centers can lie in the
 radius-`12/11` window around `operatorCenterAt k` (namely indices `k-1,k,k+1`
