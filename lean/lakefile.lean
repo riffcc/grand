@@ -130,6 +130,7 @@ lean_lib Gutoe where
              `Gutoe.LambdaQG,
              `Gutoe.RiemannCore,
              `Gutoe.RiemannSelfAdjoint,
+             `Gutoe.RiemannOperatorLadder,
              `Gutoe.RiemannBridge,
              `Gutoe.RiemannCounting,
              `Gutoe.RiemannLayer2Identity,

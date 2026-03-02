@@ -1,9 +1,13 @@
 import Mathlib
 import Gutoe.RiemannTargetFiniteLadder
+import Gutoe.RiemannFiniteXiModel
+import Gutoe.RiemannCore
 
 namespace Gutoe.RiemannConcreteLadder
 
 open Gutoe.RiemannTargetFiniteLadder
+open Gutoe.RiemannFiniteXiModel
+open Gutoe.RiemannCore
 
 noncomputable section
 
@@ -150,13 +154,41 @@ theorem referenceSpecN_nested (N : ℕ) :
   refine ⟨k, ?_, rfl⟩
   exact Finset.mem_range.mpr (Nat.lt_trans (Finset.mem_range.mp hk) (Nat.lt_succ_self (N + 1)))
 
+/-- Every listed ordinate index up to `N` is present in the `N`th concrete prefix. -/
+theorem mem_referenceSpecN_of_le {n N : ℕ} (hn : n ≤ N) :
+    referenceOrdinate n ∈ referenceSpecN N := by
+  unfold referenceSpecN prefixSpec
+  refine Finset.mem_image.mpr ?_
+  exact ⟨n, Finset.mem_range.mpr (Nat.lt_succ_of_le hn), rfl⟩
+
+/-- Finite-level exactness on listed ordinates:
+`XiFinite (referenceSpecN N)` vanishes at each indexed reference ordinate `n ≤ N`. -/
+theorem xiFinite_referenceSpecN_zero_of_le {n N : ℕ} (hn : n ≤ N) :
+    XiFinite (referenceSpecN N) (criticalLinePoint (referenceOrdinate n)) = 0 := by
+  exact XiFinite_zero_of_mem (referenceSpecN N) (mem_referenceSpecN_of_le hn)
+
+/-- Pointwise finite-ladder capture for each listed reference ordinate. -/
+theorem reference_capture_of_index (n : ℕ) :
+    ∃ N : ℕ, ∃ t : ℝ, t ∈ referenceSpecN N ∧
+      criticalLinePoint (referenceOrdinate n) = criticalLinePoint t := by
+  refine ⟨n, referenceOrdinate n, mem_referenceSpecN_of_le (Nat.le_refl n), rfl⟩
+
 /-- In the concrete ladder, zero-tolerance convergence is equivalent to exact
 target zero-capture (canonical reduction theorem specialized). -/
 theorem approxZero_tolZero_iff_reference_capture :
     Gutoe.RiemannConvergenceTransfer.ApproxZeroConvergence
-      Gutoe.RiemannFinalTarget.XiTarget (XiFiniteLadder referenceSpecN) tolZero
+      Gutoe.RiemannFinalTarget.XiTarget (XiFiniteLadder referenceSpecN)
+      Gutoe.RiemannTargetFiniteLadder.tolZero
       ↔ XiTargetLadderZeroCapture referenceSpecN :=
   approxZero_tolZero_iff_zeroCapture referenceSpecN
+
+/-- Concrete-ladder nontrivial capture from a direct ordinate-enumeration hypothesis
+on the reference ordinate function. -/
+theorem reference_nontrivial_capture_of_ordinate_enumeration
+    (hEnum : RiemannNontrivialZeroOrdinateEnumeration referenceOrdinate) :
+    RiemannNontrivialLadderZeroCapture referenceSpecN := by
+  simpa [referenceSpecN] using
+    (ladder_capture_of_ordinate_enumeration referenceOrdinate hEnum)
 
 /-- Concrete-ladder RH closure surface:
 if the reference ladder captures all nontrivial `ζ` zeros, RH follows. -/
@@ -164,6 +196,14 @@ theorem mathlibRH_of_reference_nontrivial_capture
     (hCap : RiemannNontrivialLadderZeroCapture referenceSpecN) :
     RiemannHypothesis :=
   mathlibRH_of_nontrivial_capture referenceSpecN hCap
+
+/-- Concrete-ladder RH closure from a direct ordinate-enumeration hypothesis
+on the reference ordinate function. -/
+theorem mathlibRH_of_reference_ordinate_enumeration
+    (hEnum : RiemannNontrivialZeroOrdinateEnumeration referenceOrdinate) :
+    RiemannHypothesis :=
+  mathlibRH_of_reference_nontrivial_capture
+    (reference_nontrivial_capture_of_ordinate_enumeration hEnum)
 
 end
 
