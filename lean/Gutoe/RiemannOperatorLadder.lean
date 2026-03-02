@@ -1516,6 +1516,24 @@ theorem operatorGreedyChoiceNat_exists_prev_of_not_mem_available
       rcases ih x hNotPrev with ⟨i, hi, hix⟩
       exact ⟨i, Nat.lt_trans hi (Nat.lt_succ_self j), hix⟩
 
+/-- Generic availability/no-previous-choice equivalence:
+an arbitrary center `x` is available at step `j` iff no earlier greedy step
+chose `x`. -/
+theorem operatorAvailable_mem_iff_no_prev
+    (M : ℕ) (j : ℕ) (hj : j ≤ operatorGreedyCard M) (x : Fin (M + 1)) :
+    x ∈ operatorGreedyAvailableNat M j ↔
+      ∀ i : ℕ, i < j → operatorGreedyChoiceNat M i ≠ x := by
+  constructor
+  · intro hAvail i hij hEq
+    have hnot :=
+      operatorGreedyChoiceNat_not_mem_available_of_lt M i j hij hj
+    exact hnot (hEq ▸ hAvail)
+  · intro hNoPrev
+    by_contra hnot
+    rcases operatorGreedyChoiceNat_exists_prev_of_not_mem_available M j x hnot with
+      ⟨i, hij, hEq⟩
+    exact (hNoPrev i hij) hEq
+
 /-- Single-gap reduction:
 if no earlier step can choose the future ordered minimum center, then that
 minimum center is available at its own step. -/
@@ -2117,6 +2135,26 @@ theorem operatorMaxAboveInSameMin_of_plusOneCandidate
       c.1 ≤ (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 :=
     (operatorCenterCandidatesOrdered_mem_iff_between_min_max M ⟨j - 1, hjm1⟩ c).1 hcCand |>.2
   omega
+
+/-- Canonical `min+1` witness reduction:
+under `max(j-1)>min(j-1)`, there is a canonical center index `c = min+1`, and
+its availability at step `j-1` is equivalent to a pure no-previous-choice
+condition. This isolates the remaining seam to predecessor exclusion for that
+single explicit center. -/
+theorem operatorPlusOneAvail_iff_no_prev_choice_of_min_lt_max
+    (M : ℕ) (j : ℕ) (hjm1 : j - 1 < operatorGreedyCard M)
+    (hMaxAbove :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+        (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1) :
+    ∃ c : Fin (M + 1),
+      c.1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+      (c ∈ operatorGreedyAvailableNat M (j - 1) ↔
+        ∀ i : ℕ, i < (j - 1) → operatorGreedyChoiceNat M i ≠ c) := by
+  rcases operatorPlusOne_mem_candidates_of_min_lt_max M j hjm1 hMaxAbove with
+    ⟨c, hcEq, _hcCand⟩
+  refine ⟨c, hcEq, ?_⟩
+  exact operatorAvailable_mem_iff_no_prev M (j - 1) (Nat.le_of_lt hjm1) c
 
 /-- Clean same-min predecessor exclusion from predecessor-max availability.
 This isolates the core six-line argument and leaves endpoint/interior arithmetic
