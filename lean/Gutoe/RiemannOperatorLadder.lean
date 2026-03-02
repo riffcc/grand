@@ -1474,6 +1474,35 @@ theorem operatorSturmCountContract_of_signVariationBridge_and_stepCompatibility
   · simpa [hEigSturm M x] using hGapSC.1
   · simpa [hEigSturm M x] using hGapSC.2
 
+/-- Direct induction route from local boundary exclusions:
+if eigenvalue counting is bridged to Sturm sign-variation counting, and at each
+`(M,x)` the two outward boundary patterns are excluded, then the corrected
+Sturm-route counting contract follows globally. -/
+theorem operatorSturmCountContract_of_signVariationBridge_and_boundary_exclusions
+    (hEigSturm :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorEigenvalueCountLE M x = operatorSturmSignVariationCount M x)
+    (hBoundary :
+      ∀ M : ℕ, ∀ x : ℝ,
+        (let A := operatorSturmSignVariationCount M x
+         let B := operatorCenterCountLE M x
+         let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                       operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+         let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+         (A = B + 1 → ¬ (a = 1 ∧ b = 0)) ∧
+         (B = A + 1 → ¬ (b = 1 ∧ a = 0)))) :
+    OperatorSturmCountContract := by
+  intro M x
+  have hGapSC : operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
+      operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1 := by
+    induction' M with M ih
+    · simpa using operatorSturmSignVariationCount_centerCount_gap_zero x
+    · exact sturmCenter_gap_step_preserved_of_boundary_exclusions M x ih
+        (hBoundary M x).1 (hBoundary M x).2
+  constructor
+  · simpa [hEigSturm M x] using hGapSC.1
+  · simpa [hEigSturm M x] using hGapSC.2
+
 /-- Under the eigenvalue↔Sturm bridge, the corrected Sturm-route contract and
 minimal step-compatibility are equivalent. -/
 theorem operatorSturmCountContract_iff_stepCompatibility_of_signVariationBridge
