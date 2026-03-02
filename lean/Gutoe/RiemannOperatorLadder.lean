@@ -4826,6 +4826,40 @@ theorem operatorEigenvaluesOrdered_reflect_exists
     _ = (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j := by
           simpa using hi'
 
+/-- Index-order bridge for the antitone ordered eigenvalue lane:
+if one ordered value is strictly smaller than another, then its index is
+strictly larger. -/
+theorem operatorEigenvaluesOrdered_index_lt_of_value_lt
+    (M : ℕ)
+    {i j : Fin (Fintype.card (Fin (M + 1)))}
+    (hval : operatorEigenvaluesOrdered M i < operatorEigenvaluesOrdered M j) :
+    j < i := by
+  by_contra hnot
+  have hij : i ≤ j := le_of_not_gt hnot
+  have hanti := operatorEigenvaluesOrdered_antitone M
+  have hge : operatorEigenvaluesOrdered M j ≤ operatorEigenvaluesOrdered M i := hanti hij
+  exact (not_lt_of_ge hge) hval
+
+/-- Reflected-partner index localization (lower-half case):
+if an ordered eigenvalue is strictly below the structural center half, then any
+reflected ordered partner lies strictly earlier in the antitone ordered lane. -/
+theorem operatorEigenvaluesOrdered_reflect_index_lt_of_lt_centerHalf
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1))))
+    (hHalf : operatorEigenvaluesOrdered M j < (structuralCenterQ (M + 1) : ℝ) / 2) :
+    ∃ j' : Fin (Fintype.card (Fin (M + 1))),
+      operatorEigenvaluesOrdered M j' =
+        (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j ∧
+      j' < j := by
+  rcases operatorEigenvaluesOrdered_reflect_exists M j with ⟨j', hj'⟩
+  have hval : operatorEigenvaluesOrdered M j < operatorEigenvaluesOrdered M j' := by
+    calc
+      operatorEigenvaluesOrdered M j < (structuralCenterQ (M + 1) : ℝ) / 2 := hHalf
+      _ < (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j := by linarith
+      _ = operatorEigenvaluesOrdered M j' := by simpa [hj']
+  have hjlt : j' < j :=
+    operatorEigenvaluesOrdered_index_lt_of_value_lt M hval
+  exact ⟨j', hj', hjlt⟩
+
 /-- Set-level invariance of `operatorSpecSet` under center reflection. -/
 theorem operatorSpecSet_image_reflect_structuralCenter (N : ℕ) :
     (operatorSpecSet N).image (fun t => (structuralCenterQ (N + 1) : ℝ) - t) =
