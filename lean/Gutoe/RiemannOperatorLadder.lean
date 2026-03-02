@@ -2100,6 +2100,24 @@ theorem operatorPredExcl_of_sameMin_plusOneAvail_and_maxAbove
   exact operatorSameMin_aboveAvailable_of_plusOneAvail_and_maxAbove
     M j hj hjm1 hSameMin hMaxAbove hPlusOneAvail
 
+/-- From a `min+1` candidate witness in the same-min branch, `max(j-1) > min(j-1)`
+follows immediately by interval bounds. -/
+theorem operatorMaxAboveInSameMin_of_plusOneCandidate
+    (M : ℕ) (j : ℕ) (hj : j < operatorGreedyCard M)
+    (hjm1 : j - 1 < operatorGreedyCard M)
+    (hPlusOneCand :
+      ∃ c : Fin (M + 1),
+        c.1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+        c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩) :
+    (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+      (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 := by
+  rcases hPlusOneCand with ⟨c, hcEq, hcCand⟩
+  have hcLeMax :
+      c.1 ≤ (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 :=
+    (operatorCenterCandidatesOrdered_mem_iff_between_min_max M ⟨j - 1, hjm1⟩ c).1 hcCand |>.2
+  omega
+
 /-- Clean same-min predecessor exclusion from predecessor-max availability.
 This isolates the core six-line argument and leaves endpoint/interior arithmetic
 to upstream lemmas. -/
@@ -2460,6 +2478,46 @@ theorem operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sam
   intro M j hj hjpos hPrefix
   exact operatorPredExcl_of_sameMin_plusOneAvail_and_maxAbove M
     (hMaxAboveInSameMin M) (hPlusOneAvailInSameMin M) j hj hjpos hPrefix
+
+/-- Compatibility bridge: the older same-min witness format
+`min+1 ∈ candidates ∩ available` implies the reduced pair
+`max>min` plus `min+1 ∈ available`. -/
+theorem operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sameMin_plusOne_via_reduced
+    (hPlusOneCandAvailInSameMin :
+      ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      ∀ hjm1 : j - 1 < operatorGreedyCard M,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        ∃ c : Fin (M + 1),
+          c.1 =
+            (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+          c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ ∧
+          c ∈ operatorGreedyAvailableNat M (j - 1)) :
+    OperatorCenterGapPermutationInvariant := by
+  refine operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sameMin_plusOneAvail_and_maxAbove ?_ ?_
+  · intro M j hj hjpos hjm1 hPrefix hSameMin
+    have hPlusOneCandAvail :
+        ∃ c : Fin (M + 1),
+          c.1 =
+            (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+          c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ ∧
+          c ∈ operatorGreedyAvailableNat M (j - 1) :=
+      hPlusOneCandAvailInSameMin M j hj hjpos hjm1 hPrefix hSameMin
+    have hPlusOneCand :
+        ∃ c : Fin (M + 1),
+          c.1 =
+            (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+          c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ := by
+      rcases hPlusOneCandAvail with ⟨c, hcEq, hcCand, _⟩
+      exact ⟨c, hcEq, hcCand⟩
+    exact operatorMaxAboveInSameMin_of_plusOneCandidate M j hj hjm1 hPlusOneCand
+  · intro M j hj hjpos hjm1 hPrefix hSameMin
+    rcases hPlusOneCandAvailInSameMin M j hj hjpos hjm1 hPrefix hSameMin with
+      ⟨c, hcEq, _hcCand, hcAvail⟩
+    exact ⟨c, hcEq, hcAvail⟩
 
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
