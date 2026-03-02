@@ -3579,12 +3579,33 @@ def OperatorRHThreeConditionalObligations : Prop :=
   OperatorHurwitzKernel ∧
   OperatorXiFiniteLocallyUniformConvergence
 
+/-- Minimal RH surface currently used by the compiled closure:
+Hurwitz kernel + local-uniform convergence on the concrete operator lane. -/
+def OperatorRHTwoConditionalObligations : Prop :=
+  OperatorHurwitzKernel ∧
+  OperatorXiFiniteLocallyUniformConvergence
+
+/-- RH closure from the minimal two-obligation surface. -/
+theorem mathlibRH_of_operator_two_conditional_obligations
+    (h2 : OperatorRHTwoConditionalObligations) :
+    RiemannHypothesis := by
+  rcases h2 with ⟨hKernel, hConv⟩
+  exact mathlibRH_of_operator_hurwitzKernel_and_locallyUniform hKernel hConv
+
+/-- The historical three-obligation surface implies the minimal two-obligation
+surface by forgetting the extra geometry slot. -/
+theorem operator_two_conditional_obligations_of_three
+    (h3 : OperatorRHThreeConditionalObligations) :
+    OperatorRHTwoConditionalObligations := by
+  rcases h3 with ⟨_hGap, hKernel, hConv⟩
+  exact ⟨hKernel, hConv⟩
+
 /-- RH closure from the named three-obligation surface. -/
 theorem mathlibRH_of_operator_three_conditional_obligations
     (h3 : OperatorRHThreeConditionalObligations) :
     RiemannHypothesis := by
-  rcases h3 with ⟨_hGap, hKernel, hConv⟩
-  exact mathlibRH_of_operator_hurwitzKernel_and_locallyUniform hKernel hConv
+  exact mathlibRH_of_operator_two_conditional_obligations
+    (operator_two_conditional_obligations_of_three h3)
 
 /-- RH closure from the concrete operator Hurwitz kernel plus a summable
 nonnegative step profile and pointwise convergence to `XiTarget`. This packages
