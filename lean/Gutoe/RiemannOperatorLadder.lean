@@ -1052,6 +1052,66 @@ def OperatorSturmStepCompatibility : Prop :=
     let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
     (A = B + 1 → a ≤ b) ∧ (B = A + 1 → b ≤ a)
 
+/-- Minimal step-compatibility follows from a global `±1` gap law for
+Sturm sign-variation count versus center count.
+This is a pure one-step arithmetic consequence of successor decompositions. -/
+theorem operatorSturmStepCompatibility_of_signVariation_gap
+    (hGap :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
+        operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1) :
+    OperatorSturmStepCompatibility := by
+  intro M x
+  dsimp
+  let A : ℕ := operatorSturmSignVariationCount M x
+  let B : ℕ := operatorCenterCountLE M x
+  let a : ℕ :=
+    if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+          operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0
+  let b : ℕ := if operatorCenterAt (M + 1) ≤ x then 1 else 0
+  have hA' : operatorSturmSignVariationCount (M + 1) x = A + a := by
+    unfold A a
+    simpa [operatorSturmP_step] using
+      operatorSturmSignVariationCount_succ_eq_add_indicator_recurrence M x
+  have hB' : operatorCenterCountLE (M + 1) x = B + b := by
+    unfold B b
+    simpa using operatorCenterCountLE_succ_eq_add_indicator M x
+  have ha_cases : a = 0 ∨ a = 1 := by
+    unfold a
+    split_ifs <;> simp
+  have hb_cases : b = 0 ∨ b = 1 := by
+    unfold b
+    split_ifs <;> simp
+  have hGapNext :
+      operatorSturmSignVariationCount (M + 1) x ≤ operatorCenterCountLE (M + 1) x + 1 ∧
+      operatorCenterCountLE (M + 1) x ≤ operatorSturmSignVariationCount (M + 1) x + 1 :=
+    hGap (M + 1) x
+  constructor
+  · intro hAB
+    rcases ha_cases with ha0 | ha1
+    · have hle : a ≤ b := by
+        simpa [ha0] using (Nat.zero_le b)
+      simpa [a, b] using hle
+    · have hineq : A + a ≤ B + b + 1 := by
+        simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hGapNext.1
+      have hb1 : b = 1 := by
+        omega
+      have hle : a ≤ b := by
+        simpa [ha1, hb1]
+      simpa [a, b] using hle
+  · intro hBA
+    rcases hb_cases with hb0 | hb1
+    · have hle : b ≤ a := by
+        simpa [hb0] using (Nat.zero_le a)
+      simpa [a, b] using hle
+    · have hineq : B + b ≤ A + a + 1 := by
+        simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hGapNext.2
+      have ha1 : a = 1 := by
+        omega
+      have hle : b ≤ a := by
+        simpa [hb1, ha1]
+      simpa [a, b] using hle
+
 /-- Strong edge-lock implies the minimal step-compatibility condition. -/
 theorem operatorSturmStepCompatibility_of_edgeLock
     (hEdgeLock :
