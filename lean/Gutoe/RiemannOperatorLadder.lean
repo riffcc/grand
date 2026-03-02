@@ -843,6 +843,38 @@ theorem operatorCenterCandidates_card_le_three
       simpa [hsetEq]
     _ ≤ 3 := operatorCenterCandidatesOrdered_card_le_three M j
 
+/-- Ordered candidate sets are index-convex:
+if two center indices are admissible at level `j`, every index between them is
+also admissible. -/
+theorem operatorCenterCandidatesOrdered_mem_of_between
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1))))
+    {i k m : Fin (M + 1)}
+    (hi : i ∈ operatorCenterCandidatesOrdered M j)
+    (hk : k ∈ operatorCenterCandidatesOrdered M j)
+    (him : i.1 ≤ m.1) (hmk : m.1 ≤ k.1) :
+    m ∈ operatorCenterCandidatesOrdered M j := by
+  have hi_abs : |operatorEigenvaluesOrdered M j - ((i.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 :=
+    (Finset.mem_filter.mp hi).2
+  have hk_abs : |operatorEigenvaluesOrdered M j - ((k.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 :=
+    (Finset.mem_filter.mp hk).2
+  have hi_lo : operatorEigenvaluesOrdered M j - (12 : ℝ) / 11 ≤ (i.1 : ℝ) + (29 : ℝ) / 16 := by
+    linarith [(abs_le.mp hi_abs).2]
+  have hk_hi : (k.1 : ℝ) + (29 : ℝ) / 16 ≤ operatorEigenvaluesOrdered M j + (12 : ℝ) / 11 := by
+    linarith [(abs_le.mp hk_abs).1]
+  have himR : (i.1 : ℝ) ≤ (m.1 : ℝ) := by exact_mod_cast him
+  have hmkR : (m.1 : ℝ) ≤ (k.1 : ℝ) := by exact_mod_cast hmk
+  have hm_lo :
+      operatorEigenvaluesOrdered M j - (12 : ℝ) / 11 ≤ (m.1 : ℝ) + (29 : ℝ) / 16 := by
+    linarith [hi_lo, himR]
+  have hm_hi :
+      (m.1 : ℝ) + (29 : ℝ) / 16 ≤ operatorEigenvaluesOrdered M j + (12 : ℝ) / 11 := by
+    linarith [hk_hi, hmkR]
+  have hm_abs : |operatorEigenvaluesOrdered M j - ((m.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+    refine abs_le.mpr ?_
+    constructor <;> linarith [hm_lo, hm_hi]
+  refine Finset.mem_filter.mpr ?_
+  exact ⟨Finset.mem_univ m, hm_abs⟩
+
 /-- Hall-style finite-level center-gap condition:
 every finite subfamily of eigenvalue candidate-center sets has union cardinality
 at least the subfamily cardinality. -/
