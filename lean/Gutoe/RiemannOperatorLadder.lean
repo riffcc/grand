@@ -20,7 +20,7 @@ open Gutoe.RiemannFiniteXiModel
 open Gutoe.RiemannHurwitzKernel
 
 noncomputable section
-open scoped Topology
+open scoped Topology BigOperators
 
 /-- Complex-lifted structural matrix lane for spectral statements. -/
 def structuralRiemannMatrixC (n : ℕ) : Matrix (Fin n) (Fin n) ℂ :=
@@ -151,6 +151,48 @@ theorem mathlibRH_of_operator_enumerated_nontrivial_capture
 def operatorXiFiniteLadder : ℕ → (ℂ → ℂ) :=
   XiFiniteLadder operatorSpecN
 
+/-- Telescoping norm control for complex sequences over a finite step range. -/
+theorem norm_sub_le_sum_steps
+    (f : ℕ → ℂ) (n m : ℕ) :
+    ‖f (n + m) - f n‖ ≤
+      Finset.sum (Finset.range m) (fun k => ‖f (n + (k + 1)) - f (n + k)‖) := by
+  induction m with
+  | zero =>
+      simp
+  | succ m ih =>
+      have hsplit :
+          f (n + (m + 1)) - f n =
+            (f (n + (m + 1)) - f (n + m)) + (f (n + m) - f n) := by
+        ring
+      calc
+        ‖f (n + (m + 1)) - f n‖
+            = ‖(f (n + (m + 1)) - f (n + m)) + (f (n + m) - f n)‖ := by
+                rw [hsplit]
+        _ ≤ ‖f (n + (m + 1)) - f (n + m)‖ + ‖f (n + m) - f n‖ := by
+              exact norm_add_le _ _
+        _ ≤ ‖f (n + (m + 1)) - f (n + m)‖ +
+              Finset.sum (Finset.range m) (fun k => ‖f (n + (k + 1)) - f (n + k)‖) := by
+              simpa [add_comm, add_left_comm, add_assoc] using
+                (add_le_add_right ih ‖f (n + (m + 1)) - f (n + m)‖)
+        _ = Finset.sum (Finset.range (m + 1))
+              (fun k => ‖f (n + (k + 1)) - f (n + k)‖) := by
+              simp [Finset.sum_range_succ, add_comm]
+
+/-- Telescoping norm control from explicit per-step bounds. -/
+theorem norm_sub_le_sum_stepBounds
+    (f : ℕ → ℂ) (a : ℕ → ℝ)
+    (hstep : ∀ j : ℕ, ‖f (j + 1) - f j‖ ≤ a j)
+    (n m : ℕ) :
+    ‖f (n + m) - f n‖ ≤
+      Finset.sum (Finset.range m) (fun k => a (n + k)) := by
+  have htele := norm_sub_le_sum_steps f n m
+  have hsum :
+      (Finset.sum (Finset.range m) (fun k => ‖f (n + (k + 1)) - f (n + k)‖))
+        ≤ Finset.sum (Finset.range m) (fun k => a (n + k)) := by
+    exact Finset.sum_le_sum (fun k hk => by
+      simpa [Nat.add_assoc] using hstep (n + k))
+  exact le_trans htele hsum
+
 /-- Critical-line points are never zero. -/
 theorem criticalLinePoint_ne_zero (t : ℝ) :
     criticalLinePoint t ≠ 0 := by
@@ -204,6 +246,16 @@ theorem norm_operatorXiFiniteLadder_le_pow_card_of_ordinate_bound
   simpa [operatorXiFiniteLadder, XiFiniteLadder] using
     (norm_XiFinite_le_pow_card_of_ordinate_bound
       (operatorSpecN N) s B hB)
+
+/-- One-step increment bound specialized to the concrete operator finite product
+at level `N` when adding a fresh ordinate. -/
+theorem norm_operatorXiFinite_insert_sub_le
+    (N : ℕ) {t : ℝ} (ht : t ∉ operatorSpecN N) (s : ℂ) :
+    ‖XiFinite (insert t (operatorSpecN N)) s - operatorXiFiniteLadder N s‖ ≤
+      ‖s - criticalLinePoint t - 1‖ *
+        Finset.prod (operatorSpecN N) (fun u => (‖s‖ + ‖criticalLinePoint u‖)) := by
+  simpa [operatorXiFiniteLadder, XiFiniteLadder] using
+    (norm_XiFinite_insert_sub_le (operatorSpecN N) ht s)
 
 /-- The concrete operator spectral ladder at level `N` is nonempty. -/
 theorem operatorSpecN_nonempty (N : ℕ) :
@@ -265,6 +317,24 @@ theorem exists_closedBall_uniform_operator_bound
   refine ⟨B, hB0, ?_⟩
   intro s hs
   exact norm_operatorXiFiniteLadder_le_on_closedBall N R B hB0 hB hs
+
+/-- Operator-ladder telescoping norm control over `m` successive levels. -/
+theorem norm_operatorXiFiniteLadder_sub_le_sum_steps
+    (s : ℂ) (n m : ℕ) :
+    ‖operatorXiFiniteLadder (n + m) s - operatorXiFiniteLadder n s‖ ≤
+      Finset.sum (Finset.range m)
+        (fun k => ‖operatorXiFiniteLadder (n + (k + 1)) s - operatorXiFiniteLadder (n + k) s‖) := by
+  simpa using norm_sub_le_sum_steps (fun j => operatorXiFiniteLadder j s) n m
+
+/-- Operator-ladder telescoping control from explicit per-step bounds. -/
+theorem norm_operatorXiFiniteLadder_sub_le_sum_stepBounds
+    (s : ℂ) (a : ℕ → ℝ)
+    (hstep : ∀ j : ℕ,
+      ‖operatorXiFiniteLadder (j + 1) s - operatorXiFiniteLadder j s‖ ≤ a j)
+    (n m : ℕ) :
+    ‖operatorXiFiniteLadder (n + m) s - operatorXiFiniteLadder n s‖ ≤
+      Finset.sum (Finset.range m) (fun k => a (n + k)) := by
+  simpa using norm_sub_le_sum_stepBounds (fun j => operatorXiFiniteLadder j s) a hstep n m
 
 /-- Finite zero witnesses for the operator Xi ladder:
 every finite-level zero is exactly a critical-line point listed in `operatorSpecN N`. -/
