@@ -766,10 +766,46 @@ theorem uniform_cauchyOnClosedBall_of_stepTail_operatorCenteredPhaseNormalized
   have hbound :
       ‖operatorCenteredPhaseNormalizedXiLadder (n + m) z
         - operatorCenteredPhaseNormalizedXiLadder n z‖ ≤
-        Finset.sum (Finset.range m) (fun k => a (n + k)) :=
+      Finset.sum (Finset.range m) (fun k => a (n + k)) :=
     norm_operatorCenteredPhaseNormalizedXiLadder_sub_le_sum_stepBounds z a
       (fun j => hstep j z hz) n m
   exact lt_of_le_of_lt hbound hsum_lt
+
+/-- Summable nonnegative step profiles give vanishing shifted finite tails. -/
+theorem stepTail_of_summable_nonneg
+    (a : ℕ → ℝ)
+    (ha_nonneg : ∀ j : ℕ, 0 ≤ a j)
+    (ha_sum : Summable a) :
+    ∀ ε : ℝ, 0 < ε → ∃ n0 : ℕ,
+      ∀ n : ℕ, n0 ≤ n → ∀ m : ℕ,
+        Finset.sum (Finset.range m) (fun k => a (n + k)) < ε := by
+  intro ε hε
+  have htend : Filter.Tendsto (fun n : ℕ => ∑' k : ℕ, a (n + k))
+      (Filter.atTop : Filter ℕ) (𝓝 (0 : ℝ)) := by
+    simpa [Nat.add_comm] using (_root_.tendsto_sum_nat_add a)
+  have hEventually :
+      ∀ᶠ n : ℕ in (Filter.atTop : Filter ℕ),
+        dist (∑' k : ℕ, a (n + k)) 0 < ε := by
+    simpa [Metric.ball, dist_eq_norm] using
+      (htend (Metric.ball_mem_nhds (0 : ℝ) hε))
+  rcases hEventually.exists_forall_of_atTop with ⟨n0, hn0⟩
+  refine ⟨n0, ?_⟩
+  intro n hn m
+  have htsum_lt_norm : ‖∑' k : ℕ, a (n + k)‖ < ε := by
+    simpa [dist_eq_norm] using (hn0 n hn)
+  have hsum_nonneg : 0 ≤ Finset.sum (Finset.range m) (fun k => a (n + k)) :=
+    Finset.sum_nonneg (fun k _hk => ha_nonneg (n + k))
+  have hsumNat : Summable (fun k : ℕ => a (n + k)) := by
+    simpa [Nat.add_comm] using ((_root_.summable_nat_add_iff n).2 ha_sum)
+  have hsum_le_tsum :
+      Finset.sum (Finset.range m) (fun k => a (n + k))
+        ≤ ∑' k : ℕ, a (n + k) := by
+    exact hsumNat.sum_le_tsum (Finset.range m) (fun k _hk => ha_nonneg (n + k))
+  have htsum_nonneg : 0 ≤ ∑' k : ℕ, a (n + k) := by
+    exact tsum_nonneg (fun k => ha_nonneg (n + k))
+  have htsum_lt : (∑' k : ℕ, a (n + k)) < ε := by
+    simpa [Real.norm_of_nonneg htsum_nonneg] using htsum_lt_norm
+  exact lt_of_le_of_lt hsum_le_tsum htsum_lt
 
 /-- Closed-ball uniform convergence for the recentered normalized ladder from
 global step-tail control plus pointwise convergence on that closed ball. -/
@@ -871,6 +907,27 @@ theorem tendstoLocallyUniformly_operatorCenteredPhaseNormalized_of_stepTail_and_
           dist (F y) (operatorCenteredPhaseNormalizedXiLadder n y) < ε :=
     (Metric.tendstoUniformlyOn_iff.1 hUnif) ε hε
   exact hUnifε.mono (fun n hn y hy => hn y (hBall hy))
+
+/-- Local-uniform convergence of the recentered normalized ladder from
+pointwise convergence plus a summable nonnegative step profile. -/
+theorem tendstoLocallyUniformly_operatorCenteredPhaseNormalized_of_stepSummable_and_pointwise
+    (a : ℕ → ℝ)
+    (ha_nonneg : ∀ j : ℕ, 0 ≤ a j)
+    (ha_sum : Summable a)
+    (hstep : ∀ R : ℝ, ∀ j : ℕ, ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      ‖operatorCenteredPhaseNormalizedXiLadder (j + 1) z
+        - operatorCenteredPhaseNormalizedXiLadder j z‖ ≤ a j)
+    {F : ℂ → ℂ}
+    (hpt : ∀ z : ℂ,
+      Filter.Tendsto (fun N : ℕ => operatorCenteredPhaseNormalizedXiLadder N z)
+        (Filter.atTop : Filter ℕ) (𝓝 (F z))) :
+    TendstoLocallyUniformly operatorCenteredPhaseNormalizedXiLadder F
+      (Filter.atTop : Filter ℕ) := by
+  exact
+    tendstoLocallyUniformly_operatorCenteredPhaseNormalized_of_stepTail_and_pointwise
+      a hstep
+      (fun _R ε hε => stepTail_of_summable_nonneg a ha_nonneg ha_sum ε hε)
+      hpt
 
 /-- Critical-line points are never zero. -/
 theorem criticalLinePoint_ne_zero (t : ℝ) :
