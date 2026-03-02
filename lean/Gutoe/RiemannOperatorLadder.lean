@@ -146,6 +146,42 @@ theorem mathlibRH_of_operator_enumerated_nontrivial_capture
 def operatorXiFiniteLadder : ℕ → (ℂ → ℂ) :=
   XiFiniteLadder operatorSpecN
 
+/-- Critical-line points are never zero. -/
+theorem criticalLinePoint_ne_zero (t : ℝ) :
+    criticalLinePoint t ≠ 0 := by
+  intro h
+  have hre : (criticalLinePoint t).re = 0 := by
+    simpa [h] using congrArg Complex.re h
+  have hhalf : (1 / 2 : ℝ) = 0 := by
+    simpa [criticalLinePoint_re] using hre
+  norm_num at hhalf
+
+/-- The finite model `XiFinite spec` is complex-differentiable everywhere. -/
+theorem differentiable_XiFinite
+    (spec : Finset ℝ) :
+    Differentiable ℂ (XiFinite spec) := by
+  intro z
+  unfold XiFinite
+  let f : ℝ → ℂ → ℂ := fun t s => s - criticalLinePoint t
+  have hf : ∀ t ∈ spec, DifferentiableAt ℂ (f t) z := by
+    intro t ht
+    simpa [f] using (differentiableAt_id.sub_const (criticalLinePoint t))
+  simpa [f] using (DifferentiableAt.fun_finset_prod (u := spec) (f := f) hf)
+
+/-- Each finite level of the concrete operator Xi ladder is differentiable. -/
+theorem differentiable_operatorXiFiniteLadder (N : ℕ) :
+    Differentiable ℂ (operatorXiFiniteLadder N) := by
+  simpa [operatorXiFiniteLadder, XiFiniteLadder] using
+    (differentiable_XiFinite (operatorSpecN N))
+
+/-- The finite operator Xi products are nontrivial: they never vanish at `0`. -/
+theorem xiFinite_operatorSpecN_zero_ne (N : ℕ) :
+    XiFinite (operatorSpecN N) 0 ≠ 0 := by
+  unfold XiFinite
+  refine Finset.prod_ne_zero_iff.mpr ?_
+  intro t ht
+  simp [criticalLinePoint_ne_zero t]
+
 /-- Operator-ladder convergence obligation at zero tolerance. -/
 def OperatorApproxZeroConvergence : Prop :=
   ApproxZeroConvergence
