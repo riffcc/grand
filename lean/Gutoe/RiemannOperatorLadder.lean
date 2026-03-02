@@ -5186,13 +5186,13 @@ theorem operatorEigenvaluesOrdered_lt_centerHalf_of_singleton_bottom
       |operatorEigenvaluesOrdered M j - ((kBot.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 :=
     (Finset.mem_filter.mp hkBot_mem).2
   have hupper :
-      operatorEigenvaluesOrdered M j ≤ (637 : ℝ) / 176 := by
+      operatorEigenvaluesOrdered M j ≤ (511 : ℝ) / 176 := by
     have hright : operatorEigenvaluesOrdered M j - (29 : ℝ) / 16 ≤ (12 : ℝ) / 11 := by
       simpa [kBot] using (abs_le.mp hkAbs).2
-    have hconst : (29 : ℝ) / 16 + (12 : ℝ) / 11 = (637 : ℝ) / 176 := by norm_num
+    have hconst : (29 : ℝ) / 16 + (12 : ℝ) / 11 = (511 : ℝ) / 176 := by norm_num
     have : operatorEigenvaluesOrdered M j ≤ (29 : ℝ) / 16 + (12 : ℝ) / 11 := by linarith
     simpa [hconst] using this
-  have hhalf_lower : (637 : ℝ) / 176 < (structuralCenterQ (M + 1) : ℝ) / 2 := by
+  have hhalf_lower : (511 : ℝ) / 176 < (structuralCenterQ (M + 1) : ℝ) / 2 := by
     have hMreal : (4 : ℝ) ≤ M := by exact_mod_cast hM4
     norm_num [structuralCenterQ, timelikeOffsetQ]
     linarith
@@ -5214,7 +5214,19 @@ theorem operatorEigenvaluesOrdered_reflect_index_lt_of_singleton_bottom
   have hHalf :
       operatorEigenvaluesOrdered M j < (structuralCenterQ (M + 1) : ℝ) / 2 :=
     operatorEigenvaluesOrdered_lt_centerHalf_of_singleton_bottom M j hM4 hMinBot hMaxBot
-  exact operatorEigenvaluesOrdered_reflect_index_lt_of_lt_centerHalf M j hHalf
+  rcases operatorEigenvaluesOrdered_reflect_exists M j with ⟨j', hj'⟩
+  have hval : operatorEigenvaluesOrdered M j < operatorEigenvaluesOrdered M j' := by
+    calc
+      operatorEigenvaluesOrdered M j < (structuralCenterQ (M + 1) : ℝ) / 2 := hHalf
+      _ < (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j := by linarith
+      _ = operatorEigenvaluesOrdered M j' := by simpa [hj']
+  have hjlt : j' < j := by
+    by_contra hnot
+    have hjle : j ≤ j' := le_of_not_gt hnot
+    have hanti := operatorEigenvaluesOrdered_antitone M
+    have hge : operatorEigenvaluesOrdered M j' ≤ operatorEigenvaluesOrdered M j := hanti hjle
+    exact (not_lt_of_ge hge) hval
+  exact ⟨j', hj', hjlt⟩
 
 /-- Index-order bridge for the antitone ordered eigenvalue lane:
 if one ordered value is strictly smaller than another, then its index is
