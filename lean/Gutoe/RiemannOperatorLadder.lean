@@ -780,6 +780,53 @@ theorem operatorEigenvalueCountLE_halfWindow_sub_eq_one_of_sturm
   rw [hUpper, hLower]
   exact operatorCenterCountLE_halfWindow_sub_eq_one M k
 
+/-- Sturm-route half-window witness:
+under exact counting-function match, each structural half-window contains
+an indexed operator eigenvalue. -/
+theorem exists_operatorEigenvalue_in_halfWindow_of_sturm
+    (hS : OperatorSturmCountContract) (M : ℕ) (k : Fin (M + 1)) :
+    ∃ i : Fin (M + 1),
+      operatorCenterAt k.1 - (1 : ℝ) / 2 < operatorEigenvalues M i ∧
+      operatorEigenvalues M i ≤ operatorCenterAt k.1 + (1 : ℝ) / 2 := by
+  classical
+  let upper : ℝ := operatorCenterAt k.1 + (1 : ℝ) / 2
+  let lower : ℝ := operatorCenterAt k.1 - (1 : ℝ) / 2
+  let Ue : Finset (Fin (M + 1)) :=
+    (Finset.univ : Finset (Fin (M + 1))).filter (fun i => operatorEigenvalues M i ≤ upper)
+  let Le : Finset (Fin (M + 1)) :=
+    (Finset.univ : Finset (Fin (M + 1))).filter (fun i => operatorEigenvalues M i ≤ lower)
+  have hlower_le_upper : lower ≤ upper := by
+    unfold lower upper
+    linarith
+  have hsubset : Le ⊆ Ue := by
+    intro i hiL
+    have hiL' := Finset.mem_filter.mp hiL
+    exact Finset.mem_filter.mpr ⟨hiL'.1, le_trans hiL'.2 hlower_le_upper⟩
+  have hcard_one : (Ue \ Le).card = 1 := by
+    have hdiff :
+        operatorEigenvalueCountLE M upper - operatorEigenvalueCountLE M lower = 1 := by
+      exact operatorEigenvalueCountLE_halfWindow_sub_eq_one_of_sturm hS M k
+    dsimp [operatorEigenvalueCountLE, Ue, Le] at hdiff
+    have hcard : (Ue \ Le).card = Ue.card - (Le ∩ Ue).card := by
+      simpa [Finset.inter_comm] using (Finset.card_sdiff (s := Le) (t := Ue))
+    have hinter : Le ∩ Ue = Le := by
+      exact Finset.inter_eq_left.mpr hsubset
+    simpa [hcard, hinter] using hdiff
+  have hnonempty : (Ue \ Le).Nonempty := by
+    exact Finset.card_pos.mp (by simpa [hcard_one])
+  rcases hnonempty with ⟨i, hi⟩
+  have hiU : i ∈ Ue := (Finset.mem_sdiff.mp hi).1
+  have hiNotL : i ∉ Le := (Finset.mem_sdiff.mp hi).2
+  have hiU' := Finset.mem_filter.mp hiU
+  have hiUpper : operatorEigenvalues M i ≤ upper := hiU'.2
+  have hiLowerNot : ¬ operatorEigenvalues M i ≤ lower := by
+    intro hle
+    exact hiNotL (Finset.mem_filter.mpr ⟨by simpa using hiU'.1, hle⟩)
+  have hiLower : lower < operatorEigenvalues M i := lt_of_not_ge hiLowerNot
+  refine ⟨i, ?_, ?_⟩
+  · simpa [lower] using hiLower
+  · simpa [upper] using hiUpper
+
 /-- Sturm-route counting consequence:
 if eigenvalue and center counting functions agree at every threshold, then the
 eigenvalue counting function also increases by at most `3` across the structural
