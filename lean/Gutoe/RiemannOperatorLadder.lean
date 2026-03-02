@@ -1699,6 +1699,51 @@ theorem operatorGreedyChoiceNat_eq_future_min_implies_adjacent_of_min_available_
     simpa [hEq, hmin_i1_eq_j]
   exact hnot_i1 (hEq_i1 ▸ hmin_i1_avail)
 
+/-- Prefix no-premature form:
+under prefix minimum-availability up to `j-1`, any index strictly before `j-1`
+cannot choose `min(j)`. -/
+theorem operatorGreedyChoiceNat_ne_future_min_of_min_available_prefix
+    (M : ℕ) (j : ℕ) (hj : j < operatorGreedyCard M)
+    (hminAvailPrefix :
+      ∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) :
+    ∀ i : ℕ, i + 1 < j →
+      operatorGreedyChoiceNat M i ≠
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ := by
+  intro i hij hEq
+  have hadj :
+      i + 1 = j :=
+    operatorGreedyChoiceNat_eq_future_min_implies_adjacent_of_min_available_prefix
+      M j hj hminAvailPrefix i (lt_of_lt_of_le (Nat.lt_succ_self i) (Nat.le_of_lt hij)) hEq
+  omega
+
+/-- If `min(j)` is unavailable under prefix minimum-availability up to `j-1`,
+then the immediate predecessor `j-1` must be the step that chose it. -/
+theorem operatorMin_not_mem_available_implies_pred_choice_of_min_available_prefix
+    (M : ℕ) (j : ℕ) (hj : j < operatorGreedyCard M)
+    (hjpos : 0 < j)
+    (hminAvailPrefix :
+      ∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k)
+    (hnot :
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ ∉
+        operatorGreedyAvailableNat M j) :
+    operatorGreedyChoiceNat M (j - 1) =
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ := by
+  rcases operatorGreedyChoiceNat_exists_prev_of_not_mem_available M j
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩) hnot with
+    ⟨i, hij, hEq⟩
+  have hle : i + 1 ≤ j := Nat.succ_le_of_lt hij
+  have hge : j ≤ i + 1 := by
+    by_contra hlt
+    have hlt' : i + 1 < j := Nat.lt_of_not_ge hlt
+    exact (operatorGreedyChoiceNat_ne_future_min_of_min_available_prefix M j hj
+      hminAvailPrefix i hlt' hEq).elim
+  have hi : i = j - 1 := by omega
+  simpa [hi] using hEq
+
 /-- Packaged `hCandAvail` from the single target property
 `min(j) ∈ available(j)` at each ordered step. -/
 theorem operatorGreedy_hCandAvail_of_min_available
