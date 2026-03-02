@@ -1461,6 +1461,25 @@ theorem mathlibRH_of_operator_hurwitzKernel_and_locallyUniform
   exact mathlibRH_of_operator_hurwitz_zero_approx
     (operatorHurwitzTransfer_of_kernel hKernel hconv)
 
+/-- RH closure from the concrete operator Hurwitz kernel plus a summable
+nonnegative step profile and pointwise convergence to `XiTarget`. This packages
+the local-uniform promotion in one theorem so the remaining analytic inputs are
+exactly `(ha_sum, hpt)`. -/
+theorem mathlibRH_of_operator_hurwitzKernel_and_stepSummable_pointwise
+    (hKernel : OperatorHurwitzKernel)
+    (a : ℕ → ℝ)
+    (ha_nonneg : ∀ j : ℕ, 0 ≤ a j)
+    (ha_sum : Summable a)
+    (hstep : ∀ R : ℝ, ∀ j : ℕ, ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      ‖operatorXiFiniteLadder (j + 1) z - operatorXiFiniteLadder j z‖ ≤ a j)
+    (hpt : ∀ z : ℂ,
+      Filter.Tendsto (fun N : ℕ => operatorXiFiniteLadder N z)
+        (Filter.atTop : Filter ℕ) (𝓝 (XiTarget z))) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_operator_hurwitzKernel_and_locallyUniform hKernel
+    (tendstoLocallyUniformly_operatorXiFiniteLadder_of_stepSummable_and_pointwise
+      a ha_nonneg ha_sum hstep hpt)
+
 /-- Zero-tolerance operator approximation already implies the Hurwitz-output
 surface (with exact finite-level zeros at the target point itself). -/
 theorem operatorHurwitz_of_operatorApproxZero
