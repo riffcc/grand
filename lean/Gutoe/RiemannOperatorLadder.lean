@@ -2,6 +2,7 @@ import Mathlib
 import Gutoe.RiemannCore
 import Gutoe.RiemannSelfAdjoint
 import Gutoe.RiemannTargetFiniteLadder
+import Gutoe.RiemannLimitBridge
 import Gutoe.RiemannConvergenceTransfer
 import Gutoe.RiemannFinalTarget
 import Gutoe.RiemannFiniteXiModel
@@ -11,11 +12,13 @@ namespace Gutoe.RiemannOperatorLadder
 open Gutoe.RiemannCore
 open Gutoe.RiemannSelfAdjoint
 open Gutoe.RiemannTargetFiniteLadder
+open Gutoe.RiemannLimitBridge
 open Gutoe.RiemannConvergenceTransfer
 open Gutoe.RiemannFinalTarget
 open Gutoe.RiemannFiniteXiModel
 
 noncomputable section
+open scoped Topology
 
 /-- Complex-lifted structural matrix lane for spectral statements. -/
 def structuralRiemannMatrixC (n : ℕ) : Matrix (Fin n) (Fin n) ℂ :=
@@ -182,6 +185,49 @@ theorem xiFinite_operatorSpecN_zero_ne (N : ℕ) :
   intro t ht
   simp [criticalLinePoint_ne_zero t]
 
+/-- Constant tolerance profile for the concrete operator ladder. -/
+def operatorTolConst (τ : ℝ) : ℕ → ℝ := fun _ => τ
+
+/-- Local-uniform convergence implies nonzero-tolerance approximate zero capture
+at every target zero. -/
+theorem operatorApprox_of_locallyUniform_constTol
+    (hconv : TendstoLocallyUniformly operatorXiFiniteLadder XiTarget
+      (Filter.atTop : Filter ℕ))
+    {τ : ℝ} (hτ : 0 < τ) :
+    ApproxZeroConvergence XiTarget operatorXiFiniteLadder (operatorTolConst τ) := by
+  intro s hsXi
+  have hconvOn : TendstoLocallyUniformlyOn operatorXiFiniteLadder XiTarget
+      (Filter.atTop : Filter ℕ) (Set.univ) := by
+    simpa [tendstoLocallyUniformlyOn_univ] using hconv
+  have hpt : Filter.Tendsto (fun N : ℕ => operatorXiFiniteLadder N s)
+      (Filter.atTop : Filter ℕ) (𝓝 (XiTarget s)) :=
+    hconvOn.tendsto_at (by simp)
+  have hball : ∀ᶠ N : ℕ in (Filter.atTop : Filter ℕ),
+      ‖operatorXiFiniteLadder N s - XiTarget s‖ < τ := by
+    simpa [Metric.ball, dist_eq_norm] using
+      (hpt (Metric.ball_mem_nhds (XiTarget s) hτ))
+  rcases hball.exists_forall_of_atTop with ⟨N0, hN0⟩
+  refine ⟨N0, ?_⟩
+  have hlt : ‖operatorXiFiniteLadder N0 s - XiTarget s‖ < τ := hN0 N0 (le_rfl)
+  have hlt0 : ‖operatorXiFiniteLadder N0 s‖ < τ := by
+    simpa [hsXi] using hlt
+  exact le_of_lt hlt0
+
+/-- If local-uniform convergence is available and the constant tolerance level
+is rigid, one gets zero-forward transfer for the operator Xi ladder. -/
+theorem operatorZeroForward_of_locallyUniform_and_constRigidity
+    (hconv : TendstoLocallyUniformly operatorXiFiniteLadder XiTarget
+      (Filter.atTop : Filter ℕ))
+    {τ : ℝ} (hτ : 0 < τ)
+    (hRigid : SpectralRigidity operatorXiFiniteLadder (operatorTolConst τ)) :
+    ZeroForwardTransfer XiTarget operatorXiFiniteLadder := by
+  exact zeroForward_of_convergence_and_rigidity
+    XiTarget
+    operatorXiFiniteLadder
+    (operatorTolConst τ)
+    (operatorApprox_of_locallyUniform_constTol hconv hτ)
+    hRigid
+
 /-- Operator-ladder convergence obligation at zero tolerance. -/
 def OperatorApproxZeroConvergence : Prop :=
   ApproxZeroConvergence
@@ -210,6 +256,38 @@ theorem mathlibRH_of_operator_approxZero
     RiemannHypothesis := by
   exact mathlibRH_of_operator_enumerated_nontrivial_capture
     (operator_enumerated_capture_of_approxZero hApprox)
+
+/-- Positive-threshold rigidity surface: there exists at least one strictly
+positive tolerance level at which small values force exact finite-level zeros. -/
+def OperatorPositiveRigidity : Prop :=
+  ∃ τ : ℝ, 0 < τ ∧ SpectralRigidity operatorXiFiniteLadder (operatorTolConst τ)
+
+/-- Local-uniform convergence plus any positive-threshold rigidity already
+forces the zero-tolerance operator approximation obligation. -/
+theorem operatorApproxZero_of_locallyUniform_and_positiveRigidity
+    (hconv : TendstoLocallyUniformly operatorXiFiniteLadder XiTarget
+      (Filter.atTop : Filter ℕ))
+    (hPosRigid : OperatorPositiveRigidity) :
+    OperatorApproxZeroConvergence := by
+  rcases hPosRigid with ⟨τ, hτ, hRigid⟩
+  intro s hsXi
+  have hApproxτ :
+      ApproxZeroConvergence XiTarget operatorXiFiniteLadder (operatorTolConst τ) :=
+    operatorApprox_of_locallyUniform_constTol hconv hτ
+  rcases hApproxτ s hsXi with ⟨N, hNτ⟩
+  have hZero : operatorXiFiniteLadder N s = 0 := hRigid N s hNτ
+  refine ⟨N, ?_⟩
+  simpa [Gutoe.RiemannTargetFiniteLadder.tolZero, hZero]
+
+/-- RH closure from the analytic surface
+`local-uniform convergence + positive-threshold rigidity`. -/
+theorem mathlibRH_of_locallyUniform_and_positiveRigidity
+    (hconv : TendstoLocallyUniformly operatorXiFiniteLadder XiTarget
+      (Filter.atTop : Filter ℕ))
+    (hPosRigid : OperatorPositiveRigidity) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_operator_approxZero
+    (operatorApproxZero_of_locallyUniform_and_positiveRigidity hconv hPosRigid)
 
 /-- The two operator capture surfaces are equivalent:
 finite ladder capture (`operatorSpecN`) and direct spectrum-set capture (`operatorSpecSet`). -/
