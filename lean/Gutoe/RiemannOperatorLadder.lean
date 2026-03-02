@@ -1535,6 +1535,25 @@ theorem operatorEigenvalueOrderedCenterChoiceMin_mem_available_of_noPremature
     ⟨i, hij, hEq⟩
   exact (hNoPremature i j hij hj) hEq
 
+/-- Max-version of the single-gap reduction:
+if no earlier step can choose the future ordered maximal center, then that
+maximal center is available at its own step. -/
+theorem operatorEigenvalueOrderedCenterChoiceMax_mem_available_of_noPremature
+    (M : ℕ)
+    (hNoPremature :
+      ∀ i j : ℕ, ∀ hij : i < j, ∀ hj : j < operatorGreedyCard M,
+        operatorGreedyChoiceNat M i ≠
+          operatorEigenvalueOrderedCenterChoiceMax M ⟨j, hj⟩) :
+    ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M,
+      operatorEigenvalueOrderedCenterChoiceMax M ⟨j, hj⟩ ∈
+        operatorGreedyAvailableNat M j := by
+  intro j hj
+  by_contra hnot
+  rcases operatorGreedyChoiceNat_exists_prev_of_not_mem_available M j
+      (operatorEigenvalueOrderedCenterChoiceMax M ⟨j, hj⟩) hnot with
+    ⟨i, hij, hEq⟩
+  exact (hNoPremature i j hij hj) hEq
+
 /-- Availability/no-premature equivalence for the future ordered minimum center. -/
 theorem operatorMin_mem_available_iff_no_prev
     (M : ℕ) (j : ℕ) (hj : j < operatorGreedyCard M) :
@@ -1912,6 +1931,7 @@ theorem operatorSameMin_aboveAvailable_of_maxAvailable
   refine ⟨operatorEigenvalueOrderedCenterChoiceMax_mem M ⟨j - 1, hjm1⟩, ?_⟩
   refine ⟨hMaxAvail, ?_⟩
   exact hMaxAbove
+
 
 /-- Strong-induction closure:
 if the predecessor step never chooses `min(j)` under the prefix min-availability
