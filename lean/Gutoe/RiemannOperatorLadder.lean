@@ -1052,6 +1052,155 @@ def OperatorSturmStepCompatibility : Prop :=
     let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
     (A = B + 1 → a ≤ b) ∧ (B = A + 1 → b ≤ a)
 
+/-- Pointwise unpacking of `OperatorSturmStepCompatibility`:
+at each `(M,x)`, the boundary conditions are exactly the two forbidden outward
+increment patterns `(a,b) = (1,0)` and `(b,a) = (1,0)`. -/
+theorem operatorSturmStepCompatibility_at_iff_forbidden_boundary_patterns
+    (M : ℕ) (x : ℝ) :
+    (let A := operatorSturmSignVariationCount M x
+     let B := operatorCenterCountLE M x
+     let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                   operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+     let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+     (A = B + 1 → a ≤ b) ∧ (B = A + 1 → b ≤ a))
+    ↔
+    (let A := operatorSturmSignVariationCount M x
+     let B := operatorCenterCountLE M x
+     let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                   operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+     let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+     (A = B + 1 → ¬ (a = 1 ∧ b = 0)) ∧
+     (B = A + 1 → ¬ (b = 1 ∧ a = 0))) := by
+  dsimp
+  let A : ℕ := operatorSturmSignVariationCount M x
+  let B : ℕ := operatorCenterCountLE M x
+  let a : ℕ :=
+    if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+          operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0
+  let b : ℕ := if operatorCenterAt (M + 1) ≤ x then 1 else 0
+  have ha_cases : a = 0 ∨ a = 1 := by
+    unfold a
+    split_ifs <;> simp
+  have hb_cases : b = 0 ∨ b = 1 := by
+    unfold b
+    split_ifs <;> simp
+  constructor
+  · intro h
+    constructor
+    · intro hAB hab
+      rcases hab with ⟨ha1, hb0⟩
+      have hle : a ≤ b := h.1 hAB
+      omega
+    · intro hBA hba
+      rcases hba with ⟨hb1, ha0⟩
+      have hle : b ≤ a := h.2 hBA
+      omega
+  · intro h
+    constructor
+    · intro hAB
+      rcases ha_cases with ha0 | ha1
+      · have hle : a ≤ b := by
+          omega
+        simpa [a, b] using hle
+      · have hb1 : b = 1 := by
+          by_contra hb1ne
+          have hb0 : b = 0 := by
+            rcases hb_cases with hb0 | hb1
+            · exact hb0
+            · exfalso
+              exact hb1ne hb1
+          exact (h.1 hAB) ⟨ha1, hb0⟩
+        have hle : a ≤ b := by
+          omega
+        simpa [a, b] using hle
+    · intro hBA
+      rcases hb_cases with hb0 | hb1
+      · have hle : b ≤ a := by
+          omega
+        simpa [a, b] using hle
+      · have ha1 : a = 1 := by
+          by_contra ha1ne
+          have ha0 : a = 0 := by
+            rcases ha_cases with ha0 | ha1
+            · exact ha0
+            · exfalso
+              exact ha1ne ha1
+          exact (h.2 hBA) ⟨hb1, ha0⟩
+        have hle : b ≤ a := by
+          omega
+        simpa [a, b] using hle
+
+/-- Global reformulation of `OperatorSturmStepCompatibility` as forbidden boundary
+patterns at every level and threshold. -/
+theorem operatorSturmStepCompatibility_iff_forbidden_boundary_patterns :
+    OperatorSturmStepCompatibility
+      ↔
+    (∀ M : ℕ, ∀ x : ℝ,
+      let A := operatorSturmSignVariationCount M x
+      let B := operatorCenterCountLE M x
+      let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                    operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+      let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+      (A = B + 1 → ¬ (a = 1 ∧ b = 0)) ∧
+      (B = A + 1 → ¬ (b = 1 ∧ a = 0))) := by
+  constructor
+  · intro h M x
+    exact (operatorSturmStepCompatibility_at_iff_forbidden_boundary_patterns M x).1 (h M x)
+  · intro h M x
+    exact (operatorSturmStepCompatibility_at_iff_forbidden_boundary_patterns M x).2 (h M x)
+
+/-- Upper-boundary exclusion extracted from `OperatorSturmStepCompatibility`:
+when `A = B + 1`, the outward pattern `(a,b) = (1,0)` is impossible. -/
+theorem operatorSturm_forbid_upper_boundary_pattern_of_stepCompatibility
+    (hCompat : OperatorSturmStepCompatibility) :
+    ∀ M : ℕ, ∀ x : ℝ,
+      let A := operatorSturmSignVariationCount M x
+      let B := operatorCenterCountLE M x
+      let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                    operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+      let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+      A = B + 1 → ¬ (a = 1 ∧ b = 0) := by
+  intro M x
+  exact (operatorSturmStepCompatibility_iff_forbidden_boundary_patterns.mp hCompat M x).1
+
+/-- Lower-boundary exclusion extracted from `OperatorSturmStepCompatibility`:
+when `B = A + 1`, the outward pattern `(b,a) = (1,0)` is impossible. -/
+theorem operatorSturm_forbid_lower_boundary_pattern_of_stepCompatibility
+    (hCompat : OperatorSturmStepCompatibility) :
+    ∀ M : ℕ, ∀ x : ℝ,
+      let A := operatorSturmSignVariationCount M x
+      let B := operatorCenterCountLE M x
+      let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                    operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+      let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+      B = A + 1 → ¬ (b = 1 ∧ a = 0) := by
+  intro M x
+  exact (operatorSturmStepCompatibility_iff_forbidden_boundary_patterns.mp hCompat M x).2
+
+/-- Constructor: the two boundary exclusion lemmas are exactly enough to recover
+`OperatorSturmStepCompatibility`. -/
+theorem operatorSturmStepCompatibility_of_boundary_exclusions
+    (hUpper :
+      ∀ M : ℕ, ∀ x : ℝ,
+        let A := operatorSturmSignVariationCount M x
+        let B := operatorCenterCountLE M x
+        let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                      operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+        let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+        A = B + 1 → ¬ (a = 1 ∧ b = 0))
+    (hLower :
+      ∀ M : ℕ, ∀ x : ℝ,
+        let A := operatorSturmSignVariationCount M x
+        let B := operatorCenterCountLE M x
+        let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                      operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+        let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+        B = A + 1 → ¬ (b = 1 ∧ a = 0)) :
+    OperatorSturmStepCompatibility := by
+  apply (operatorSturmStepCompatibility_iff_forbidden_boundary_patterns).2
+  intro M x
+  exact ⟨hUpper M x, hLower M x⟩
+
 /-- Strong edge-lock implies the minimal step-compatibility condition. -/
 theorem operatorSturmStepCompatibility_of_edgeLock
     (hEdgeLock :
