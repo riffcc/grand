@@ -440,11 +440,11 @@ theorem operatorEigenvalue_exists_center_gap_le_twelve_over_eleven
   simpa [Metric.mem_closedBall, dist_eq_norm, sub_eq_add_neg, add_comm, add_left_comm, add_assoc]
     using hk
 
-/-- Uniform explicit lower bound on all indexed operator eigenvalues, obtained from
-the structural Gershgorin enclosure and diagonal formula. -/
-theorem operatorEigenvalue_lower_uniform
+/-- Sharp uniform explicit lower bound on all indexed operator eigenvalues, obtained
+from the structural Gershgorin enclosure and diagonal formula. -/
+theorem operatorEigenvalue_lower_uniform_sharp
     (M : ℕ) (i : Fin (M + 1)) :
-    ((117 : ℝ) / 176) ≤ operatorEigenvalues M i := by
+    ((127 : ℝ) / 176) ≤ operatorEigenvalues M i := by
   rcases operatorEigenvalue_exists_center_gap_le_twelve_over_eleven M i with ⟨k, hgap⟩
   let c : ℝ := (k.1 : ℝ) + (29 : ℝ) / 16
   have hdiag :
@@ -469,15 +469,21 @@ theorem operatorEigenvalue_lower_uniform
   have hlower1 : c - ((12 : ℝ) / 11) ≤ operatorEigenvalues M i := by
     have hpair := abs_le.mp habs
     linarith [hpair.1]
-  have hlower_const : (117 : ℝ) / 176 ≤ c - (12 : ℝ) / 11 := by
+  have hlower_const : (127 : ℝ) / 176 ≤ c - (12 : ℝ) / 11 := by
     have h127_eq : (127 : ℝ) / 176 = ((29 : ℝ) / 16) - ((12 : ℝ) / 11) := by norm_num
-    have h127_le : (127 : ℝ) / 176 ≤ c - (12 : ℝ) / 11 := by
-      linarith [hc_ge, h127_eq]
-    have h117_le_127 : (117 : ℝ) / 176 ≤ (127 : ℝ) / 176 := by norm_num
-    linarith
+    linarith [hc_ge, h127_eq]
   calc
-    (117 : ℝ) / 176 ≤ c - (12 : ℝ) / 11 := hlower_const
+    (127 : ℝ) / 176 ≤ c - (12 : ℝ) / 11 := hlower_const
     _ ≤ operatorEigenvalues M i := hlower1
+
+/-- Backward-compatible coarse uniform lower bound, derived from the sharp bound. -/
+theorem operatorEigenvalue_lower_uniform
+    (M : ℕ) (i : Fin (M + 1)) :
+    ((117 : ℝ) / 176) ≤ operatorEigenvalues M i := by
+  have hsharp : ((127 : ℝ) / 176) ≤ operatorEigenvalues M i :=
+    operatorEigenvalue_lower_uniform_sharp M i
+  have hcoarse : ((117 : ℝ) / 176) ≤ ((127 : ℝ) / 176) := by norm_num
+  exact le_trans hcoarse hsharp
 
 /-- Concrete operator-derived finite ladder:
 real eigenvalues of the structural Hermitian matrix at each level `N+1`. -/
