@@ -107,6 +107,32 @@ theorem norm_XiFinite_le_pow_card_of_ordinate_bound
     _ ≤ Finset.prod spec (fun _t => (‖s‖ + B)) := hProdLe
     _ = (‖s‖ + B) ^ spec.card := by simp
 
+/-- One-step factorization when inserting a new ordinate into the finite product. -/
+theorem XiFinite_insert
+    (spec : Finset ℝ) {t : ℝ} (ht : t ∉ spec) (s : ℂ) :
+    XiFinite (insert t spec) s = (s - criticalLinePoint t) * XiFinite spec s := by
+  simp [XiFinite, Finset.prod_insert, ht]
+
+/-- One-step increment bound for the finite Xi products. -/
+theorem norm_XiFinite_insert_sub_le
+    (spec : Finset ℝ) {t : ℝ} (ht : t ∉ spec) (s : ℂ) :
+    ‖XiFinite (insert t spec) s - XiFinite spec s‖ ≤
+      ‖s - criticalLinePoint t - 1‖ *
+        Finset.prod spec (fun u => (‖s‖ + ‖criticalLinePoint u‖)) := by
+  have hfactor := XiFinite_insert spec ht s
+  calc
+    ‖XiFinite (insert t spec) s - XiFinite spec s‖
+        = ‖((s - criticalLinePoint t) - 1) * XiFinite spec s‖ := by
+            rw [hfactor]
+            ring_nf
+    _ = ‖s - criticalLinePoint t - 1‖ * ‖XiFinite spec s‖ := by
+          simp [sub_eq_add_neg, add_assoc]
+    _ ≤ ‖s - criticalLinePoint t - 1‖ *
+          Finset.prod spec (fun u => (‖s‖ + ‖criticalLinePoint u‖)) := by
+          exact mul_le_mul_of_nonneg_left
+            (norm_XiFinite_le_factorized_envelope spec s)
+            (norm_nonneg _)
+
 theorem XiFinite_zero_of_mem
     (spec : Finset ℝ) {t : ℝ}
     (ht : t ∈ spec) :
