@@ -4,6 +4,7 @@ import Gutoe.RiemannSelfAdjoint
 import Gutoe.RiemannTargetFiniteLadder
 import Gutoe.RiemannConvergenceTransfer
 import Gutoe.RiemannFinalTarget
+import Gutoe.RiemannFiniteXiModel
 
 namespace Gutoe.RiemannOperatorLadder
 
@@ -12,6 +13,7 @@ open Gutoe.RiemannSelfAdjoint
 open Gutoe.RiemannTargetFiniteLadder
 open Gutoe.RiemannConvergenceTransfer
 open Gutoe.RiemannFinalTarget
+open Gutoe.RiemannFiniteXiModel
 
 noncomputable section
 
@@ -82,6 +84,13 @@ theorem mem_operatorSpecN_iff_ordinateIsEigenvalue
         (hA := structuralRiemannMatrixC_isHermitian (N + 1))] using hreal
     rcases hrange with ⟨i, rfl⟩
     exact Finset.mem_image.mpr ⟨i, Finset.mem_univ i, rfl⟩
+
+/-- Concrete operator ladder membership is exactly operator-spectrum set membership. -/
+theorem mem_operatorSpecN_iff_mem_operatorSpecSet
+    (N : ℕ) (t : ℝ) :
+    t ∈ operatorSpecN N ↔ t ∈ operatorSpecSet N := by
+  exact (mem_operatorSpecN_iff_ordinateIsEigenvalue N t).trans
+    (ordinateIsEigenvalue_iff_mem_operatorSpecSet N t)
 
 /-- Operator-native finite ladder witness:
 each finite level list is exactly the real ordinates detected as operator
@@ -166,6 +175,28 @@ theorem mathlibRH_of_operator_approxZero
   exact mathlibRH_of_operator_enumerated_nontrivial_capture
     (operator_enumerated_capture_of_approxZero hApprox)
 
+/-- The two operator capture surfaces are equivalent:
+finite ladder capture (`operatorSpecN`) and direct spectrum-set capture (`operatorSpecSet`). -/
+theorem operator_enumerated_capture_iff_operator_set_capture :
+    OperatorEnumeratedNontrivialCapture ↔ OperatorSetNontrivialCapture := by
+  constructor
+  · intro hCap
+    intro s hs htriv h1
+    rcases hCap s hs htriv h1 with ⟨N, t, ht, hsEq⟩
+    exact ⟨N, t, (mem_operatorSpecN_iff_mem_operatorSpecSet N t).1 ht, hsEq⟩
+  · intro hCap
+    intro s hs htriv h1
+    rcases hCap s hs htriv h1 with ⟨N, t, ht, hsEq⟩
+    exact ⟨N, t, (mem_operatorSpecN_iff_mem_operatorSpecSet N t).2 ht, hsEq⟩
+
+/-- Endgame equivalence in operator-native form:
+the convergence obligation is equivalent to direct operator-spectrum capture. -/
+theorem operatorApproxZero_iff_operator_set_capture :
+    OperatorApproxZeroConvergence ↔ OperatorSetNontrivialCapture := by
+  exact (operatorApproxZero_iff_xiTarget_capture.trans
+    (nontrivial_capture_iff_xiTarget_capture operatorSpecN).symm).trans
+      operator_enumerated_capture_iff_operator_set_capture
+
 /-- A finite operator-ladder witness immediately yields set-capture on the
 explicit operator spectrum lane. -/
 theorem operator_set_capture_of_operator_ladder
@@ -185,6 +216,66 @@ theorem mathlibRH_of_operator_set_nontrivial_capture
   intro s hs htriv h1
   rcases hCap s hs htriv h1 with ⟨_N, t, _ht, hsEq⟩
   simpa [hsEq, onCriticalLine, criticalLinePoint_re] using (criticalLinePoint_re t)
+
+/-- Approximate operator-spectrum capture:
+every `XiTarget` zero can be approximated arbitrarily well by critical-line
+points coming from finite operator spectra. -/
+def OperatorApproximateCapture : Prop :=
+  ∀ s : ℂ, XiTarget s = 0 → ∀ ε : ℝ, 0 < ε →
+    ∃ N : ℕ, ∃ t : ℝ, t ∈ operatorSpecSet N ∧ ‖s - criticalLinePoint t‖ < ε
+
+/-- Hurwitz-output surface specialized to the concrete operator lane:
+every `XiTarget` zero can be approximated by an actual finite-level zero of the
+operator finite product. -/
+def OperatorHurwitzZeroApproxTransfer : Prop :=
+  ∀ s : ℂ, XiTarget s = 0 → ∀ ε : ℝ, 0 < ε →
+    ∃ N : ℕ, ∃ z : ℂ,
+      XiFinite (operatorSpecN N) z = 0 ∧ ‖s - z‖ < ε
+
+/-- The operator Hurwitz-output surface implies the internal approximate-capture
+surface used by the RH closure theorem. -/
+theorem operatorApproximateCapture_of_hurwitzTransfer
+    (hHurwitz : OperatorHurwitzZeroApproxTransfer) :
+    OperatorApproximateCapture := by
+  intro s hsXi ε hε
+  rcases hHurwitz s hsXi ε hε with ⟨N, z, hz0, hdist⟩
+  rcases (XiFinite_zero_iff_exists (operatorSpecN N) z).1 hz0 with ⟨t, htN, hzEq⟩
+  refine ⟨N, t, (mem_operatorSpecN_iff_mem_operatorSpecSet N t).1 htN, ?_⟩
+  simpa [hzEq] using hdist
+
+/-- RH closure from approximate operator-spectrum capture.
+This is the exact interface needed for a future Hurwitz-style transfer lemma. -/
+theorem mathlibRH_of_operator_approximate_capture
+    (hApprox : OperatorApproximateCapture) :
+    RiemannHypothesis := by
+  intro s hs htriv h1
+  have hsXi : XiTarget s = 0 := nontrivialZeroTransferToXiTarget s hs htriv h1
+  have hsmall : ∀ ε : ℝ, 0 < ε → |s.re - (1 / 2 : ℝ)| < ε := by
+    intro ε hε
+    rcases hApprox s hsXi ε hε with ⟨N, t, _ht, hdist⟩
+    have hreLe : |(s - criticalLinePoint t).re| ≤ ‖s - criticalLinePoint t‖ := by
+      simpa using (Complex.abs_re_le_norm (s - criticalLinePoint t))
+    have hreLt : |(s - criticalLinePoint t).re| < ε := lt_of_le_of_lt hreLe hdist
+    simpa [criticalLinePoint_re, Complex.sub_re] using hreLt
+  have hEq : s.re = (1 / 2 : ℝ) := by
+    by_contra hne
+    let δ : ℝ := |s.re - (1 / 2 : ℝ)| / 2
+    have hδpos : 0 < δ := by
+      unfold δ
+      exact half_pos (abs_pos.mpr (sub_ne_zero.mpr hne))
+    have hlt : |s.re - (1 / 2 : ℝ)| < δ := hsmall δ hδpos
+    have hge : δ ≤ |s.re - (1 / 2 : ℝ)| := by
+      unfold δ
+      nlinarith [abs_nonneg (s.re - (1 / 2 : ℝ))]
+    exact (not_lt_of_ge hge) hlt
+  exact hEq
+
+/-- RH closure from the operator Hurwitz-output obligation. -/
+theorem mathlibRH_of_operator_hurwitz_zero_approx
+    (hHurwitz : OperatorHurwitzZeroApproxTransfer) :
+    RiemannHypothesis := by
+  exact mathlibRH_of_operator_approximate_capture
+    (operatorApproximateCapture_of_hurwitzTransfer hHurwitz)
 
 end
 
