@@ -2296,6 +2296,30 @@ theorem operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion
   intro M n hn
   exact operatorGreedy_hCandAvail_of_pred_exclusion M (hPredExcl M) n hn
 
+/-- Global closure reduction:
+if the same-min branch always supplies a `min+1` candidate that is both
+admissible and available at step `j-1`, then the greedy predecessor-exclusion
+route closes `OperatorCenterGapPermutationInvariant`. -/
+theorem operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sameMin_plusOne
+    (hPlusOneCandAvailInSameMin :
+      ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      ∀ hjm1 : j - 1 < operatorGreedyCard M,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        ∃ c : Fin (M + 1),
+          c.1 =
+            (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+          c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ ∧
+          c ∈ operatorGreedyAvailableNat M (j - 1)) :
+    OperatorCenterGapPermutationInvariant := by
+  refine operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion ?_
+  intro M j hj hjpos hPrefix
+  exact operatorPredExcl_of_sameMin_plusOneAvailable M
+    (hPlusOneCandAvailInSameMin M) j hj hjpos hPrefix
+
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
 center-gap contract holds. -/
