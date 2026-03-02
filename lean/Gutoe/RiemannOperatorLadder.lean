@@ -665,6 +665,121 @@ theorem operatorCenterCountLE_window_sub_le_three
           simpa [hU_sdiff_L]
     _ ≤ 3 := hwindow_card
 
+/-- Exact half-window center count jump:
+across the structural window of radius `1/2` around center `k+29/16`,
+the center counting function increases by exactly `1`. -/
+theorem operatorCenterCountLE_halfWindow_sub_eq_one
+    (M : ℕ) (k : Fin (M + 1)) :
+    operatorCenterCountLE M (operatorCenterAt k.1 + (1 : ℝ) / 2) -
+      operatorCenterCountLE M (operatorCenterAt k.1 - (1 : ℝ) / 2) = 1 := by
+  classical
+  let upper : ℝ := operatorCenterAt k.1 + (1 : ℝ) / 2
+  let lower : ℝ := operatorCenterAt k.1 - (1 : ℝ) / 2
+  let U : Finset (Fin (M + 1)) :=
+    (Finset.univ : Finset (Fin (M + 1))).filter (fun i => operatorCenterAt i.1 ≤ upper)
+  let L : Finset (Fin (M + 1)) :=
+    (Finset.univ : Finset (Fin (M + 1))).filter (fun i => operatorCenterAt i.1 ≤ lower)
+  have hlower_le_upper : lower ≤ upper := by
+    unfold lower upper
+    linarith
+  have hsubset : L ⊆ U := by
+    intro i hiL
+    have hiL' := Finset.mem_filter.mp hiL
+    exact Finset.mem_filter.mpr ⟨hiL'.1, le_trans hiL'.2 hlower_le_upper⟩
+  have hU_sdiff_L :
+      (U \ L) =
+        ((Finset.univ : Finset (Fin (M + 1))).filter
+          (fun i => lower < operatorCenterAt i.1 ∧ operatorCenterAt i.1 ≤ upper)) := by
+    ext i
+    constructor
+    · intro hi
+      have hiU : i ∈ U := (Finset.mem_sdiff.mp hi).1
+      have hiNotL : i ∉ L := (Finset.mem_sdiff.mp hi).2
+      have hiU' := Finset.mem_filter.mp hiU
+      have hiUpper : operatorCenterAt i.1 ≤ upper := hiU'.2
+      have hiLowerNot : ¬ operatorCenterAt i.1 ≤ lower := by
+        intro hle
+        exact hiNotL (Finset.mem_filter.mpr ⟨by simpa using hiU'.1, hle⟩)
+      have hiLower : lower < operatorCenterAt i.1 := lt_of_not_ge hiLowerNot
+      exact Finset.mem_filter.mpr ⟨by simpa using hiU'.1, ⟨hiLower, hiUpper⟩⟩
+    · intro hi
+      have hi' := Finset.mem_filter.mp hi
+      have hiLower : lower < operatorCenterAt i.1 := hi'.2.1
+      have hiUpper : operatorCenterAt i.1 ≤ upper := hi'.2.2
+      have hiU : i ∈ U := Finset.mem_filter.mpr ⟨by simpa using hi'.1, hiUpper⟩
+      have hiNotL : i ∉ L := by
+        intro hiL
+        have hiL' := Finset.mem_filter.mp hiL
+        exact (not_le_of_gt hiLower) hiL'.2
+      exact Finset.mem_sdiff.mpr ⟨hiU, hiNotL⟩
+  have hcard_sub :
+      operatorCenterCountLE M upper - operatorCenterCountLE M lower = (U \ L).card := by
+    unfold operatorCenterCountLE U L
+    have hcard : (U \ L).card = U.card - (L ∩ U).card := by
+      simpa [Finset.inter_comm] using (Finset.card_sdiff (s := L) (t := U))
+    have hinter : L ∩ U = L := by
+      exact Finset.inter_eq_left.mpr hsubset
+    rw [hcard, hinter]
+  have hwindow_singleton :
+      ((Finset.univ : Finset (Fin (M + 1))).filter
+        (fun i => lower < operatorCenterAt i.1 ∧ operatorCenterAt i.1 ≤ upper)) = ({k} : Finset (Fin (M + 1))) := by
+    ext i
+    constructor
+    · intro hi
+      have hi' := Finset.mem_filter.mp hi
+      have hlow : lower < operatorCenterAt i.1 := hi'.2.1
+      have hup : operatorCenterAt i.1 ≤ upper := hi'.2.2
+      have hi_le_k : i.1 ≤ k.1 := by
+        have hlt : (i.1 : ℝ) < (k.1 : ℝ) + 1 := by
+          dsimp [lower, upper, operatorCenterAt] at hlow hup ⊢
+          linarith
+        exact Nat.lt_succ_iff.mp (by exact_mod_cast hlt)
+      have hk_le_i : k.1 ≤ i.1 := by
+        have hlt : (k.1 : ℝ) < (i.1 : ℝ) + 1 := by
+          dsimp [lower, upper, operatorCenterAt] at hlow hup ⊢
+          linarith
+        exact Nat.lt_succ_iff.mp (by exact_mod_cast hlt)
+      have hik : i = k := Fin.ext (Nat.le_antisymm hi_le_k hk_le_i)
+      simpa [hik]
+    · intro hi
+      have hik : i = k := by simpa using hi
+      subst i
+      have hlow : lower < operatorCenterAt k.1 := by
+        dsimp [lower, operatorCenterAt]
+        linarith
+      have hup : operatorCenterAt k.1 ≤ upper := by
+        dsimp [upper, operatorCenterAt]
+        linarith
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ k, ⟨hlow, hup⟩⟩
+  calc
+    operatorCenterCountLE M (operatorCenterAt k.1 + (1 : ℝ) / 2) -
+      operatorCenterCountLE M (operatorCenterAt k.1 - (1 : ℝ) / 2)
+        = operatorCenterCountLE M upper - operatorCenterCountLE M lower := by rfl
+    _ = (U \ L).card := hcard_sub
+    _ = ((Finset.univ : Finset (Fin (M + 1))).filter
+          (fun i => lower < operatorCenterAt i.1 ∧ operatorCenterAt i.1 ≤ upper)).card := by
+          simpa [hU_sdiff_L]
+    _ = ({k} : Finset (Fin (M + 1))).card := by simpa [hwindow_singleton]
+    _ = 1 := by simp
+
+/-- Sturm-route exact half-window jump transfer:
+if counting functions match at every threshold, then each structural half-window
+captures exactly one eigenvalue count increment. -/
+theorem operatorEigenvalueCountLE_halfWindow_sub_eq_one_of_sturm
+    (hS : OperatorSturmCountContract) (M : ℕ) (k : Fin (M + 1)) :
+    operatorEigenvalueCountLE M (operatorCenterAt k.1 + (1 : ℝ) / 2) -
+      operatorEigenvalueCountLE M (operatorCenterAt k.1 - (1 : ℝ) / 2) = 1 := by
+  have hUpper :
+      operatorEigenvalueCountLE M (operatorCenterAt k.1 + (1 : ℝ) / 2) =
+        operatorCenterCountLE M (operatorCenterAt k.1 + (1 : ℝ) / 2) := by
+    exact hS M (operatorCenterAt k.1 + (1 : ℝ) / 2)
+  have hLower :
+      operatorEigenvalueCountLE M (operatorCenterAt k.1 - (1 : ℝ) / 2) =
+        operatorCenterCountLE M (operatorCenterAt k.1 - (1 : ℝ) / 2) := by
+    exact hS M (operatorCenterAt k.1 - (1 : ℝ) / 2)
+  rw [hUpper, hLower]
+  exact operatorCenterCountLE_halfWindow_sub_eq_one M k
+
 /-- Sturm-route counting consequence:
 if eigenvalue and center counting functions agree at every threshold, then the
 eigenvalue counting function also increases by at most `3` across the structural
