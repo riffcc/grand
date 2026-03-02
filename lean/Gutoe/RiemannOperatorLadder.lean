@@ -929,6 +929,127 @@ theorem tendstoLocallyUniformly_operatorCenteredPhaseNormalized_of_stepSummable_
       (fun _R ε hε => stepTail_of_summable_nonneg a ha_nonneg ha_sum ε hε)
       hpt
 
+/-- Closed-ball uniform convergence for the concrete operator Xi ladder from
+global step-tail control plus pointwise convergence on that closed ball. -/
+theorem tendstoUniformlyOn_closedBall_operatorXiFiniteLadder_of_stepTail_and_pointwise
+    (R : ℝ) (a : ℕ → ℝ)
+    (hstep : ∀ j : ℕ, ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      ‖operatorXiFiniteLadder (j + 1) z - operatorXiFiniteLadder j z‖ ≤ a j)
+    (htail : ∀ ε : ℝ, 0 < ε → ∃ n0 : ℕ,
+      ∀ n : ℕ, n0 ≤ n → ∀ m : ℕ,
+        Finset.sum (Finset.range m) (fun k => a (n + k)) < ε)
+    {F : ℂ → ℂ}
+    (hpt : ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      Filter.Tendsto (fun N : ℕ => operatorXiFiniteLadder N z)
+        (Filter.atTop : Filter ℕ) (𝓝 (F z))) :
+    TendstoUniformlyOn operatorXiFiniteLadder F
+      (Filter.atTop : Filter ℕ) (Metric.closedBall (0 : ℂ) R) := by
+  have hUC :
+      UniformCauchySeqOn operatorXiFiniteLadder
+        (Filter.atTop : Filter ℕ) (Metric.closedBall (0 : ℂ) R) := by
+    intro u hu
+    rcases (Metric.mem_uniformity_dist).1 hu with ⟨ε, hε, hεsub⟩
+    rcases htail ε hε with ⟨n0, hn0⟩
+    rw [Filter.eventually_prod_iff]
+    refine ⟨{i : ℕ | n0 ≤ i}, Filter.mem_atTop_sets.mpr ⟨n0, by intro i hi; exact hi⟩,
+      {j : ℕ | n0 ≤ j}, Filter.mem_atTop_sets.mpr ⟨n0, by intro j hj; exact hj⟩, ?_⟩
+    intro i hi j hj z hz
+    have hdist : dist (operatorXiFiniteLadder i z) (operatorXiFiniteLadder j z) < ε := by
+      by_cases hij : i ≤ j
+      · let m : ℕ := j - i
+        have hjEq : j = i + m := by
+          dsimp [m]
+          exact (Nat.add_sub_of_le hij).symm
+        have hbound :
+            ‖operatorXiFiniteLadder j z - operatorXiFiniteLadder i z‖ ≤
+              Finset.sum (Finset.range m) (fun k => a (i + k)) := by
+          have hle := norm_sub_le_sum_stepBounds
+            (fun j => operatorXiFiniteLadder j z) a (fun j => hstep j z hz) i m
+          exact by simpa [hjEq] using hle
+        have hlt : ‖operatorXiFiniteLadder j z - operatorXiFiniteLadder i z‖ < ε :=
+          lt_of_le_of_lt hbound (hn0 i hi m)
+        simpa [dist_eq_norm, norm_sub_rev] using hlt
+      · have hji : j ≤ i := le_of_not_ge hij
+        let m : ℕ := i - j
+        have hiEq : i = j + m := by
+          dsimp [m]
+          exact (Nat.add_sub_of_le hji).symm
+        have hbound :
+            ‖operatorXiFiniteLadder i z - operatorXiFiniteLadder j z‖ ≤
+              Finset.sum (Finset.range m) (fun k => a (j + k)) := by
+          have hle := norm_sub_le_sum_stepBounds
+            (fun j => operatorXiFiniteLadder j z) a (fun j => hstep j z hz) j m
+          exact by simpa [hiEq] using hle
+        have hlt : ‖operatorXiFiniteLadder i z - operatorXiFiniteLadder j z‖ < ε :=
+          lt_of_le_of_lt hbound (hn0 j hj m)
+        simpa [dist_eq_norm] using hlt
+    exact hεsub (by simpa using hdist)
+  exact hUC.tendstoUniformlyOn_of_tendsto (fun z hz => hpt z hz)
+
+/-- Local-uniform convergence of the concrete operator Xi ladder from
+closed-ball step-tail control and pointwise convergence. -/
+theorem tendstoLocallyUniformly_operatorXiFiniteLadder_of_stepTail_and_pointwise
+    (a : ℕ → ℝ)
+    (hstep : ∀ R : ℝ, ∀ j : ℕ, ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      ‖operatorXiFiniteLadder (j + 1) z - operatorXiFiniteLadder j z‖ ≤ a j)
+    (htail : ∀ R : ℝ, ∀ ε : ℝ, 0 < ε → ∃ n0 : ℕ,
+      ∀ n : ℕ, n0 ≤ n → ∀ m : ℕ,
+        Finset.sum (Finset.range m) (fun k => a (n + k)) < ε)
+    {F : ℂ → ℂ}
+    (hpt : ∀ z : ℂ,
+      Filter.Tendsto (fun N : ℕ => operatorXiFiniteLadder N z)
+        (Filter.atTop : Filter ℕ) (𝓝 (F z))) :
+    TendstoLocallyUniformly operatorXiFiniteLadder F
+      (Filter.atTop : Filter ℕ) := by
+  rw [Metric.tendstoLocallyUniformly_iff]
+  intro ε hε x
+  let R : ℝ := ‖x‖ + 1
+  have hUnif :
+      TendstoUniformlyOn operatorXiFiniteLadder F
+        (Filter.atTop : Filter ℕ) (Metric.closedBall (0 : ℂ) R) :=
+    tendstoUniformlyOn_closedBall_operatorXiFiniteLadder_of_stepTail_and_pointwise
+      R a (hstep R) (htail R) (fun z _hz => hpt z)
+  have hBall : Metric.ball x 1 ⊆ Metric.closedBall (0 : ℂ) R := by
+    intro y hy
+    have hxy : ‖y - x‖ < 1 := by
+      simpa [Metric.mem_ball, dist_eq_norm] using hy
+    have hyNorm : ‖y‖ ≤ R := by
+      have hyLt : ‖y‖ < R := by
+        calc
+          ‖y‖ = ‖(y - x) + x‖ := by ring
+          _ ≤ ‖y - x‖ + ‖x‖ := norm_add_le _ _
+          _ < 1 + ‖x‖ := by linarith
+          _ = R := by simp [R, add_comm]
+      exact le_of_lt hyLt
+    simpa [Metric.mem_closedBall, dist_eq_norm, R] using hyNorm
+  refine ⟨Metric.ball x 1, Metric.ball_mem_nhds x zero_lt_one, ?_⟩
+  have hUnifε :
+      ∀ᶠ n : ℕ in (Filter.atTop : Filter ℕ),
+        ∀ y : ℂ, y ∈ Metric.closedBall (0 : ℂ) R →
+          dist (F y) (operatorXiFiniteLadder n y) < ε :=
+    (Metric.tendstoUniformlyOn_iff.1 hUnif) ε hε
+  exact hUnifε.mono (fun n hn y hy => hn y (hBall hy))
+
+/-- Local-uniform convergence of the concrete operator Xi ladder from
+pointwise convergence plus a summable nonnegative step profile. -/
+theorem tendstoLocallyUniformly_operatorXiFiniteLadder_of_stepSummable_and_pointwise
+    (a : ℕ → ℝ)
+    (ha_nonneg : ∀ j : ℕ, 0 ≤ a j)
+    (ha_sum : Summable a)
+    (hstep : ∀ R : ℝ, ∀ j : ℕ, ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      ‖operatorXiFiniteLadder (j + 1) z - operatorXiFiniteLadder j z‖ ≤ a j)
+    {F : ℂ → ℂ}
+    (hpt : ∀ z : ℂ,
+      Filter.Tendsto (fun N : ℕ => operatorXiFiniteLadder N z)
+        (Filter.atTop : Filter ℕ) (𝓝 (F z))) :
+    TendstoLocallyUniformly operatorXiFiniteLadder F
+      (Filter.atTop : Filter ℕ) := by
+  exact
+    tendstoLocallyUniformly_operatorXiFiniteLadder_of_stepTail_and_pointwise
+      a hstep
+      (fun _R ε hε => stepTail_of_summable_nonneg a ha_nonneg ha_sum ε hε)
+      hpt
+
 /-- Critical-line points are never zero. -/
 theorem criticalLinePoint_ne_zero (t : ℝ) :
     criticalLinePoint t ≠ 0 := by
