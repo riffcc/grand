@@ -435,6 +435,15 @@ theorem operatorEigenvaluesOrdered_antitone (N : ℕ) :
     (Matrix.IsHermitian.eigenvalues₀_antitone
       (hA := structuralRiemannMatrixC_isHermitian (N + 1)))
 
+/-- Convenience monotonicity form of the ordered lane: indices increase while
+ordered eigenvalues weakly decrease. -/
+theorem operatorEigenvaluesOrdered_mono
+    (N : ℕ)
+    {i j : Fin (Fintype.card (Fin (N + 1)))}
+    (hij : i ≤ j) :
+    operatorEigenvaluesOrdered N j ≤ operatorEigenvaluesOrdered N i := by
+  exact (operatorEigenvaluesOrdered_antitone N) hij
+
 /-- Canonical reindex map from the `Fin (N+1)` lane to the `eigenvalues₀` lane. -/
 noncomputable def operatorEigenvaluesReindexToOrdered (N : ℕ) :
     Fin (N + 1) → Fin (Fintype.card (Fin (N + 1))) :=
