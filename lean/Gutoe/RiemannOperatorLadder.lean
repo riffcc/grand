@@ -713,6 +713,31 @@ theorem operatorSturm_prev_edge_indicator_zero_of_center_gt_and_flip
     operatorSturm_prev_sign_eq_of_center_gt_and_flip M x hcx hflip hp1nz
   simp [hsame]
 
+/-- Upper-boundary pattern connector:
+if the local increment indicators satisfy `(a,b)=(1,0)` and `p_{M+1}(x) ≠ 0`,
+then the previous edge indicator is forced to `0` by the recurrence-local
+sign lock. -/
+theorem operatorSturm_prev_edge_indicator_zero_of_upper_pattern_and_nonzero
+    (M : ℕ) (x : ℝ)
+    (ha1 : (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0) = 1)
+    (hb0 : (if operatorCenterAt (M + 1) ≤ x then 1 else 0) = 0)
+    (hp1nz : operatorSturmP (M + 1) x ≠ 0) :
+    (if operatorSturmSign (operatorSturmP M x) ≠
+          operatorSturmSign (operatorSturmP (M + 1) x) then 1 else 0) = 0 := by
+  have hflip : operatorSturmSign (operatorSturmP (M + 1) x) ≠
+      operatorSturmSign (operatorSturmP (M + 2) x) := by
+    by_cases h :
+        operatorSturmSign (operatorSturmP (M + 1) x) =
+          operatorSturmSign (operatorSturmP (M + 2) x)
+    · simp [h] at ha1
+    · exact h
+  have hcx : x < operatorCenterAt (M + 1) := by
+    by_cases hle : operatorCenterAt (M + 1) ≤ x
+    · simp [hle] at hb0
+    · exact lt_of_not_ge hle
+  exact operatorSturm_prev_edge_indicator_zero_of_center_gt_and_flip M x hcx hflip hp1nz
+
 /-- Finite sign-variation count on consecutive Sturm recurrence values
 `p₀(x), p₁(x), ..., p_{M+1}(x)`. -/
 def operatorSturmSignVariationCount (M : ℕ) (x : ℝ) : ℕ :=
