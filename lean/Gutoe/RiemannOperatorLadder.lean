@@ -648,6 +648,43 @@ theorem even_limit_of_locallyUniform_operatorCenteredPhaseNormalized
     simpa [hseqEq] using hneg
   exact (tendsto_nhds_unique hz hnegOnZ).symm
 
+/-- The phase normalization contributes at most a linear factor in the centered
+distance. This keeps growth order unchanged. -/
+theorem norm_operatorPhaseNormalizedXiLadder_le_linear
+    (N : ℕ) (s : ℂ) :
+    ‖operatorPhaseNormalizedXiLadder N s‖ ≤
+      (1 + ‖s - operatorCenterMidpoint N‖) * ‖operatorXiFiniteLadder N s‖ := by
+  let p : ℕ := (operatorSpecN N).card % 2
+  let m : ℂ := operatorCenterMidpoint N
+  have hpow : ‖s - m‖ ^ p ≤ 1 + ‖s - m‖ := by
+    rcases Nat.mod_two_eq_zero_or_one ((operatorSpecN N).card) with hp0 | hp1
+    · have hpz : p = 0 := by simpa [p] using hp0
+      simp [hpz]
+    · have hpo : p = 1 := by simpa [p] using hp1
+      simp [hpo]
+  calc
+    ‖operatorPhaseNormalizedXiLadder N s‖
+        = ‖(s - m) ^ p * operatorXiFiniteLadder N s‖ := by
+            simp [operatorPhaseNormalizedXiLadder, p, m]
+    _ = ‖(s - m) ^ p‖ * ‖operatorXiFiniteLadder N s‖ := norm_mul _ _
+    _ = ‖s - m‖ ^ p * ‖operatorXiFiniteLadder N s‖ := by
+          simp [norm_pow]
+    _ ≤ (1 + ‖s - m‖) * ‖operatorXiFiniteLadder N s‖ := by
+          exact mul_le_mul_of_nonneg_right hpow (norm_nonneg _)
+    _ = (1 + ‖s - operatorCenterMidpoint N‖) * ‖operatorXiFiniteLadder N s‖ := by
+          simp [m]
+
+/-- Recentered normalized ladder bound: at level `N`, only a linear factor in
+`‖z‖` is added on top of the base finite-product magnitude. -/
+theorem norm_operatorCenteredPhaseNormalizedXiLadder_le_linear
+    (N : ℕ) (z : ℂ) :
+    ‖operatorCenteredPhaseNormalizedXiLadder N z‖ ≤
+      (1 + ‖z‖) *
+        ‖operatorXiFiniteLadder N (z + operatorCenterMidpoint N)‖ := by
+  simpa [operatorCenteredPhaseNormalizedXiLadder, sub_eq_add_neg, add_assoc, add_left_comm,
+    add_comm] using
+    (norm_operatorPhaseNormalizedXiLadder_le_linear N (z + operatorCenterMidpoint N))
+
 /-- Telescoping norm control for complex sequences over a finite step range. -/
 theorem norm_sub_le_sum_steps
     (f : ℕ → ℂ) (n m : ℕ) :
@@ -689,6 +726,50 @@ theorem norm_sub_le_sum_stepBounds
     exact Finset.sum_le_sum (fun k hk => by
       simpa [Nat.add_assoc] using hstep (n + k))
   exact le_trans htele hsum
+
+/-- Telescoping control specialized to the recentered phase-normalized ladder. -/
+theorem norm_operatorCenteredPhaseNormalizedXiLadder_sub_le_sum_stepBounds
+    (z : ℂ) (a : ℕ → ℝ)
+    (hstep : ∀ j : ℕ,
+      ‖operatorCenteredPhaseNormalizedXiLadder (j + 1) z
+        - operatorCenteredPhaseNormalizedXiLadder j z‖ ≤ a j)
+    (n m : ℕ) :
+    ‖operatorCenteredPhaseNormalizedXiLadder (n + m) z
+      - operatorCenteredPhaseNormalizedXiLadder n z‖ ≤
+      Finset.sum (Finset.range m) (fun k => a (n + k)) := by
+  simpa using
+    (norm_sub_le_sum_stepBounds
+      (f := fun j => operatorCenteredPhaseNormalizedXiLadder j z)
+      (a := a) hstep n m)
+
+/-- Uniform Cauchy-on-closed-ball criterion for the recentered phase-normalized
+ladder from global step-tail bounds. -/
+theorem uniform_cauchyOnClosedBall_of_stepTail_operatorCenteredPhaseNormalized
+    (R : ℝ) (a : ℕ → ℝ)
+    (hstep : ∀ j : ℕ, ∀ z : ℂ, z ∈ Metric.closedBall (0 : ℂ) R →
+      ‖operatorCenteredPhaseNormalizedXiLadder (j + 1) z
+        - operatorCenteredPhaseNormalizedXiLadder j z‖ ≤ a j)
+    (htail : ∀ ε : ℝ, 0 < ε → ∃ n0 : ℕ,
+      ∀ n : ℕ, n0 ≤ n → ∀ m : ℕ,
+        Finset.sum (Finset.range m) (fun k => a (n + k)) < ε) :
+    ∀ ε : ℝ, 0 < ε → ∃ n0 : ℕ,
+      ∀ n : ℕ, n0 ≤ n → ∀ m : ℕ, ∀ z : ℂ,
+        z ∈ Metric.closedBall (0 : ℂ) R →
+          ‖operatorCenteredPhaseNormalizedXiLadder (n + m) z
+            - operatorCenteredPhaseNormalizedXiLadder n z‖ < ε := by
+  intro ε hε
+  rcases htail ε hε with ⟨n0, hn0⟩
+  refine ⟨n0, ?_⟩
+  intro n hn m z hz
+  have hsum_lt : Finset.sum (Finset.range m) (fun k => a (n + k)) < ε :=
+    hn0 n hn m
+  have hbound :
+      ‖operatorCenteredPhaseNormalizedXiLadder (n + m) z
+        - operatorCenteredPhaseNormalizedXiLadder n z‖ ≤
+        Finset.sum (Finset.range m) (fun k => a (n + k)) :=
+    norm_operatorCenteredPhaseNormalizedXiLadder_sub_le_sum_stepBounds z a
+      (fun j => hstep j z hz) n m
+  exact lt_of_le_of_lt hbound hsum_lt
 
 /-- Critical-line points are never zero. -/
 theorem criticalLinePoint_ne_zero (t : ℝ) :
