@@ -1183,6 +1183,36 @@ theorem operatorCenterGapPermutationInvariant_of_orderedTieBreakClamped
     simpa [hEqEig, hσEq] using hTie_abs
   exact hAbs
 
+/-- Greedy center selector API (current concrete lane):
+the deterministic clamped ordered selector. -/
+noncomputable def operatorGreedyCenter
+    (M : ℕ) : Fin (Fintype.card (Fin (M + 1))) → Fin (M + 1) :=
+  operatorOrderedTieBreakCenterClamped M
+
+/-- Greedy-center admissibility in ordered candidate sets. -/
+theorem operatorGreedyCenter_mem_candidates
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    operatorGreedyCenter M j ∈ operatorCenterCandidatesOrdered M j := by
+  simpa [operatorGreedyCenter] using operatorOrderedTieBreakCenterClamped_mem M j
+
+/-- Greedy-center injectivity wrapper:
+once injectivity is discharged for the clamped ordered selector, it transfers
+directly to the greedy API. -/
+theorem operatorGreedyCenter_injective
+    (hInj : ∀ M : ℕ, Function.Injective (operatorOrderedTieBreakCenterClamped M))
+    (M : ℕ) :
+    Function.Injective (operatorGreedyCenter M) := by
+  simpa [operatorGreedyCenter] using hInj M
+
+/-- Greedy-center closure to the permutation-invariant center-gap contract. -/
+theorem operatorCenterGapPermutationInvariant_of_operatorGreedyCenter
+    (hInj : ∀ M : ℕ, Function.Injective (operatorGreedyCenter M)) :
+    OperatorCenterGapPermutationInvariant := by
+  exact operatorCenterGapPermutationInvariant_of_orderedTieBreakClamped
+    (by
+      intro M
+      simpa [operatorGreedyCenter] using hInj M)
+
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
 center-gap contract holds. -/
