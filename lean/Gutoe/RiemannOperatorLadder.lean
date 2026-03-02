@@ -328,6 +328,42 @@ theorem mem_operatorSpecSet_reflect_structuralCenter
   exact (mem_operatorSpecN_iff_mem_operatorSpecSet N
     ((structuralCenterQ (N + 1) : ℝ) - t)).1 hRefN
 
+/-- The finite operator ladder is invariant under reflection about the
+structural center at each level `N`. -/
+theorem operatorSpecN_image_reflect_structuralCenter (N : ℕ) :
+    (operatorSpecN N).image (fun t => (structuralCenterQ (N + 1) : ℝ) - t) =
+      operatorSpecN N := by
+  ext t
+  constructor
+  · intro ht
+    rcases Finset.mem_image.mp ht with ⟨u, hu, rfl⟩
+    exact mem_operatorSpecN_reflect_structuralCenter hu
+  · intro ht
+    let u : ℝ := (structuralCenterQ (N + 1) : ℝ) - t
+    have hu : u ∈ operatorSpecN N := by
+      exact mem_operatorSpecN_reflect_structuralCenter ht
+    refine Finset.mem_image.mpr ?_
+    refine ⟨u, hu, ?_⟩
+    dsimp [u]
+    ring
+
+/-- Set-level invariance of `operatorSpecSet` under center reflection. -/
+theorem operatorSpecSet_image_reflect_structuralCenter (N : ℕ) :
+    (operatorSpecSet N).image (fun t => (structuralCenterQ (N + 1) : ℝ) - t) =
+      operatorSpecSet N := by
+  ext t
+  constructor
+  · intro ht
+    rcases ht with ⟨u, hu, rfl⟩
+    exact mem_operatorSpecSet_reflect_structuralCenter hu
+  · intro ht
+    let u : ℝ := (structuralCenterQ (N + 1) : ℝ) - t
+    have hu : u ∈ operatorSpecSet N := by
+      exact mem_operatorSpecSet_reflect_structuralCenter ht
+    refine ⟨u, hu, ?_⟩
+    dsimp [u]
+    ring
+
 /-- Operator-native finite ladder witness:
 each finite level list is exactly the real ordinates detected as operator
 eigenvalues for that level. -/
