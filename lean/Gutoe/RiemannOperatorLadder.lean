@@ -1201,6 +1201,124 @@ theorem operatorSturmStepCompatibility_of_boundary_exclusions
   intro M x
   exact ⟨hUpper M x, hLower M x⟩
 
+/-- Upper-boundary exclusion from the global Sturm-route counting contract and
+the eigenvalue↔Sturm sign-variation bridge. -/
+theorem operatorSturm_forbid_upper_boundary_pattern_of_signVariationBridge_and_sturmContract
+    (hEigSturm :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorEigenvalueCountLE M x = operatorSturmSignVariationCount M x)
+    (hS : OperatorSturmCountContract) :
+    ∀ M : ℕ, ∀ x : ℝ,
+      let A := operatorSturmSignVariationCount M x
+      let B := operatorCenterCountLE M x
+      let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                    operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+      let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+      A = B + 1 → ¬ (a = 1 ∧ b = 0) := by
+  intro M x
+  dsimp
+  let A : ℕ := operatorSturmSignVariationCount M x
+  let B : ℕ := operatorCenterCountLE M x
+  let a : ℕ :=
+    if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+          operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0
+  let b : ℕ := if operatorCenterAt (M + 1) ≤ x then 1 else 0
+  have hA' : operatorSturmSignVariationCount (M + 1) x = A + a := by
+    unfold A a
+    simpa [operatorSturmP_step] using
+      operatorSturmSignVariationCount_succ_eq_add_indicator_recurrence M x
+  have hB' : operatorCenterCountLE (M + 1) x = B + b := by
+    unfold B b
+    simpa using operatorCenterCountLE_succ_eq_add_indicator M x
+  intro hAB hab
+  rcases hab with ⟨ha1, hb0⟩
+  have ha1' : a = 1 := by simpa [a] using ha1
+  have hb0' : b = 0 := by simpa [b] using hb0
+  have hGapSucc :
+      operatorSturmSignVariationCount (M + 1) x
+        ≤ operatorCenterCountLE (M + 1) x + 1 := by
+    have hEigBound : operatorEigenvalueCountLE (M + 1) x
+        ≤ operatorCenterCountLE (M + 1) x + 1 := (hS (M + 1) x).1
+    simpa [hEigSturm (M + 1) x] using hEigBound
+  have hGapAB : A + a ≤ B + b + 1 := by
+    simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hGapSucc
+  have hA_le_B : A ≤ B := by
+    have hA_le_B' : A + 1 ≤ B + 1 := by
+      calc
+        A + 1 = A + a := by simpa [ha1']
+        _ ≤ B + b + 1 := hGapAB
+        _ = B + 1 := by
+              have : b = 0 := hb0'
+              omega
+    omega
+  omega
+
+/-- Lower-boundary exclusion from the global Sturm-route counting contract and
+the eigenvalue↔Sturm sign-variation bridge. -/
+theorem operatorSturm_forbid_lower_boundary_pattern_of_signVariationBridge_and_sturmContract
+    (hEigSturm :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorEigenvalueCountLE M x = operatorSturmSignVariationCount M x)
+    (hS : OperatorSturmCountContract) :
+    ∀ M : ℕ, ∀ x : ℝ,
+      let A := operatorSturmSignVariationCount M x
+      let B := operatorCenterCountLE M x
+      let a := (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+                    operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0)
+      let b := (if operatorCenterAt (M + 1) ≤ x then 1 else 0)
+      B = A + 1 → ¬ (b = 1 ∧ a = 0) := by
+  intro M x
+  dsimp
+  let A : ℕ := operatorSturmSignVariationCount M x
+  let B : ℕ := operatorCenterCountLE M x
+  let a : ℕ :=
+    if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+          operatorSturmSign (operatorSturmP (M + 2) x) then 1 else 0
+  let b : ℕ := if operatorCenterAt (M + 1) ≤ x then 1 else 0
+  have hA' : operatorSturmSignVariationCount (M + 1) x = A + a := by
+    unfold A a
+    simpa [operatorSturmP_step] using
+      operatorSturmSignVariationCount_succ_eq_add_indicator_recurrence M x
+  have hB' : operatorCenterCountLE (M + 1) x = B + b := by
+    unfold B b
+    simpa using operatorCenterCountLE_succ_eq_add_indicator M x
+  intro hBA hba
+  rcases hba with ⟨hb1, ha0⟩
+  have hb1' : b = 1 := by simpa [b] using hb1
+  have ha0' : a = 0 := by simpa [a] using ha0
+  have hGapSucc :
+      operatorCenterCountLE (M + 1) x
+        ≤ operatorSturmSignVariationCount (M + 1) x + 1 := by
+    have hCenterEigBound : operatorCenterCountLE (M + 1) x
+        ≤ operatorEigenvalueCountLE (M + 1) x + 1 := (hS (M + 1) x).2
+    simpa [hEigSturm (M + 1) x] using hCenterEigBound
+  have hGapBA : B + b ≤ A + a + 1 := by
+    simpa [hA', hB', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hGapSucc
+  have hB_le_A : B ≤ A := by
+    have hB_le_A' : B + 1 ≤ A + 1 := by
+      calc
+        B + 1 = B + b := by simpa [hb1']
+        _ ≤ A + a + 1 := hGapBA
+        _ = A + 1 := by
+              have : a = 0 := ha0'
+              omega
+    omega
+  omega
+
+/-- `OperatorSturmStepCompatibility` follows from the global corrected Sturm
+counting contract once eigenvalue counting is bridged to Sturm sign variation. -/
+theorem operatorSturmStepCompatibility_of_signVariationBridge_and_sturmContract
+    (hEigSturm :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorEigenvalueCountLE M x = operatorSturmSignVariationCount M x)
+    (hS : OperatorSturmCountContract) :
+    OperatorSturmStepCompatibility := by
+  apply operatorSturmStepCompatibility_of_boundary_exclusions
+  · exact operatorSturm_forbid_upper_boundary_pattern_of_signVariationBridge_and_sturmContract
+      hEigSturm hS
+  · exact operatorSturm_forbid_lower_boundary_pattern_of_signVariationBridge_and_sturmContract
+      hEigSturm hS
+
 /-- Strong edge-lock implies the minimal step-compatibility condition. -/
 theorem operatorSturmStepCompatibility_of_edgeLock
     (hEdgeLock :
