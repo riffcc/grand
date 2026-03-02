@@ -1888,6 +1888,31 @@ theorem operatorPredExcl_of_sameMin_aboveAvailable
   exact operatorPredChoice_ne_futureMin_of_sameMin_and_aboveAvailable
     M j hj hjm1 hSameMin hAbove
 
+/-- Same-min witness from available predecessor-maximum:
+if `min(j-1)=min(j)`, predecessor maximum is strictly above predecessor minimum,
+and that maximum is available at step `j-1`, then the required above-min witness
+exists for the same-min branch. -/
+theorem operatorSameMin_aboveAvailable_of_maxAvailable
+    (M : ℕ) (j : ℕ) (hj : j < operatorGreedyCard M)
+    (hjm1 : j - 1 < operatorGreedyCard M)
+    (hSameMin :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1)
+    (hMaxAbove :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+        (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1)
+    (hMaxAvail :
+      operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩ ∈
+        operatorGreedyAvailableNat M (j - 1)) :
+    ∃ c : Fin (M + 1),
+      c ∈ operatorCenterCandidatesOrdered M ⟨j - 1, hjm1⟩ ∧
+      c ∈ operatorGreedyAvailableNat M (j - 1) ∧
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 < c.1 := by
+  refine ⟨operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩, ?_⟩
+  refine ⟨operatorEigenvalueOrderedCenterChoiceMax_mem M ⟨j - 1, hjm1⟩, ?_⟩
+  refine ⟨hMaxAvail, ?_⟩
+  exact hMaxAbove
+
 /-- Strong-induction closure:
 if the predecessor step never chooses `min(j)` under the prefix min-availability
 hypothesis, then `min(j)` is available at every step. -/
