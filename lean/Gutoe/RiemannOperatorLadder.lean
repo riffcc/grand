@@ -485,6 +485,41 @@ theorem operatorEigenvalue_lower_uniform
   have hcoarse : ((117 : ℝ) / 176) ≤ ((127 : ℝ) / 176) := by norm_num
   exact le_trans hcoarse hsharp
 
+/-- Weyl-style per-index center-gap contract for the structural operator lane.
+If true, this is the single perturbative bridge from `D + C` to indexed growth. -/
+def OperatorWeylCenterGap : Prop :=
+  ∀ M : ℕ, ∀ i : Fin (M + 1),
+    |operatorEigenvalues M i - ((i.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11
+
+/-- The Weyl center-gap contract implies indexed linear growth of operator eigenvalues. -/
+theorem indexed_linear_growth_of_operatorWeylCenterGap
+    (hW : OperatorWeylCenterGap) :
+    ∀ M : ℕ, ∀ i : Fin (M + 1),
+      (((i.1 + 1 : ℕ) : ℝ) / 2) ≤ operatorEigenvalues M i := by
+  intro M i
+  have hgap : |operatorEigenvalues M i - ((i.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := hW M i
+  have hpair := abs_le.mp hgap
+  have hlower :
+      (i.1 : ℝ) + (127 : ℝ) / 176 ≤ operatorEigenvalues M i := by
+    have hconst : (i.1 : ℝ) + (29 : ℝ) / 16 - (12 : ℝ) / 11
+        = (i.1 : ℝ) + (127 : ℝ) / 176 := by
+      ring_nf
+    linarith [hpair.1, hconst]
+  have hhalf_le :
+      (((i.1 + 1 : ℕ) : ℝ) / 2) ≤ (i.1 : ℝ) + (127 : ℝ) / 176 := by
+    have hi_nonneg : (0 : ℝ) ≤ i.1 := by positivity
+    have hle_half : (((i.1 + 1 : ℕ) : ℝ) / 2) ≤ (i.1 : ℝ) + (1 : ℝ) / 2 := by
+      calc
+        (((i.1 + 1 : ℕ) : ℝ) / 2)
+            = ((i.1 : ℝ) + 1) / 2 := by norm_num [Nat.cast_add]
+        _ = (i.1 : ℝ) / 2 + (1 : ℝ) / 2 := by ring
+        _ ≤ (i.1 : ℝ) + (1 : ℝ) / 2 := by nlinarith
+    have hconst : (1 : ℝ) / 2 ≤ (127 : ℝ) / 176 := by norm_num
+    have hle_const : (i.1 : ℝ) + (1 : ℝ) / 2 ≤ (i.1 : ℝ) + (127 : ℝ) / 176 := by
+      simpa [add_comm, add_left_comm, add_assoc] using add_le_add_left hconst (i.1 : ℝ)
+    exact le_trans hle_half hle_const
+  exact le_trans hhalf_le hlower
+
 /-- Concrete operator-derived finite ladder:
 real eigenvalues of the structural Hermitian matrix at each level `N+1`. -/
 noncomputable def operatorSpecN (N : ℕ) : Finset ℝ :=
@@ -1719,6 +1754,15 @@ theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_indexed_linear_
     _ ≤ Finset.sum Finset.univ (fun i : Fin (M + 1) => a i.1) := hindex_le
     _ = Finset.sum (Finset.range (M + 1)) a := hsum_range
     _ ≤ ∑' n : ℕ, a n := hrange_le_tsum
+
+/-- One-assumption Weyl reduction:
+the Weyl center-gap contract directly yields the finite-level uniform inverse-square bound. -/
+theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_weylCenterGap
+    (hW : OperatorWeylCenterGap) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
+  exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_indexed_linear_growth
+    (indexed_linear_growth_of_operatorWeylCenterGap hW)
 
 /-- Cardinality growth control for the concrete operator spectral ladder. -/
 theorem card_operatorSpecN_le (N : ℕ) :
