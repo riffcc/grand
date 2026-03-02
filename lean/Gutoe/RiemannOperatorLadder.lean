@@ -1578,6 +1578,44 @@ theorem operatorGreedyCandAvail_nonempty_of_min_available
   exact Finset.mem_filter.mpr
     ⟨operatorEigenvalueOrderedCenterChoiceMin_mem M ⟨n, hn⟩, hminAvail⟩
 
+/-- If the ordered-lane minimum center is available at step `n`, the greedy
+choice index is at least that minimum index. -/
+theorem operatorGreedyChoiceNat_ge_min_of_min_available
+    (M : ℕ) (n : ℕ) (hn : n < operatorGreedyCard M)
+    (hminAvail :
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨n, hn⟩ ∈ operatorGreedyAvailableNat M n) :
+    (operatorEigenvalueOrderedCenterChoiceMin M ⟨n, hn⟩).1
+      ≤ (operatorGreedyChoiceNat M n).1 := by
+  let CandAvail : Finset (Fin (M + 1)) :=
+    ((operatorCenterCandidatesOrdered M ⟨n, hn⟩).filter
+      (fun k => k ∈ operatorGreedyAvailableNat M n))
+  have hCA :
+      CandAvail.Nonempty :=
+    operatorGreedyCandAvail_nonempty_of_min_available M n hn hminAvail
+  have hchoice :
+      operatorGreedyChoiceNat M n = CandAvail.max' hCA := by
+    let P : Prop := CandAvail.Nonempty
+    let F : P → Fin (M + 1) := fun h => CandAvail.max' h
+    let G : ¬P → Fin (M + 1) := fun _ =>
+      if hA : (operatorGreedyAvailableNat M n).Nonempty then
+        (operatorGreedyAvailableNat M n).max' hA
+      else
+        ⟨0, Nat.succ_pos M⟩
+    have hdif : dite P F G = F hCA := dif_pos hCA
+    simpa [operatorGreedyChoiceNat, hn, CandAvail, P, F, G] using hdif
+  have hmemCandAvail : CandAvail.max' hCA ∈ CandAvail := Finset.max'_mem CandAvail hCA
+  have hmemCand :
+      CandAvail.max' hCA ∈ operatorCenterCandidatesOrdered M ⟨n, hn⟩ := by
+    exact (Finset.mem_filter.mp hmemCandAvail).1
+  have hbetween :
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨n, hn⟩).1
+        ≤ (CandAvail.max' hCA).1 := by
+    exact (operatorCenterCandidatesOrdered_mem_iff_between_min_max M ⟨n, hn⟩
+      (CandAvail.max' hCA)).1 hmemCand |>.1
+  have hchoice_val : (operatorGreedyChoiceNat M n).1 = (CandAvail.max' hCA).1 := by
+    simpa [hchoice]
+  simpa [hchoice_val] using hbetween
+
 /-- Packaged `hCandAvail` from the single target property
 `min(j) ∈ available(j)` at each ordered step. -/
 theorem operatorGreedy_hCandAvail_of_min_available
