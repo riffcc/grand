@@ -297,6 +297,37 @@ theorem mem_operatorSpecN_iff_mem_operatorSpecSet
   exact (mem_operatorSpecN_iff_ordinateIsEigenvalue N t).trans
     (ordinateIsEigenvalue_iff_mem_operatorSpecSet N t)
 
+/-- Finite-level operator ladder symmetry:
+membership is closed under reflection about the structural center. -/
+theorem mem_operatorSpecN_reflect_structuralCenter
+    {N : ℕ} {t : ℝ} (ht : t ∈ operatorSpecN N) :
+    ((structuralCenterQ (N + 1) : ℝ) - t) ∈ operatorSpecN N := by
+  have htReal : t ∈ spectrum ℝ (structuralRiemannMatrixC (N + 1)) :=
+    mem_operatorSpecN_implies_mem_real_spectrum ht
+  have htComplex : (t : ℂ) ∈ spectrum ℂ (structuralRiemannMatrixC (N + 1)) :=
+    (spectrum.algebraMap_mem_iff ℂ).2 htReal
+  have hReflectComplex :
+      ((structuralCenterQ (N + 1) : ℂ) - (t : ℂ)) ∈
+        spectrum ℂ (structuralRiemannMatrixC (N + 1)) :=
+    structuralRiemannMatrixC_spectrum_reflect (N + 1) (t : ℂ) htComplex
+  have hReflectEigen :
+      ordinateIsEigenvalue (N + 1) ((structuralCenterQ (N + 1) : ℝ) - t) :=
+    (spectrum.algebraMap_mem_iff ℂ).1 (by simpa using hReflectComplex)
+  exact (mem_operatorSpecN_iff_ordinateIsEigenvalue N
+    ((structuralCenterQ (N + 1) : ℝ) - t)).2 hReflectEigen
+
+/-- Set-level version of finite reflection symmetry on the concrete operator lane. -/
+theorem mem_operatorSpecSet_reflect_structuralCenter
+    {N : ℕ} {t : ℝ} (ht : t ∈ operatorSpecSet N) :
+    ((structuralCenterQ (N + 1) : ℝ) - t) ∈ operatorSpecSet N := by
+  have htN : t ∈ operatorSpecN N :=
+    (mem_operatorSpecN_iff_mem_operatorSpecSet N t).2 ht
+  have hRefN :
+      ((structuralCenterQ (N + 1) : ℝ) - t) ∈ operatorSpecN N :=
+    mem_operatorSpecN_reflect_structuralCenter htN
+  exact (mem_operatorSpecN_iff_mem_operatorSpecSet N
+    ((structuralCenterQ (N + 1) : ℝ) - t)).1 hRefN
+
 /-- Operator-native finite ladder witness:
 each finite level list is exactly the real ordinates detected as operator
 eigenvalues for that level. -/
