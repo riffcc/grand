@@ -504,6 +504,32 @@ def operatorCenterCandidates (M : ℕ) (i : Fin (M + 1)) : Finset (Fin (M + 1)) 
   Finset.univ.filter (fun k =>
     |operatorEigenvalues M i - ((k.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11)
 
+/-- Real-gap form of the concrete Gershgorin enclosure:
+every indexed operator eigenvalue is within `12/11` of some structural center
+`k + 29/16`. -/
+theorem operatorEigenvalue_exists_center_gap_real_le_twelve_over_eleven
+    (M : ℕ) (i : Fin (M + 1)) :
+    ∃ k : Fin (M + 1),
+      |operatorEigenvalues M i - ((k.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+  rcases operatorEigenvalue_exists_center_gap_le_twelve_over_eleven M i with ⟨k, hgap⟩
+  let c : ℝ := (k.1 : ℝ) + (29 : ℝ) / 16
+  have hdiag :
+      structuralRiemannMatrixC (M + 1) k k = (c : ℂ) := by
+    simp [structuralRiemannMatrixC, structuralRiemannMatrix_diag, c, timelikeOffsetQ]
+    ring_nf
+  have hgap' : ‖((operatorEigenvalues M i : ℂ) - (c : ℂ))‖ ≤ ((12 : ℝ) / 11) := by
+    simpa [hdiag, sub_eq_add_neg, add_comm, add_left_comm, add_assoc] using hgap
+  have hgap'' : ‖(((operatorEigenvalues M i - c : ℝ) : ℂ))‖ ≤ ((12 : ℝ) / 11) := by
+    convert hgap' using 1
+    simp
+  have habs : |operatorEigenvalues M i - c| ≤ ((12 : ℝ) / 11) := by
+    calc
+      |operatorEigenvalues M i - c| = ‖(((operatorEigenvalues M i - c : ℝ) : ℂ))‖ := by
+        simpa using (Complex.norm_real (operatorEigenvalues M i - c)).symm
+      _ ≤ ((12 : ℝ) / 11) := hgap''
+  refine ⟨k, ?_⟩
+  simpa [c] using habs
+
 /-- Hall-style finite-level center-gap condition:
 every finite subfamily of eigenvalue candidate-center sets has union cardinality
 at least the subfamily cardinality. -/
@@ -545,7 +571,7 @@ theorem operatorCenterGapHallCondition_of_weylCenterGap
   exact Finset.card_le_card hsubset
 
 /-- Ordered Weyl center-gap implies the permutation-invariant center-gap
-via the identity permutation. -/
+via Hall SDR on the candidate-center family. -/
 theorem operatorCenterGapPermutationInvariant_of_weylCenterGap
     (hW : OperatorWeylCenterGap) :
     OperatorCenterGapPermutationInvariant := by
