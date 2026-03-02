@@ -556,6 +556,26 @@ theorem operatorSturmP_step (n : ℕ) (x : ℝ) :
 def operatorSturmSign (r : ℝ) : Int :=
   if r > 0 then 1 else if r < 0 then -1 else 0
 
+theorem operatorSturmSign_eq_one_of_pos {r : ℝ} (hr : 0 < r) :
+    operatorSturmSign r = 1 := by
+  unfold operatorSturmSign
+  have hnotlt : ¬ r < 0 := by linarith
+  simp [hr, hnotlt]
+
+theorem operatorSturmSign_ne_one_of_nonpos {r : ℝ} (hr : r ≤ 0) :
+    operatorSturmSign r ≠ 1 := by
+  intro hs
+  by_cases hgt : r > 0
+  · linarith
+  · by_cases hlt : r < 0
+    · have hcontra : (-1 : Int) = 1 := by
+        simpa [operatorSturmSign, hgt, hlt] using hs
+      exact (by decide : (-1 : Int) ≠ 1) hcontra
+    · have hz : r = 0 := by linarith
+      have hcontra : (0 : Int) = 1 := by
+        simpa [operatorSturmSign, hgt, hlt, hz] using hs
+      exact (by decide : (0 : Int) ≠ 1) hcontra
+
 /-- Finite sign-variation count on consecutive Sturm recurrence values
 `p₀(x), p₁(x), ..., p_{M+1}(x)`. -/
 def operatorSturmSignVariationCount (M : ℕ) (x : ℝ) : ℕ :=
@@ -568,6 +588,84 @@ def operatorSturmSignVariationCount (M : ℕ) (x : ℝ) : ℕ :=
     operatorSturmSign (operatorSturmP 0 x) = 1 := by
   change operatorSturmSign 1 = 1
   simp [operatorSturmSign]
+
+/-- Level-`0` Sturm sign-variation count is exactly the single-center indicator. -/
+theorem operatorSturmSignVariationCount_zero_eq_center_indicator (x : ℝ) :
+    operatorSturmSignVariationCount 0 x =
+      (if operatorCenterAt 0 ≤ x then 1 else 0) := by
+  have hbase :
+      operatorSturmSignVariationCount 0 x
+        = (if operatorSturmSign 1 = operatorSturmSign (operatorSturmDiag 0 - x)
+            then 0 else 1) := by
+    unfold operatorSturmSignVariationCount
+    by_cases h : operatorSturmSign 1 = operatorSturmSign (operatorSturmDiag 0 - x)
+    · simp [operatorSturmP, h]
+    · let F : Finset ℕ :=
+        (Finset.range (0 + 1)).filter
+          (fun k =>
+            operatorSturmSign (operatorSturmP k x) ≠
+              operatorSturmSign (operatorSturmP (k + 1) x))
+      have hmem0 : 0 ∈ F := by
+        refine Finset.mem_filter.mpr ?_
+        constructor
+        · simp
+        · simpa [operatorSturmP] using h
+      have hcard_le : F.card ≤ 1 := by
+        unfold F
+        calc
+          ((Finset.range (0 + 1)).filter
+              (fun k =>
+                operatorSturmSign (operatorSturmP k x) ≠
+                  operatorSturmSign (operatorSturmP (k + 1) x))).card
+              ≤ (Finset.range (0 + 1)).card := by
+                simpa using Finset.card_filter_le
+                  (s := Finset.range (0 + 1))
+                  (p := fun k =>
+                    operatorSturmSign (operatorSturmP k x) ≠
+                      operatorSturmSign (operatorSturmP (k + 1) x))
+          _ = 1 := by simp
+      have hcard_pos : 0 < F.card := Finset.card_pos.mpr ⟨0, hmem0⟩
+      have hcard_eq : F.card = 1 := by omega
+      have hcard_eq_raw :
+          ((Finset.range (0 + 1)).filter
+              (fun k =>
+                operatorSturmSign (operatorSturmP k x) ≠
+                  operatorSturmSign (operatorSturmP (k + 1) x))).card = 1 := by
+        simpa [F] using hcard_eq
+      calc
+        ((Finset.range (0 + 1)).filter
+            (fun k =>
+              operatorSturmSign (operatorSturmP k x) ≠
+                operatorSturmSign (operatorSturmP (k + 1) x))).card = 1 := hcard_eq_raw
+        _ = (if operatorSturmSign 1 = operatorSturmSign (operatorSturmDiag 0 - x)
+              then 0 else 1) := by simp [h]
+  rw [hbase]
+  have hs1 : operatorSturmSign 1 = 1 := by simp [operatorSturmSign]
+  by_cases hx : operatorCenterAt 0 ≤ x
+  · have hdiag_le : operatorSturmDiag 0 ≤ x := by
+      simpa [operatorSturmDiag_eq_centerAt] using hx
+    have hnonpos : operatorSturmDiag 0 - x ≤ 0 := by linarith
+    have hsDiag_ne_one : operatorSturmSign (operatorSturmDiag 0 - x) ≠ 1 :=
+      operatorSturmSign_ne_one_of_nonpos hnonpos
+    have hEqFalse : ¬ (operatorSturmSign 1 = operatorSturmSign (operatorSturmDiag 0 - x)) := by
+      intro hEq
+      have hsDiag_eq_one : operatorSturmSign (operatorSturmDiag 0 - x) = 1 := by
+        calc
+          operatorSturmSign (operatorSturmDiag 0 - x) = operatorSturmSign 1 := hEq.symm
+          _ = 1 := hs1
+      exact hsDiag_ne_one hsDiag_eq_one
+    simp [hx, hEqFalse]
+  · have hdiag_gt : x < operatorSturmDiag 0 := by
+      have : x < operatorCenterAt 0 := lt_of_not_ge hx
+      simpa [operatorSturmDiag_eq_centerAt] using this
+    have hpos : 0 < operatorSturmDiag 0 - x := by linarith
+    have hsDiag_eq_one : operatorSturmSign (operatorSturmDiag 0 - x) = 1 :=
+      operatorSturmSign_eq_one_of_pos hpos
+    have hEqTrue : operatorSturmSign 1 = operatorSturmSign (operatorSturmDiag 0 - x) := by
+      calc
+        operatorSturmSign 1 = 1 := hs1
+        _ = operatorSturmSign (operatorSturmDiag 0 - x) := hsDiag_eq_one.symm
+    simp [hx, hEqTrue]
 
 theorem operatorSturmSignVariationCount_le (M : ℕ) (x : ℝ) :
     operatorSturmSignVariationCount M x ≤ M + 1 := by
