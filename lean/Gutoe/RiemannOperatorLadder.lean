@@ -1183,35 +1183,287 @@ theorem operatorCenterGapPermutationInvariant_of_orderedTieBreakClamped
     simpa [hEqEig, hσEq] using hTie_abs
   exact hAbs
 
-/-- Greedy center selector API (current concrete lane):
-the deterministic clamped ordered selector. -/
+/-- Finite ordered-lane cardinality at level `M`. -/
+private def operatorGreedyCard (M : ℕ) : ℕ := Fintype.card (Fin (M + 1))
+
+mutual
+
+/-- Recursive available-center set for greedy assignment:
+start from all centers, then erase each previously chosen greedy center. -/
+noncomputable def operatorGreedyAvailableNat (M : ℕ) : ℕ → Finset (Fin (M + 1))
+  | 0 => Finset.univ
+  | n + 1 =>
+      let A := operatorGreedyAvailableNat M n
+      if hn : n < operatorGreedyCard M then
+        A.erase (operatorGreedyChoiceNat M n)
+      else
+        A
+
+/-- Recursive greedy choice at ordered index `n`:
+pick the maximal available candidate-center if possible; otherwise fallback to
+the maximal currently available center (and finally `0` in the impossible empty
+available-set branch). -/
+noncomputable def operatorGreedyChoiceNat (M : ℕ) (n : ℕ) : Fin (M + 1) :=
+  let A := operatorGreedyAvailableNat M n
+  if hn : n < operatorGreedyCard M then
+    let j : Fin (operatorGreedyCard M) := ⟨n, hn⟩
+    let CandAvail := (operatorCenterCandidatesOrdered M j).filter (fun k => k ∈ A)
+    if hCA : CandAvail.Nonempty then
+      CandAvail.max' hCA
+    else if hA : A.Nonempty then
+      A.max' hA
+    else
+      ⟨0, Nat.succ_pos M⟩
+  else
+    ⟨0, Nat.succ_pos M⟩
+
+end
+
+/-- True greedy center selector on ordered indices (recursive available-set lane). -/
 noncomputable def operatorGreedyCenter
-    (M : ℕ) : Fin (Fintype.card (Fin (M + 1))) → Fin (M + 1) :=
-  operatorOrderedTieBreakCenterClamped M
+    (M : ℕ) : Fin (operatorGreedyCard M) → Fin (M + 1) :=
+  fun j => operatorGreedyChoiceNat M j.1
 
-/-- Greedy-center admissibility in ordered candidate sets. -/
-theorem operatorGreedyCenter_mem_candidates
-    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
-    operatorGreedyCenter M j ∈ operatorCenterCandidatesOrdered M j := by
-  simpa [operatorGreedyCenter] using operatorOrderedTieBreakCenterClamped_mem M j
+theorem operatorGreedyChoiceNat_mem_available_of_nonempty
+    (M : ℕ) (n : ℕ)
+    (hn : n < operatorGreedyCard M)
+    (hA : (operatorGreedyAvailableNat M n).Nonempty) :
+    operatorGreedyChoiceNat M n ∈ operatorGreedyAvailableNat M n := by
+  classical
+  have hn' : n < operatorGreedyCard M := hn
+  by_cases hCA :
+      (((operatorCenterCandidatesOrdered M ⟨n, hn'⟩).filter
+        (fun k => k ∈ operatorGreedyAvailableNat M n)).Nonempty)
+  · have hmem :
+        ((operatorCenterCandidatesOrdered M ⟨n, hn'⟩).filter
+          (fun k => k ∈ operatorGreedyAvailableNat M n)).max' hCA ∈
+        ((operatorCenterCandidatesOrdered M ⟨n, hn'⟩).filter
+          (fun k => k ∈ operatorGreedyAvailableNat M n)) :=
+      Finset.max'_mem _ hCA
+    have hchoice :
+        operatorGreedyChoiceNat M n =
+          ((operatorCenterCandidatesOrdered M ⟨n, hn'⟩).filter
+            (fun k => k ∈ operatorGreedyAvailableNat M n)).max' hCA := by
+      let P : Prop :=
+        (((operatorCenterCandidatesOrdered M ⟨n, hn'⟩).filter
+          (fun k => k ∈ operatorGreedyAvailableNat M n)).Nonempty)
+      let F : P → Fin (M + 1) := fun h =>
+        ((operatorCenterCandidatesOrdered M ⟨n, hn'⟩).filter
+          (fun k => k ∈ operatorGreedyAvailableNat M n)).max' h
+      let G : ¬P → Fin (M + 1) := fun _ =>
+        if hA : (operatorGreedyAvailableNat M n).Nonempty then
+          (operatorGreedyAvailableNat M n).max' hA
+        else
+          ⟨0, Nat.succ_pos M⟩
+      have hdif : dite P F G = F hCA := by
+        exact dif_pos hCA
+      simpa [operatorGreedyChoiceNat, hn', P, F, G] using hdif
+    exact hchoice ▸ (Finset.mem_filter.mp hmem).2
+  · by_cases hA' : (operatorGreedyAvailableNat M n).Nonempty
+    · have hmem : (operatorGreedyAvailableNat M n).max' hA' ∈ operatorGreedyAvailableNat M n :=
+        Finset.max'_mem _ hA'
+      have hchoice :
+          operatorGreedyChoiceNat M n = (operatorGreedyAvailableNat M n).max' hA' := by
+        let P : Prop :=
+          (((operatorCenterCandidatesOrdered M ⟨n, hn'⟩).filter
+            (fun k => k ∈ operatorGreedyAvailableNat M n)).Nonempty)
+        let F : P → Fin (M + 1) := fun h =>
+          ((operatorCenterCandidatesOrdered M ⟨n, hn'⟩).filter
+            (fun k => k ∈ operatorGreedyAvailableNat M n)).max' h
+        let G : ¬P → Fin (M + 1) := fun _ =>
+          if hA : (operatorGreedyAvailableNat M n).Nonempty then
+            (operatorGreedyAvailableNat M n).max' hA
+          else
+            ⟨0, Nat.succ_pos M⟩
+        have hPneg : ¬P := by
+          simpa [P] using hCA
+        have hdif : dite P F G = G hPneg := by
+          exact dif_neg hPneg
+        have hG : G hPneg = (operatorGreedyAvailableNat M n).max' hA' := by
+          simp [G, hA']
+        simpa [operatorGreedyChoiceNat, hn', P, F, G] using hdif.trans hG
+      exact hchoice ▸ hmem
+    · exact False.elim (hA' hA)
 
-/-- Greedy-center injectivity wrapper:
-once injectivity is discharged for the clamped ordered selector, it transfers
-directly to the greedy API. -/
+theorem operatorGreedyAvailableNat_card
+    (M : ℕ) :
+    ∀ n : ℕ, n ≤ operatorGreedyCard M →
+      (operatorGreedyAvailableNat M n).card = operatorGreedyCard M - n := by
+  intro n
+  induction' n with n ih
+  · intro h0
+    simp [operatorGreedyAvailableNat, operatorGreedyCard]
+  · intro hn1
+    have hnlt : n < operatorGreedyCard M := by omega
+    have hnle : n ≤ operatorGreedyCard M := Nat.le_of_lt hnlt
+    have hcardPrev : (operatorGreedyAvailableNat M n).card = operatorGreedyCard M - n := ih hnle
+    have hApos : 0 < (operatorGreedyAvailableNat M n).card := by
+      rw [hcardPrev]
+      exact Nat.sub_pos_of_lt hnlt
+    have hAne : (operatorGreedyAvailableNat M n).Nonempty := Finset.card_pos.mp hApos
+    have hmem :
+        operatorGreedyChoiceNat M n ∈ operatorGreedyAvailableNat M n :=
+      operatorGreedyChoiceNat_mem_available_of_nonempty M n hnlt hAne
+    have hcardErase :
+        (operatorGreedyAvailableNat M (n + 1)).card
+          = (operatorGreedyAvailableNat M n).card - 1 := by
+      simp [operatorGreedyAvailableNat, hnlt, Finset.card_erase_of_mem, hmem]
+    rw [hcardErase, hcardPrev]
+    omega
+
+theorem operatorGreedyAvailableNat_nonempty_of_lt
+    (M : ℕ) (n : ℕ) (hn : n < operatorGreedyCard M) :
+    (operatorGreedyAvailableNat M n).Nonempty := by
+  have hcard := operatorGreedyAvailableNat_card M n (Nat.le_of_lt hn)
+  have hpos : 0 < (operatorGreedyCard M - n) := Nat.sub_pos_of_lt hn
+  have hcardPos : 0 < (operatorGreedyAvailableNat M n).card := by simpa [hcard] using hpos
+  exact Finset.card_pos.mp hcardPos
+
+theorem operatorGreedyChoiceNat_mem_available_of_lt
+    (M : ℕ) (n : ℕ) (hn : n < operatorGreedyCard M) :
+    operatorGreedyChoiceNat M n ∈ operatorGreedyAvailableNat M n := by
+  exact operatorGreedyChoiceNat_mem_available_of_nonempty M n hn
+    (operatorGreedyAvailableNat_nonempty_of_lt M n hn)
+
+theorem operatorGreedyAvailableNat_succ_subset
+    (M : ℕ) (n : ℕ) (hn : n < operatorGreedyCard M) :
+    operatorGreedyAvailableNat M (n + 1) ⊆ operatorGreedyAvailableNat M n := by
+  intro x hx
+  have hx' : x ≠ operatorGreedyChoiceNat M n ∧ x ∈ operatorGreedyAvailableNat M n := by
+    simpa [operatorGreedyAvailableNat, hn] using hx
+  exact hx'.2
+
+theorem operatorGreedyChoiceNat_not_mem_available_succ
+    (M : ℕ) (n : ℕ) (hn : n < operatorGreedyCard M) :
+    operatorGreedyChoiceNat M n ∉ operatorGreedyAvailableNat M (n + 1) := by
+  simp [operatorGreedyAvailableNat, hn]
+
+theorem operatorGreedyAvailableNat_antitone
+    (M : ℕ) :
+    ∀ {m n : ℕ}, m ≤ n → n ≤ operatorGreedyCard M →
+      operatorGreedyAvailableNat M n ⊆ operatorGreedyAvailableNat M m := by
+  intro m n hmn
+  induction' hmn with n hmn ih
+  · intro hn
+    exact subset_rfl
+  · intro hn
+    have hnlt : n < operatorGreedyCard M := by
+      exact lt_of_lt_of_le (Nat.lt_succ_self n) hn
+    exact Set.Subset.trans
+      (operatorGreedyAvailableNat_succ_subset M n hnlt)
+      (ih (Nat.le_trans (Nat.le_succ n) hn))
+
+theorem operatorGreedyChoiceNat_not_mem_available_of_lt
+    (M : ℕ) (i j : ℕ)
+    (hij : i < j) (hj : j ≤ operatorGreedyCard M) :
+    operatorGreedyChoiceNat M i ∉ operatorGreedyAvailableNat M j := by
+  have hi : i < operatorGreedyCard M := lt_of_lt_of_le hij hj
+  have hnot1 :
+      operatorGreedyChoiceNat M i ∉ operatorGreedyAvailableNat M (i + 1) := by
+    simpa using operatorGreedyChoiceNat_not_mem_available_succ M i hi
+  have hsub :
+      operatorGreedyAvailableNat M j ⊆ operatorGreedyAvailableNat M (i + 1) :=
+    operatorGreedyAvailableNat_antitone M (Nat.succ_le_of_lt hij) hj
+  exact fun hmem => hnot1 (hsub hmem)
+
+/-- Greedy-center injectivity is by construction:
+each step chooses from the current available set and is erased before the next step. -/
 theorem operatorGreedyCenter_injective
-    (hInj : ∀ M : ℕ, Function.Injective (operatorOrderedTieBreakCenterClamped M))
     (M : ℕ) :
     Function.Injective (operatorGreedyCenter M) := by
-  simpa [operatorGreedyCenter] using hInj M
+  intro j1 j2 hEq
+  by_cases hlt : j1.1 < j2.1
+  · have hj2le : j2.1 ≤ operatorGreedyCard M := Nat.le_of_lt j2.2
+    have hnot :
+        operatorGreedyChoiceNat M j1.1 ∉ operatorGreedyAvailableNat M j2.1 :=
+      operatorGreedyChoiceNat_not_mem_available_of_lt M j1.1 j2.1 hlt hj2le
+    have hmem :
+        operatorGreedyChoiceNat M j2.1 ∈ operatorGreedyAvailableNat M j2.1 :=
+      operatorGreedyChoiceNat_mem_available_of_lt M j2.1 j2.2
+    have hEqNat : operatorGreedyChoiceNat M j1.1 = operatorGreedyChoiceNat M j2.1 := by
+      simpa [operatorGreedyCenter] using hEq
+    have hmem' :
+        operatorGreedyChoiceNat M j1.1 ∈ operatorGreedyAvailableNat M j2.1 := by
+      simpa [hEqNat] using hmem
+    exact (hnot hmem').elim
+  · have hge : j2.1 ≤ j1.1 := Nat.le_of_not_lt hlt
+    by_cases hlt' : j2.1 < j1.1
+    · have hj1le : j1.1 ≤ operatorGreedyCard M := Nat.le_of_lt j1.2
+      have hnot :
+          operatorGreedyChoiceNat M j2.1 ∉ operatorGreedyAvailableNat M j1.1 :=
+        operatorGreedyChoiceNat_not_mem_available_of_lt M j2.1 j1.1 hlt' hj1le
+      have hmem :
+          operatorGreedyChoiceNat M j1.1 ∈ operatorGreedyAvailableNat M j1.1 :=
+        operatorGreedyChoiceNat_mem_available_of_lt M j1.1 j1.2
+      have hEqNat : operatorGreedyChoiceNat M j1.1 = operatorGreedyChoiceNat M j2.1 := by
+        simpa [operatorGreedyCenter] using hEq
+      have hmem' :
+          operatorGreedyChoiceNat M j2.1 ∈ operatorGreedyAvailableNat M j1.1 := by
+        simpa [hEqNat] using hmem
+      exact (hnot hmem').elim
+    · have hle12 : j1.1 ≤ j2.1 := Nat.le_of_not_lt hlt'
+      have hNat : j1.1 = j2.1 := Nat.le_antisymm hle12 hge
+      exact Fin.ext hNat
 
-/-- Greedy-center closure to the permutation-invariant center-gap contract. -/
+/-- Greedy-center admissibility in ordered candidate sets, provided the
+candidate∩available branch is nonempty at each ordered step. -/
+theorem operatorGreedyCenter_mem_candidates
+    (M : ℕ)
+    (hCandAvail :
+      ∀ n : ℕ, ∀ hn : n < operatorGreedyCard M,
+        (((operatorCenterCandidatesOrdered M ⟨n, hn⟩).filter
+          (fun k => k ∈ operatorGreedyAvailableNat M n)).Nonempty))
+    (j : Fin (operatorGreedyCard M)) :
+    operatorGreedyCenter M j ∈ operatorCenterCandidatesOrdered M j := by
+  classical
+  have hn : j.1 < operatorGreedyCard M := j.2
+  unfold operatorGreedyCenter
+  unfold operatorGreedyChoiceNat
+  simp [hn]
+  let A : Finset (Fin (M + 1)) := operatorGreedyAvailableNat M j.1
+  let CandAvail : Finset (Fin (M + 1)) := (operatorCenterCandidatesOrdered M j).filter (fun k => k ∈ A)
+  have hCA : CandAvail.Nonempty := by
+    simpa [A, CandAvail] using hCandAvail j.1 hn
+  have hmem : CandAvail.max' hCA ∈ CandAvail := Finset.max'_mem CandAvail hCA
+  have hmemC : CandAvail.max' hCA ∈ operatorCenterCandidatesOrdered M j :=
+    (Finset.mem_filter.mp hmem).1
+  simpa [A, CandAvail, hn, hCA] using hmemC
+
+/-- Greedy-center closure to the permutation-invariant center-gap contract,
+assuming candidate∩available nonempty at each greedy step. -/
 theorem operatorCenterGapPermutationInvariant_of_operatorGreedyCenter
-    (hInj : ∀ M : ℕ, Function.Injective (operatorGreedyCenter M)) :
+    (hCandAvail :
+      ∀ M : ℕ, ∀ n : ℕ, ∀ hn : n < operatorGreedyCard M,
+        (((operatorCenterCandidatesOrdered M ⟨n, hn⟩).filter
+          (fun k => k ∈ operatorGreedyAvailableNat M n)).Nonempty)) :
     OperatorCenterGapPermutationInvariant := by
-  exact operatorCenterGapPermutationInvariant_of_orderedTieBreakClamped
-    (by
-      intro M
-      simpa [operatorGreedyCenter] using hInj M)
+  intro M
+  classical
+  let e : Fin (M + 1) ≃ Fin (operatorGreedyCard M) :=
+    operatorEigenvaluesReindexToOrderedEquiv M
+  let f : Fin (M + 1) → Fin (M + 1) := fun i => operatorGreedyCenter M (e i)
+  have hf_injective : Function.Injective f := by
+    intro i1 i2 h
+    exact e.injective (operatorGreedyCenter_injective M h)
+  have hf_surjective : Function.Surjective f := (Finite.injective_iff_surjective).1 hf_injective
+  let σ : Fin (M + 1) ≃ Fin (M + 1) := Equiv.ofBijective f ⟨hf_injective, hf_surjective⟩
+  refine ⟨σ, ?_⟩
+  intro i
+  have hTie_i :
+      operatorGreedyCenter M (e i) ∈ operatorCenterCandidatesOrdered M (e i) :=
+    operatorGreedyCenter_mem_candidates M (hCandAvail M) (e i)
+  have hTie_abs :
+      |operatorEigenvaluesOrdered M (e i) -
+        (((operatorGreedyCenter M (e i)).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+    exact (Finset.mem_filter.mp hTie_i).2
+  have hEqEig :
+      operatorEigenvalues M i = operatorEigenvaluesOrdered M (e i) := by
+    simpa [e] using operatorEigenvalues_eq_ordered_reindex M i
+  have hσEq : σ i = operatorGreedyCenter M (e i) := rfl
+  have hAbs :
+      |operatorEigenvalues M i - (((σ i).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+    simpa [hEqEig, hσEq] using hTie_abs
+  exact hAbs
 
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
