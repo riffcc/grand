@@ -984,7 +984,8 @@ theorem sturmCenter_gap_step_preserved
   let b : ℕ := if operatorCenterAt (M + 1) ≤ x then 1 else 0
   have hA' : operatorSturmSignVariationCount (M + 1) x = A + a := by
     unfold A a
-    simpa using operatorSturmSignVariationCount_succ_eq_add_indicator M x
+    simpa [operatorSturmP_step] using
+      operatorSturmSignVariationCount_succ_eq_add_indicator_recurrence M x
   have hB' : operatorCenterCountLE (M + 1) x = B + b := by
     unfold B b
     simpa using operatorCenterCountLE_succ_eq_add_indicator M x
@@ -2858,6 +2859,45 @@ theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm
       Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
   exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_centerGapPermutationInvariant
     (hBridge hS)
+
+/-- Sturm-to-summability route (minimal step-compatibility form):
+if eigenvalue counting matches Sturm sign-variation counting and the recurrence-step
+compatibility holds, then any bridge from Sturm contract to permutation-invariant
+center-gap pairing yields the Path-B uniform inverse-square bound. -/
+theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm_stepCompatibility
+    (hEigSturm :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorEigenvalueCountLE M x = operatorSturmSignVariationCount M x)
+    (hCompat : OperatorSturmStepCompatibility)
+    (hBridge : OperatorSturmCountContract → OperatorCenterGapPermutationInvariant) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
+  exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm
+    (operatorSturmCountContract_of_signVariationBridge_and_stepCompatibility hEigSturm hCompat)
+    hBridge
+
+/-- Sturm-to-summability route (edge-lock form):
+if eigenvalue counting matches Sturm sign-variation counting and edge-lock holds
+for the recurrence increments, then any bridge from Sturm contract to
+permutation-invariant center-gap pairing yields the Path-B uniform inverse-square
+bound. -/
+theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm_edgeLock
+    (hEigSturm :
+      ∀ M : ℕ, ∀ x : ℝ,
+        operatorEigenvalueCountLE M x = operatorSturmSignVariationCount M x)
+    (hEdgeLock :
+      ∀ M : ℕ, ∀ x : ℝ,
+        (operatorSturmSignVariationCount M x = operatorCenterCountLE M x + 1 →
+          operatorCenterAt (M + 1) ≤ x) ∧
+        (operatorCenterCountLE M x = operatorSturmSignVariationCount M x + 1 →
+          operatorSturmSign (operatorSturmP (M + 1) x) ≠
+            operatorSturmSign (operatorSturmP (M + 2) x)))
+    (hBridge : OperatorSturmCountContract → OperatorCenterGapPermutationInvariant) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
+  exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm
+    (operatorSturmCountContract_of_signVariationBridge_and_edgeLock hEigSturm hEdgeLock)
+    hBridge
 
 /-- Cardinality growth control for the concrete operator spectral ladder. -/
 theorem card_operatorSpecN_le (N : ℕ) :
