@@ -1366,6 +1366,98 @@ theorem operatorGreedyChoiceNat_not_mem_available_of_lt
     operatorGreedyAvailableNat_antitone M (Nat.succ_le_of_lt hij) hj
   exact fun hmem => hnot1 (hsub hmem)
 
+/-- If `x` is not available at step `j`, then some earlier greedy step chose `x`. -/
+theorem operatorGreedyChoiceNat_exists_prev_of_not_mem_available
+    (M : ℕ) :
+    ∀ j : ℕ, ∀ x : Fin (M + 1),
+      x ∉ operatorGreedyAvailableNat M j →
+        ∃ i : ℕ, i < j ∧ operatorGreedyChoiceNat M i = x := by
+  intro j
+  induction' j with j ih
+  · intro x hx
+    have hxU : x ∉ (Finset.univ : Finset (Fin (M + 1))) := by
+      simpa [operatorGreedyAvailableNat] using hx
+    exact False.elim (hxU (Finset.mem_univ x))
+  · intro x hx
+    by_cases hjlt : j < operatorGreedyCard M
+    · have hx' :
+        x = operatorGreedyChoiceNat M j ∨ x ∉ operatorGreedyAvailableNat M j := by
+        have hxImp :
+            x ≠ operatorGreedyChoiceNat M j →
+              x ∉ operatorGreedyAvailableNat M j := by
+          simpa [operatorGreedyAvailableNat, hjlt, Finset.mem_erase] using hx
+        by_cases hEq : x = operatorGreedyChoiceNat M j
+        · exact Or.inl hEq
+        · exact Or.inr (hxImp hEq)
+      rcases hx' with hEq | hNotPrev
+      · refine ⟨j, Nat.lt_succ_self j, hEq.symm⟩
+      · rcases ih x hNotPrev with ⟨i, hi, hix⟩
+        exact ⟨i, Nat.lt_trans hi (Nat.lt_succ_self j), hix⟩
+    · have hNotPrev : x ∉ operatorGreedyAvailableNat M j := by
+        simpa [operatorGreedyAvailableNat, hjlt] using hx
+      rcases ih x hNotPrev with ⟨i, hi, hix⟩
+      exact ⟨i, Nat.lt_trans hi (Nat.lt_succ_self j), hix⟩
+
+/-- Single-gap reduction:
+if no earlier step can choose the future ordered minimum center, then that
+minimum center is available at its own step. -/
+theorem operatorEigenvalueOrderedCenterChoiceMin_mem_available_of_noPremature
+    (M : ℕ)
+    (hNoPremature :
+      ∀ i j : ℕ, ∀ hij : i < j, ∀ hj : j < operatorGreedyCard M,
+        operatorGreedyChoiceNat M i ≠
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩) :
+    ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M,
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩ ∈
+        operatorGreedyAvailableNat M j := by
+  intro j hj
+  by_contra hnot
+  rcases operatorGreedyChoiceNat_exists_prev_of_not_mem_available M j
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩) hnot with
+    ⟨i, hij, hEq⟩
+  exact (hNoPremature i j hij hj) hEq
+
+/-- If the canonical ordered-lane minimum center is available at step `n`,
+then the candidate∩available set at step `n` is nonempty. -/
+theorem operatorGreedyCandAvail_nonempty_of_min_available
+    (M : ℕ) (n : ℕ) (hn : n < operatorGreedyCard M)
+    (hminAvail :
+      operatorEigenvalueOrderedCenterChoiceMin M ⟨n, hn⟩ ∈ operatorGreedyAvailableNat M n) :
+    (((operatorCenterCandidatesOrdered M ⟨n, hn⟩).filter
+      (fun k => k ∈ operatorGreedyAvailableNat M n)).Nonempty) := by
+  refine ⟨operatorEigenvalueOrderedCenterChoiceMin M ⟨n, hn⟩, ?_⟩
+  exact Finset.mem_filter.mpr
+    ⟨operatorEigenvalueOrderedCenterChoiceMin_mem M ⟨n, hn⟩, hminAvail⟩
+
+/-- Packaged `hCandAvail` from the single target property
+`min(j) ∈ available(j)` at each ordered step. -/
+theorem operatorGreedy_hCandAvail_of_min_available
+    (M : ℕ)
+    (hminAvail :
+      ∀ n : ℕ, ∀ hn : n < operatorGreedyCard M,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨n, hn⟩ ∈
+          operatorGreedyAvailableNat M n) :
+    ∀ n : ℕ, ∀ hn : n < operatorGreedyCard M,
+      (((operatorCenterCandidatesOrdered M ⟨n, hn⟩).filter
+        (fun k => k ∈ operatorGreedyAvailableNat M n)).Nonempty) := by
+  intro n hn
+  exact operatorGreedyCandAvail_nonempty_of_min_available M n hn (hminAvail n hn)
+
+/-- Two-stage reduction:
+if no earlier step can choose the future ordered minimum center, the greedy
+candidate∩available branch is nonempty at every ordered step. -/
+theorem operatorGreedy_hCandAvail_of_noPremature
+    (M : ℕ)
+    (hNoPremature :
+      ∀ i j : ℕ, ∀ hij : i < j, ∀ hj : j < operatorGreedyCard M,
+        operatorGreedyChoiceNat M i ≠
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩) :
+    ∀ n : ℕ, ∀ hn : n < operatorGreedyCard M,
+      (((operatorCenterCandidatesOrdered M ⟨n, hn⟩).filter
+        (fun k => k ∈ operatorGreedyAvailableNat M n)).Nonempty) := by
+  exact operatorGreedy_hCandAvail_of_min_available M
+    (operatorEigenvalueOrderedCenterChoiceMin_mem_available_of_noPremature M hNoPremature)
+
 /-- Greedy-center injectivity is by construction:
 each step chooses from the current available set and is erased before the next step. -/
 theorem operatorGreedyCenter_injective
@@ -1464,6 +1556,18 @@ theorem operatorCenterGapPermutationInvariant_of_operatorGreedyCenter
       |operatorEigenvalues M i - (((σ i).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
     simpa [hEqEig, hσEq] using hTie_abs
   exact hAbs
+
+/-- Reduction: if we prove `min(j)` is always available at step `j`, the greedy
+route closes `OperatorCenterGapPermutationInvariant` directly. -/
+theorem operatorCenterGapPermutationInvariant_of_operatorGreedyMinAvailable
+    (hminAvail :
+      ∀ M : ℕ, ∀ n : ℕ, ∀ hn : n < operatorGreedyCard M,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨n, hn⟩ ∈
+          operatorGreedyAvailableNat M n) :
+    OperatorCenterGapPermutationInvariant := by
+  refine operatorCenterGapPermutationInvariant_of_operatorGreedyCenter ?_
+  intro M n hn
+  exact operatorGreedy_hCandAvail_of_min_available M (hminAvail M) n hn
 
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
