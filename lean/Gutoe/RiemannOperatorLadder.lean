@@ -1143,6 +1143,46 @@ theorem operatorOrderedTieBreakCenterClamped_mem
   exact (operatorCenterCandidatesOrdered_mem_iff_between_min_max M j
     (operatorOrderedTieBreakCenterClamped M j)).2 ⟨hMin_le_tie, hTie_le_max⟩
 
+/-- Clamped tie-break closure:
+if the clamped ordered tie-break is injective at every finite level, then the
+permutation-invariant center-gap contract follows immediately from admissibility. -/
+theorem operatorCenterGapPermutationInvariant_of_orderedTieBreakClamped
+    (hInj :
+      ∀ M : ℕ,
+        Function.Injective
+          (fun j : Fin (Fintype.card (Fin (M + 1))) =>
+            operatorOrderedTieBreakCenterClamped M j)) :
+    OperatorCenterGapPermutationInvariant := by
+  intro M
+  classical
+  let e : Fin (M + 1) ≃ Fin (Fintype.card (Fin (M + 1))) :=
+    operatorEigenvaluesReindexToOrderedEquiv M
+  let f : Fin (M + 1) → Fin (M + 1) := fun i =>
+    operatorOrderedTieBreakCenterClamped M (e i)
+  have hf_injective : Function.Injective f := by
+    intro i1 i2 h
+    exact e.injective ((hInj M) h)
+  have hf_surjective : Function.Surjective f := (Finite.injective_iff_surjective).1 hf_injective
+  let σ : Fin (M + 1) ≃ Fin (M + 1) := Equiv.ofBijective f ⟨hf_injective, hf_surjective⟩
+  refine ⟨σ, ?_⟩
+  intro i
+  have hTie_i :
+      operatorOrderedTieBreakCenterClamped M (e i) ∈
+        operatorCenterCandidatesOrdered M (e i) :=
+    operatorOrderedTieBreakCenterClamped_mem M (e i)
+  have hTie_abs :
+      |operatorEigenvaluesOrdered M (e i) -
+        (((operatorOrderedTieBreakCenterClamped M (e i)).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+    exact (Finset.mem_filter.mp hTie_i).2
+  have hEqEig :
+      operatorEigenvalues M i = operatorEigenvaluesOrdered M (e i) := by
+    simpa [e] using operatorEigenvalues_eq_ordered_reindex M i
+  have hσEq : σ i = operatorOrderedTieBreakCenterClamped M (e i) := rfl
+  have hAbs :
+      |operatorEigenvalues M i - (((σ i).1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+    simpa [hEqEig, hσEq] using hTie_abs
+  exact hAbs
+
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
 center-gap contract holds. -/
