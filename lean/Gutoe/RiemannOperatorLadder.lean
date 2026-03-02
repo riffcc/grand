@@ -2669,6 +2669,62 @@ theorem operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sam
     (hAvailIff).2 hNoPrev
   exact ⟨c, hcEq, hAvail⟩
 
+/-- Geometric-algebraic same-min symmetry contract (Clifford-lane interface):
+in every same-min branch, the predecessor candidate interval is interior
+(`0 < min` and `max < M`) and the canonical center `min+1` is available.
+
+This is the minimal structural package that feeds the two explicit seams:
+`maxAbove` (via interior non-collapse) and `noPrev` (via availability bridge). -/
+def OperatorCliffordSameMinSymmetryContract : Prop :=
+  (∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+    ∀ hjm1 : j - 1 < operatorGreedyCard M,
+      (∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) →
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+      0 < (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 ∧
+      (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 < M)
+  ∧
+  (∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+    ∀ hjm1 : j - 1 < operatorGreedyCard M,
+      (∀ k : ℕ, ∀ hk : k < j,
+        operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+          operatorGreedyAvailableNat M k) →
+      (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+      ∃ c : Fin (M + 1),
+        c.1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+        c ∈ operatorGreedyAvailableNat M (j - 1))
+
+/-- Clifford same-min symmetry contract closes the operator center-gap geometry
+lane by discharging both explicit same-min seams (`maxAbove`, `noPrev`). -/
+theorem operatorCenterGapPermutationInvariant_of_cliffordSameMinSymmetryContract
+    (hCliff : OperatorCliffordSameMinSymmetryContract) :
+    OperatorCenterGapPermutationInvariant := by
+  rcases hCliff with ⟨hInteriorInSameMin, hPlusOneAvailInSameMin⟩
+  have hMaxAboveInSameMin :
+      ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      ∀ hjm1 : j - 1 < operatorGreedyCard M,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 <
+          (operatorEigenvalueOrderedCenterChoiceMax M ⟨j - 1, hjm1⟩).1 := by
+    intro M j hj hjpos hjm1 hPrefix hSameMin
+    rcases hInteriorInSameMin M j hj hjpos hjm1 hPrefix hSameMin with
+      ⟨hminPos, hmaxLt⟩
+    exact operatorMaxAboveInSameMin_of_interior M j hj hjpos hjm1 hminPos hmaxLt
+  have hNoPrevPlusOneInSameMin : OperatorSameMinPlusOneNoPrevObligation :=
+    operatorSameMinPlusOneNoPrevObligation_of_plusOneAvailInSameMin
+      hPlusOneAvailInSameMin
+  exact
+    operatorCenterGapPermutationInvariant_of_operatorGreedyPredExclusion_sameMin_plusOneNoPrev_and_maxAbove
+      hMaxAboveInSameMin hNoPrevPlusOneInSameMin
+
 /-- Tie-break closure theorem: if the deterministic ordered tie-break center is
 admissible in every ordered candidate set, then the full permutation-invariant
 center-gap contract holds. -/
@@ -6288,6 +6344,24 @@ theorem mathlibRH_of_operator_three_conditional_obligations
     RiemannHypothesis := by
   exact mathlibRH_of_operator_two_conditional_obligations
     (operator_two_conditional_obligations_of_three h3)
+
+/-- Full Clifford-operator endgame bundle:
+1) Clifford same-min symmetry contract (geometry lane),
+2) concrete operator Hurwitz kernel, and
+3) local-uniform convergence of finite operator products to `XiTarget`. -/
+def OperatorCliffordRHEndgameObligation : Prop :=
+  OperatorCliffordSameMinSymmetryContract ∧
+  OperatorHurwitzKernel ∧
+  OperatorXiFiniteLocallyUniformConvergence
+
+/-- RH closure from the Clifford-operator endgame bundle. -/
+theorem mathlibRH_of_clifford_operator_endgame
+    (hEnd : OperatorCliffordRHEndgameObligation) :
+    RiemannHypothesis := by
+  rcases hEnd with ⟨hCliff, hKernel, hConv⟩
+  have hGap : OperatorCenterGapPermutationInvariant :=
+    operatorCenterGapPermutationInvariant_of_cliffordSameMinSymmetryContract hCliff
+  exact mathlibRH_of_operator_three_conditional_obligations ⟨hGap, hKernel, hConv⟩
 
 /-- RH closure from the concrete operator Hurwitz kernel plus a summable
 nonnegative step profile and pointwise convergence to `XiTarget`. This packages
