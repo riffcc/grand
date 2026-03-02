@@ -745,6 +745,78 @@ theorem operatorEigenvalueOrderedCenterChoiceMax_antitone
       exact_mod_cast hkj_lt_ki_real
     exact le_of_lt hkj_lt_ki
 
+/-- Any ordered-lane candidate center lies within the last three indices
+ending at the maximal ordered-lane center choice. -/
+theorem operatorCenterCandidatesOrdered_index_bounds_of_max
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1))))
+    {i : Fin (M + 1)}
+    (hi : i ∈ operatorCenterCandidatesOrdered M j) :
+    (operatorEigenvalueOrderedCenterChoiceMax M j).1 - 2 ≤ i.1 ∧
+      i.1 ≤ (operatorEigenvalueOrderedCenterChoiceMax M j).1 := by
+  let k : Fin (M + 1) := operatorEigenvalueOrderedCenterChoiceMax M j
+  let x : ℝ := operatorEigenvaluesOrdered M j
+  let ci : ℝ := (i.1 : ℝ) + (29 : ℝ) / 16
+  let ck : ℝ := (k.1 : ℝ) + (29 : ℝ) / 16
+  have hi_abs : |x - ci| ≤ (12 : ℝ) / 11 := by
+    exact (Finset.mem_filter.mp hi).2
+  have hk_abs : |x - ck| ≤ (12 : ℝ) / 11 := by
+    simpa [k, x, ck] using operatorEigenvalueOrderedCenterChoiceMax_spec M j
+  have hi_le_k_fin : i ≤ k := Finset.le_max' (operatorCenterCandidatesOrdered M j) i hi
+  have hi_le_k : i.1 ≤ k.1 := hi_le_k_fin
+  have hci_lower : x - (12 : ℝ) / 11 ≤ ci := by
+    linarith [(abs_le.mp hi_abs).2]
+  have hck_upper : ck ≤ x + (12 : ℝ) / 11 := by
+    linarith [(abs_le.mp hk_abs).1]
+  have hdiff_le : ck - ci ≤ (24 : ℝ) / 11 := by
+    linarith [hck_upper, hci_lower]
+  have hdiff_lt_three : ck - ci < (3 : ℝ) := by
+    linarith [hdiff_le]
+  have hk_lt_i_plus_three_real : (k.1 : ℝ) < (i.1 : ℝ) + 3 := by
+    dsimp [ck, ci] at hdiff_lt_three ⊢
+    linarith
+  have hk_lt_i_plus_three : k.1 < i.1 + 3 := by
+    exact_mod_cast hk_lt_i_plus_three_real
+  have hk_le_i_plus_two : k.1 ≤ i.1 + 2 := by
+    have htmp : k.1 < i.1 + 2 + 1 := by
+      simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hk_lt_i_plus_three
+    exact Nat.lt_succ_iff.mp htmp
+  have hk_sub_two_le_i : k.1 - 2 ≤ i.1 := by
+    omega
+  exact ⟨hk_sub_two_le_i, hi_le_k⟩
+
+/-- Cardinality bound for ordered-lane candidate centers: each candidate set has
+at most three indices, concentrated near its maximal candidate center. -/
+theorem operatorCenterCandidatesOrdered_card_le_three
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1)))) :
+    (operatorCenterCandidatesOrdered M j).card ≤ 3 := by
+  classical
+  let k : Fin (M + 1) := operatorEigenvalueOrderedCenterChoiceMax M j
+  let Sfin : Finset (Fin (M + 1)) := operatorCenterCandidatesOrdered M j
+  let Snat : Finset ℕ := Sfin.image (fun i : Fin (M + 1) => i.1)
+  let T : Finset ℕ := {k.1 - 2, k.1 - 1, k.1}
+  have hcard_img : Snat.card = Sfin.card := by
+    simpa [Snat, Sfin] using
+      (Finset.card_image_of_injOn (s := Sfin) (f := fun i : Fin (M + 1) => i.1)
+        (by intro a ha b hb hab; exact Fin.ext hab))
+  have hsubset : Snat ⊆ T := by
+    intro n hn
+    rcases Finset.mem_image.mp hn with ⟨i, hiS, rfl⟩
+    have hbounds :=
+      operatorCenterCandidatesOrdered_index_bounds_of_max M j (i := i) hiS
+    have hcases : i.1 = k.1 - 2 ∨ i.1 = k.1 - 1 ∨ i.1 = k.1 := by
+      omega
+    rcases hcases with hEq | hEq | hEq
+    · simpa [T, hEq]
+    · simpa [T, hEq]
+    · simpa [T, hEq]
+  have hT_card_le_three : T.card ≤ 3 := by
+    simpa [T] using (Finset.card_le_three (a := k.1 - 2) (b := k.1 - 1) (c := k.1))
+  calc
+    (operatorCenterCandidatesOrdered M j).card = Sfin.card := by rfl
+    _ = Snat.card := hcard_img.symm
+    _ ≤ T.card := Finset.card_le_card hsubset
+    _ ≤ 3 := hT_card_le_three
+
 /-- Hall-style finite-level center-gap condition:
 every finite subfamily of eigenvalue candidate-center sets has union cardinality
 at least the subfamily cardinality. -/
