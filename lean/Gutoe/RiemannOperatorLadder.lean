@@ -1244,6 +1244,103 @@ theorem operatorSpecN_nonempty (N : ℕ) :
   refine ⟨operatorEigenvalues N i, ?_⟩
   exact Finset.mem_image.mpr ⟨i, hi, rfl⟩
 
+/-- Existence of a concrete operator ordinate at level `N` that lies on or above
+the structural center midpoint. -/
+theorem exists_mem_operatorSpecN_ge_center_midpoint (N : ℕ) :
+    ∃ t : ℝ, t ∈ operatorSpecN N ∧
+      ((structuralCenterQ (N + 1) : ℝ) / 2 ≤ t) := by
+  rcases operatorSpecN_nonempty N with ⟨t0, ht0⟩
+  let c : ℝ := (structuralCenterQ (N + 1) : ℝ)
+  let t1 : ℝ := c - t0
+  have ht1 : t1 ∈ operatorSpecN N := by
+    simpa [t1, c] using
+      (mem_operatorSpecN_reflect_structuralCenter (N := N) (t := t0) ht0)
+  by_cases h0 : c / 2 ≤ t0
+  · exact ⟨t0, ht0, h0⟩
+  · have h0lt : t0 < c / 2 := lt_of_not_ge h0
+    have h1ge : c / 2 ≤ t1 := by
+      dsimp [t1, c]
+      linarith
+    exact ⟨t1, ht1, h1ge⟩
+
+/-- Existence of a concrete operator ordinate at level `N` with explicit linear
+lower growth `(N+1)/2`. -/
+theorem exists_mem_operatorSpecN_ge_linear_half (N : ℕ) :
+    ∃ t : ℝ, t ∈ operatorSpecN N ∧ (((N + 1 : ℕ) : ℝ) / 2 ≤ t) := by
+  rcases exists_mem_operatorSpecN_ge_center_midpoint N with ⟨t, ht, hmid⟩
+  refine ⟨t, ht, ?_⟩
+  have hmid_ge :
+      (((N + 1 : ℕ) : ℝ) / 2) ≤ ((structuralCenterQ (N + 1) : ℝ) / 2) := by
+    norm_num [structuralCenterQ, timelikeOffsetQ]
+    nlinarith
+  exact le_trans hmid_ge hmid
+
+/-- Canonical concrete large-ordinate selector from the operator ladder at each level. -/
+noncomputable def operatorLargeOrdinate (N : ℕ) : ℝ :=
+  Classical.choose (exists_mem_operatorSpecN_ge_linear_half N)
+
+/-- Membership of the canonical large-ordinate selector in the concrete operator ladder. -/
+theorem operatorLargeOrdinate_mem (N : ℕ) :
+    operatorLargeOrdinate N ∈ operatorSpecN N := by
+  exact (Classical.choose_spec (exists_mem_operatorSpecN_ge_linear_half N)).1
+
+/-- Explicit linear lower bound for the canonical large-ordinate selector. -/
+theorem operatorLargeOrdinate_lower (N : ℕ) :
+    (((N + 1 : ℕ) : ℝ) / 2) ≤ operatorLargeOrdinate N := by
+  exact (Classical.choose_spec (exists_mem_operatorSpecN_ge_linear_half N)).2
+
+/-- The inverse-square series over the canonical large-ordinate selector is summable. -/
+theorem summable_one_div_abs_sq_operatorLargeOrdinate :
+    Summable (fun N : ℕ => (1 : ℝ) / (|operatorLargeOrdinate N| ^ (2 : ℕ))) := by
+  have hbase : Summable (fun n : ℕ => (1 : ℝ) / ((n : ℝ) ^ (2 : ℕ))) :=
+    (Real.summable_one_div_nat_pow).2 (by norm_num)
+  have hshift : Summable (fun n : ℕ => (1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ))) := by
+    simpa [Nat.cast_add, add_assoc, add_comm, add_left_comm] using
+      (summable_nat_add_iff 1).2 hbase
+  have hmajor : Summable (fun n : ℕ =>
+      (4 : ℝ) * ((1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ)))) := by
+    exact hshift.mul_left (4 : ℝ)
+  have hnonneg :
+      ∀ n : ℕ, 0 ≤ (1 : ℝ) / (|operatorLargeOrdinate n| ^ (2 : ℕ)) := by
+    intro n
+    positivity
+  have hle :
+      ∀ n : ℕ,
+        (1 : ℝ) / (|operatorLargeOrdinate n| ^ (2 : ℕ))
+          ≤ (4 : ℝ) * ((1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ))) := by
+    intro n
+    have hlin : (((n + 1 : ℕ) : ℝ) / 2) ≤ operatorLargeOrdinate n :=
+      operatorLargeOrdinate_lower n
+    have hnonneg_t : 0 ≤ operatorLargeOrdinate n := by
+      have hhalf_nonneg : 0 ≤ (((n + 1 : ℕ) : ℝ) / 2) := by positivity
+      exact le_trans hhalf_nonneg hlin
+    have habs_lower : (((n + 1 : ℕ) : ℝ) / 2) ≤ |operatorLargeOrdinate n| := by
+      simpa [abs_of_nonneg hnonneg_t] using hlin
+    have ha_nonneg : 0 ≤ (((n + 1 : ℕ) : ℝ) / 2) := by
+      positivity
+    have hb_nonneg : 0 ≤ |operatorLargeOrdinate n| := abs_nonneg _
+    have hpow_le :
+        ((((n + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ)) ≤ (|operatorLargeOrdinate n| ^ (2 : ℕ)) := by
+      nlinarith [habs_lower, ha_nonneg, hb_nonneg]
+    have hhalf_sq_pos : 0 < ((((n + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ)) := by
+      positivity
+    have hrecip :
+        (1 : ℝ) / (|operatorLargeOrdinate n| ^ (2 : ℕ))
+          ≤ (1 : ℝ) / ((((n + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ)) := by
+      exact one_div_le_one_div_of_le hhalf_sq_pos hpow_le
+    have hn1 : (((n + 1 : ℕ) : ℝ)) ≠ 0 := by
+      exact_mod_cast Nat.succ_ne_zero n
+    have hhalf_rewrite :
+        (1 : ℝ) / ((((n + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ))
+          = (4 : ℝ) * ((1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ))) := by
+      field_simp [hn1]
+      ring
+    calc
+      (1 : ℝ) / (|operatorLargeOrdinate n| ^ (2 : ℕ))
+          ≤ (1 : ℝ) / ((((n + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ)) := hrecip
+      _ = (4 : ℝ) * ((1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ))) := hhalf_rewrite
+  exact Summable.of_nonneg_of_le hnonneg hle hmajor
+
 /-- Cardinality growth control for the concrete operator spectral ladder. -/
 theorem card_operatorSpecN_le (N : ℕ) :
     (operatorSpecN N).card ≤ N + 1 := by
