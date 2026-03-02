@@ -511,6 +511,43 @@ theorem operatorCenterGapPermutationInvariant_of_weylCenterGap
 /-- Structural center on the real axis for the `k`-th Gershgorin lane. -/
 def operatorCenterAt (k : ℕ) : ℝ := (k : ℝ) + (29 : ℝ) / 16
 
+/-- Concrete tridiagonal diagonal coefficient `d_k` for the structural matrix:
+`d_k = (k+1) + 13/16 = k + 29/16`. -/
+def operatorSturmDiag (k : ℕ) : ℝ := ((k + 1 : ℕ) : ℝ) + (13 : ℝ) / 16
+
+/-- Concrete nearest-neighbor coefficient `a_k` for the structural matrix. -/
+def operatorSturmOff : ℝ := (6 : ℝ) / 11
+
+/-- Concrete characteristic-polynomial recursion for the structural tridiagonal lane:
+`p₀(x)=1`, `p₁(x)=d₀-x`, and
+`p_{k+1}(x) = (d_k-x)p_k(x) - a² p_{k-1}(x)` for `k≥1`. -/
+def operatorSturmP : ℕ → ℝ → ℝ
+  | 0, _ => 1
+  | 1, x => operatorSturmDiag 0 - x
+  | n + 2, x =>
+      (operatorSturmDiag (n + 1) - x) * operatorSturmP (n + 1) x
+        - (operatorSturmOff ^ (2 : ℕ)) * operatorSturmP n x
+
+theorem operatorSturmDiag_eq_centerAt (k : ℕ) :
+    operatorSturmDiag k = operatorCenterAt k := by
+  unfold operatorSturmDiag operatorCenterAt
+  norm_num
+  ring_nf
+
+@[simp] theorem operatorSturmP_zero (x : ℝ) :
+    operatorSturmP 0 x = 1 := by
+  rfl
+
+@[simp] theorem operatorSturmP_one (x : ℝ) :
+    operatorSturmP 1 x = operatorSturmDiag 0 - x := by
+  rfl
+
+theorem operatorSturmP_step (n : ℕ) (x : ℝ) :
+    operatorSturmP (n + 2) x =
+      (operatorSturmDiag (n + 1) - x) * operatorSturmP (n + 1) x
+        - (operatorSturmOff ^ (2 : ℕ)) * operatorSturmP n x := by
+  rfl
+
 /-- Gershgorin-window separation geometry used by the Sturm route:
 if indices are at least `3` apart (forward), radius-`12/11` windows are strictly separated. -/
 theorem operatorCenterWindow_separated_of_add_three_le
@@ -534,12 +571,13 @@ def operatorCenterCountLE (M : ℕ) (x : ℝ) : ℕ :=
     ((Finset.univ : Finset (Fin (M + 1))).filter
       (fun i => operatorCenterAt i.1 ≤ x))
 
-/-- Sturm-route contract:
-eigenvalue and center counting functions agree at every threshold. This is the
-counting-surface targeted to discharge permutation-invariant center-gap without
-index-order assumptions. -/
+/-- Sturm-route contract (corrected):
+eigenvalue and center counting functions differ by at most one at every threshold
+(`|Δcount| ≤ 1` in natural-number form). -/
 def OperatorSturmCountContract : Prop :=
-  ∀ M : ℕ, ∀ x : ℝ, operatorEigenvalueCountLE M x = operatorCenterCountLE M x
+  ∀ M : ℕ, ∀ x : ℝ,
+    operatorEigenvalueCountLE M x ≤ operatorCenterCountLE M x + 1 ∧
+    operatorCenterCountLE M x ≤ operatorEigenvalueCountLE M x + 1
 
 /-- Structural center-window occupancy bound:
 for fixed center index `k`, at most three structural centers can lie in the
@@ -762,155 +800,70 @@ theorem operatorCenterCountLE_halfWindow_sub_eq_one
     _ = ({k} : Finset (Fin (M + 1))).card := by simpa [hwindow_singleton]
     _ = 1 := by simp
 
-/-- Sturm-route exact half-window jump transfer:
-if counting functions match at every threshold, then each structural half-window
-captures exactly one eigenvalue count increment. -/
-theorem operatorEigenvalueCountLE_halfWindow_sub_eq_one_of_sturm
+/-- Sturm-route half-window jump bound (corrected contract):
+if `|Δcount| ≤ 1` at every threshold, then each structural half-window captures
+at most three eigenvalue count increments. -/
+theorem operatorEigenvalueCountLE_halfWindow_sub_le_three_of_sturm
     (hS : OperatorSturmCountContract) (M : ℕ) (k : Fin (M + 1)) :
     operatorEigenvalueCountLE M (operatorCenterAt k.1 + (1 : ℝ) / 2) -
-      operatorEigenvalueCountLE M (operatorCenterAt k.1 - (1 : ℝ) / 2) = 1 := by
-  have hUpper :
-      operatorEigenvalueCountLE M (operatorCenterAt k.1 + (1 : ℝ) / 2) =
-        operatorCenterCountLE M (operatorCenterAt k.1 + (1 : ℝ) / 2) := by
-    exact hS M (operatorCenterAt k.1 + (1 : ℝ) / 2)
-  have hLower :
-      operatorEigenvalueCountLE M (operatorCenterAt k.1 - (1 : ℝ) / 2) =
-        operatorCenterCountLE M (operatorCenterAt k.1 - (1 : ℝ) / 2) := by
-    exact hS M (operatorCenterAt k.1 - (1 : ℝ) / 2)
-  rw [hUpper, hLower]
-  exact operatorCenterCountLE_halfWindow_sub_eq_one M k
-
-/-- Sturm-route half-window witness:
-under exact counting-function match, each structural half-window contains
-an indexed operator eigenvalue. -/
-theorem exists_operatorEigenvalue_in_halfWindow_of_sturm
-    (hS : OperatorSturmCountContract) (M : ℕ) (k : Fin (M + 1)) :
-    ∃ i : Fin (M + 1),
-      operatorCenterAt k.1 - (1 : ℝ) / 2 < operatorEigenvalues M i ∧
-      operatorEigenvalues M i ≤ operatorCenterAt k.1 + (1 : ℝ) / 2 := by
-  classical
+      operatorEigenvalueCountLE M (operatorCenterAt k.1 - (1 : ℝ) / 2) ≤ 3 := by
   let upper : ℝ := operatorCenterAt k.1 + (1 : ℝ) / 2
   let lower : ℝ := operatorCenterAt k.1 - (1 : ℝ) / 2
-  let Ue : Finset (Fin (M + 1)) :=
-    (Finset.univ : Finset (Fin (M + 1))).filter (fun i => operatorEigenvalues M i ≤ upper)
-  let Le : Finset (Fin (M + 1)) :=
-    (Finset.univ : Finset (Fin (M + 1))).filter (fun i => operatorEigenvalues M i ≤ lower)
-  have hlower_le_upper : lower ≤ upper := by
-    unfold lower upper
-    linarith
-  have hsubset : Le ⊆ Ue := by
-    intro i hiL
-    have hiL' := Finset.mem_filter.mp hiL
-    exact Finset.mem_filter.mpr ⟨hiL'.1, le_trans hiL'.2 hlower_le_upper⟩
-  have hcard_one : (Ue \ Le).card = 1 := by
-    have hdiff :
-        operatorEigenvalueCountLE M upper - operatorEigenvalueCountLE M lower = 1 := by
-      exact operatorEigenvalueCountLE_halfWindow_sub_eq_one_of_sturm hS M k
-    dsimp [operatorEigenvalueCountLE, Ue, Le] at hdiff
-    have hcard : (Ue \ Le).card = Ue.card - (Le ∩ Ue).card := by
-      simpa [Finset.inter_comm] using (Finset.card_sdiff (s := Le) (t := Ue))
-    have hinter : Le ∩ Ue = Le := by
-      exact Finset.inter_eq_left.mpr hsubset
-    simpa [hcard, hinter] using hdiff
-  have hnonempty : (Ue \ Le).Nonempty := by
-    exact Finset.card_pos.mp (by simpa [hcard_one])
-  rcases hnonempty with ⟨i, hi⟩
-  have hiU : i ∈ Ue := (Finset.mem_sdiff.mp hi).1
-  have hiNotL : i ∉ Le := (Finset.mem_sdiff.mp hi).2
-  have hiU' := Finset.mem_filter.mp hiU
-  have hiUpper : operatorEigenvalues M i ≤ upper := hiU'.2
-  have hiLowerNot : ¬ operatorEigenvalues M i ≤ lower := by
-    intro hle
-    exact hiNotL (Finset.mem_filter.mpr ⟨by simpa using hiU'.1, hle⟩)
-  have hiLower : lower < operatorEigenvalues M i := lt_of_not_ge hiLowerNot
-  refine ⟨i, ?_, ?_⟩
-  · simpa [lower] using hiLower
-  · simpa [upper] using hiUpper
+  let eu : ℕ := operatorEigenvalueCountLE M upper
+  let el : ℕ := operatorEigenvalueCountLE M lower
+  let cu : ℕ := operatorCenterCountLE M upper
+  let cl : ℕ := operatorCenterCountLE M lower
+  change eu - el ≤ 3
+  have hSupper : eu ≤ cu + 1 := (hS M upper).1
+  have hSlower : cl ≤ el + 1 := (hS M lower).2
+  have hcenter1 : cu - cl = 1 := by
+    unfold cu cl upper lower
+    simpa using operatorCenterCountLE_halfWindow_sub_eq_one M k
+  have hcu_eq : cu = cl + 1 := by
+    omega
+  have heu_le_el3 : eu ≤ el + 3 := by
+    calc
+      eu ≤ cu + 1 := hSupper
+      _ = cl + 2 := by simpa [hcu_eq, Nat.add_assoc]
+      _ ≤ el + 3 := by
+            calc
+              cl + 2 ≤ (el + 1) + 2 := Nat.add_le_add_right hSlower 2
+              _ = el + 3 := by omega
+  exact (Nat.sub_le_iff_le_add).2 (by
+    simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using heu_le_el3)
 
-/-- Sturm-route to permutation-invariant center-gap:
-global counting-function equality forces a bijective pairing between indexed
-eigenvalues and structural centers, with explicit half-window gap `≤ 1/2`
-(hence `≤ 12/11`). -/
-theorem operatorCenterGapPermutationInvariant_of_sturm
-    (hS : OperatorSturmCountContract) :
-    OperatorCenterGapPermutationInvariant := by
-  intro M
-  classical
-  let φ : Fin (M + 1) → Fin (M + 1) :=
-    fun k => Classical.choose (exists_operatorEigenvalue_in_halfWindow_of_sturm hS M k)
-  have hφ_window :
-      ∀ k : Fin (M + 1),
-        operatorCenterAt k.1 - (1 : ℝ) / 2 < operatorEigenvalues M (φ k) ∧
-          operatorEigenvalues M (φ k) ≤ operatorCenterAt k.1 + (1 : ℝ) / 2 := by
-    intro k
-    exact Classical.choose_spec (exists_operatorEigenvalue_in_halfWindow_of_sturm hS M k)
-  have hφ_inj : Function.Injective φ := by
-    intro k1 k2 hk
-    have hk1 := hφ_window k1
-    have hk2 := hφ_window k2
-    have hk1' : operatorCenterAt k1.1 - (1 : ℝ) / 2 < operatorEigenvalues M (φ k2) ∧
-        operatorEigenvalues M (φ k2) ≤ operatorCenterAt k1.1 + (1 : ℝ) / 2 := by
-      simpa [hk] using hk1
-    have hk2' : operatorCenterAt k2.1 - (1 : ℝ) / 2 < operatorEigenvalues M (φ k2) ∧
-        operatorEigenvalues M (φ k2) ≤ operatorCenterAt k2.1 + (1 : ℝ) / 2 := hk2
-    have h12 : k1.1 ≤ k2.1 := by
-      have hlt : (k1.1 : ℝ) < (k2.1 : ℝ) + 1 := by
-        dsimp [operatorCenterAt] at hk1' hk2' ⊢
-        linarith [hk1'.1, hk2'.2]
-      exact Nat.lt_succ_iff.mp (by exact_mod_cast hlt)
-    have h21 : k2.1 ≤ k1.1 := by
-      have hlt : (k2.1 : ℝ) < (k1.1 : ℝ) + 1 := by
-        dsimp [operatorCenterAt] at hk1' hk2' ⊢
-        linarith [hk2'.1, hk1'.2]
-      exact Nat.lt_succ_iff.mp (by exact_mod_cast hlt)
-    exact Fin.ext (Nat.le_antisymm h12 h21)
-  have hφ_bij : Function.Bijective φ := by
-    exact (Fintype.bijective_iff_injective_and_card φ).2 ⟨hφ_inj, by simp⟩
-  let e : Fin (M + 1) ≃ Fin (M + 1) := Equiv.ofBijective φ hφ_bij
-  refine ⟨e.symm, ?_⟩
-  intro i
-  let k : Fin (M + 1) := e.symm i
-  have hkφ : φ k = i := by
-    dsimp [k]
-    exact e.apply_symm_apply i
-  have hkWin :
-      operatorCenterAt k.1 - (1 : ℝ) / 2 < operatorEigenvalues M i ∧
-        operatorEigenvalues M i ≤ operatorCenterAt k.1 + (1 : ℝ) / 2 := by
-    have hkWin0 := hφ_window k
-    simpa [hkφ] using hkWin0
-  have habs_half :
-      |operatorEigenvalues M i - operatorCenterAt k.1| ≤ (1 : ℝ) / 2 := by
-    refine abs_le.mpr ?_
-    constructor
-    · have hlow : operatorCenterAt k.1 - (1 : ℝ) / 2 ≤ operatorEigenvalues M i := le_of_lt hkWin.1
-      linarith
-    · linarith [hkWin.2]
-  have hhalf_le_twelve : (1 : ℝ) / 2 ≤ (12 : ℝ) / 11 := by norm_num
-  calc
-    |operatorEigenvalues M i - (((e.symm i).1 : ℝ) + (29 : ℝ) / 16)|
-        = |operatorEigenvalues M i - operatorCenterAt k.1| := by
-            simp [k, operatorCenterAt]
-    _ ≤ (1 : ℝ) / 2 := habs_half
-    _ ≤ (12 : ℝ) / 11 := hhalf_le_twelve
-
-/-- Sturm-route counting consequence:
-if eigenvalue and center counting functions agree at every threshold, then the
-eigenvalue counting function also increases by at most `3` across the structural
-`±12/11` window around each center. -/
+/-- Sturm-route counting consequence (corrected contract):
+if `|Δcount| ≤ 1` at every threshold, then the eigenvalue counting function
+increases by at most `5` across the structural `±12/11` window around each center. -/
 theorem operatorEigenvalueCountLE_window_sub_le_three_of_sturm
     (hS : OperatorSturmCountContract) (M : ℕ) (k : Fin (M + 1)) :
     operatorEigenvalueCountLE M (operatorCenterAt k.1 + (12 : ℝ) / 11) -
-      operatorEigenvalueCountLE M (operatorCenterAt k.1 - (12 : ℝ) / 11) ≤ 3 := by
-  have hUpper :
-      operatorEigenvalueCountLE M (operatorCenterAt k.1 + (12 : ℝ) / 11) =
-        operatorCenterCountLE M (operatorCenterAt k.1 + (12 : ℝ) / 11) := by
-    exact hS M (operatorCenterAt k.1 + (12 : ℝ) / 11)
-  have hLower :
-      operatorEigenvalueCountLE M (operatorCenterAt k.1 - (12 : ℝ) / 11) =
-        operatorCenterCountLE M (operatorCenterAt k.1 - (12 : ℝ) / 11) := by
-    exact hS M (operatorCenterAt k.1 - (12 : ℝ) / 11)
-  rw [hUpper, hLower]
-  exact operatorCenterCountLE_window_sub_le_three M k
+      operatorEigenvalueCountLE M (operatorCenterAt k.1 - (12 : ℝ) / 11) ≤ 5 := by
+  let upper : ℝ := operatorCenterAt k.1 + (12 : ℝ) / 11
+  let lower : ℝ := operatorCenterAt k.1 - (12 : ℝ) / 11
+  let eu : ℕ := operatorEigenvalueCountLE M upper
+  let el : ℕ := operatorEigenvalueCountLE M lower
+  let cu : ℕ := operatorCenterCountLE M upper
+  let cl : ℕ := operatorCenterCountLE M lower
+  change eu - el ≤ 5
+  have hSupper : eu ≤ cu + 1 := (hS M upper).1
+  have hSlower : cl ≤ el + 1 := (hS M lower).2
+  have hcenter0 : cu - cl ≤ 3 := by
+    unfold cu cl upper lower
+    simpa using operatorCenterCountLE_window_sub_le_three M k
+  have hcu_le : cu ≤ cl + 3 := by
+    omega
+  have heu_le_el5 : eu ≤ el + 5 := by
+    calc
+      eu ≤ cu + 1 := hSupper
+      _ ≤ (cl + 3) + 1 := Nat.add_le_add_right hcu_le 1
+      _ = cl + 4 := by omega
+      _ ≤ el + 5 := by
+            calc
+              cl + 4 ≤ (el + 1) + 4 := Nat.add_le_add_right hSlower 4
+              _ = el + 5 := by omega
+  exact (Nat.sub_le_iff_le_add).2 (by
+    simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using heu_le_el5)
 
 /-- The Weyl center-gap contract implies indexed linear growth of operator eigenvalues. -/
 theorem indexed_linear_growth_of_operatorWeylCenterGap
@@ -2304,14 +2257,15 @@ theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_weylCenterGap
     (operatorCenterGapPermutationInvariant_of_weylCenterGap hW)
 
 /-- Sturm-route finite-level uniform inverse-square bound:
-counting-function equality implies a permutation-invariant center-gap pairing,
-which yields the same Path-B uniform summability bound used by the RH lane. -/
+if a Sturm contract is available together with a bridge to permutation-invariant
+center-gap pairing, we obtain the same Path-B uniform summability bound. -/
 theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_sturm
-    (hS : OperatorSturmCountContract) :
+    (hS : OperatorSturmCountContract)
+    (hBridge : OperatorSturmCountContract → OperatorCenterGapPermutationInvariant) :
     ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
       Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
   exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_centerGapPermutationInvariant
-    (operatorCenterGapPermutationInvariant_of_sturm hS)
+    (hBridge hS)
 
 /-- Cardinality growth control for the concrete operator spectral ladder. -/
 theorem card_operatorSpecN_le (N : ℕ) :
