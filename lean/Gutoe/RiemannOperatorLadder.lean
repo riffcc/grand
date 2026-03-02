@@ -548,6 +548,16 @@ theorem operatorSturmP_step (n : ℕ) (x : ℝ) :
         - (operatorSturmOff ^ (2 : ℕ)) * operatorSturmP n x := by
   rfl
 
+theorem operatorSturmP_step_center (n : ℕ) (x : ℝ) :
+    operatorSturmP (n + 2) x =
+      (operatorCenterAt (n + 1) - x) * operatorSturmP (n + 1) x
+        - (operatorSturmOff ^ (2 : ℕ)) * operatorSturmP n x := by
+  simpa [operatorSturmDiag_eq_centerAt] using operatorSturmP_step n x
+
+theorem operatorSturmOff_sq_pos : 0 < (operatorSturmOff ^ (2 : ℕ)) := by
+  unfold operatorSturmOff
+  positivity
+
 @[simp] theorem operatorSturmP_one_eq_center_sub (x : ℝ) :
     operatorSturmP 1 x = operatorCenterAt 0 - x := by
   simpa [operatorSturmP, operatorSturmDiag_eq_centerAt]
@@ -562,6 +572,12 @@ theorem operatorSturmSign_eq_one_of_pos {r : ℝ} (hr : 0 < r) :
   have hnotlt : ¬ r < 0 := by linarith
   simp [hr, hnotlt]
 
+theorem operatorSturmSign_eq_neg_one_of_neg {r : ℝ} (hr : r < 0) :
+    operatorSturmSign r = -1 := by
+  unfold operatorSturmSign
+  have hnotgt : ¬ r > 0 := by linarith
+  simp [hnotgt, hr]
+
 theorem operatorSturmSign_ne_one_of_nonpos {r : ℝ} (hr : r ≤ 0) :
     operatorSturmSign r ≠ 1 := by
   intro hs
@@ -575,6 +591,127 @@ theorem operatorSturmSign_ne_one_of_nonpos {r : ℝ} (hr : r ≤ 0) :
       have hcontra : (0 : Int) = 1 := by
         simpa [operatorSturmSign, hgt, hlt, hz] using hs
       exact (by decide : (0 : Int) ≠ 1) hcontra
+
+theorem operatorSturmSign_ne_neg_one_of_nonneg {r : ℝ} (hr : 0 ≤ r) :
+    operatorSturmSign r ≠ -1 := by
+  intro hs
+  by_cases hgt : r > 0
+  · have hcontra : (1 : Int) = -1 := by
+      simpa [operatorSturmSign, hgt] using hs
+    exact (by decide : (1 : Int) ≠ -1) hcontra
+  · by_cases hlt : r < 0
+    · linarith
+    · have hz : r = 0 := by linarith
+      have hcontra : (0 : Int) = -1 := by
+        simpa [operatorSturmSign, hgt, hlt, hz] using hs
+      exact (by decide : (0 : Int) ≠ -1) hcontra
+
+/-- Recurrence-local sign dominance (positive branch):
+if `x` is below the next structural center, the terminal value is positive, and
+the last edge flips sign, then the previous recurrence value is positive. -/
+theorem operatorSturm_prev_pos_of_center_gt_and_flip_pos
+    (M : ℕ) (x : ℝ)
+    (hcx : x < operatorCenterAt (M + 1))
+    (hp1 : 0 < operatorSturmP (M + 1) x)
+    (hflip : operatorSturmSign (operatorSturmP (M + 1) x) ≠
+      operatorSturmSign (operatorSturmP (M + 2) x)) :
+    0 < operatorSturmP M x := by
+  have hs1 : operatorSturmSign (operatorSturmP (M + 1) x) = 1 :=
+    operatorSturmSign_eq_one_of_pos hp1
+  have hp2_nonpos : operatorSturmP (M + 2) x ≤ 0 := by
+    by_contra hp2_pos
+    have hs2 : operatorSturmSign (operatorSturmP (M + 2) x) = 1 :=
+      operatorSturmSign_eq_one_of_pos (lt_of_not_ge hp2_pos)
+    exact hflip (by simpa [hs1, hs2])
+  have hcpos : 0 < operatorCenterAt (M + 1) - x := sub_pos.mpr hcx
+  have hdpos : 0 < (operatorSturmOff ^ (2 : ℕ)) := operatorSturmOff_sq_pos
+  have hrec := operatorSturmP_step_center M x
+  have hrhs_pos :
+      0 < (operatorCenterAt (M + 1) - x) * operatorSturmP (M + 1) x
+            - operatorSturmP (M + 2) x := by
+    have hmulpos : 0 < (operatorCenterAt (M + 1) - x) * operatorSturmP (M + 1) x :=
+      mul_pos hcpos hp1
+    linarith
+  have hmul_pos : 0 < (operatorSturmOff ^ (2 : ℕ)) * operatorSturmP M x := by
+    linarith [hrec, hrhs_pos]
+  nlinarith [hdpos, hmul_pos]
+
+/-- Recurrence-local sign dominance (negative branch):
+if `x` is below the next structural center, the terminal value is negative, and
+the last edge flips sign, then the previous recurrence value is negative. -/
+theorem operatorSturm_prev_neg_of_center_gt_and_flip_neg
+    (M : ℕ) (x : ℝ)
+    (hcx : x < operatorCenterAt (M + 1))
+    (hp1 : operatorSturmP (M + 1) x < 0)
+    (hflip : operatorSturmSign (operatorSturmP (M + 1) x) ≠
+      operatorSturmSign (operatorSturmP (M + 2) x)) :
+    operatorSturmP M x < 0 := by
+  have hs1 : operatorSturmSign (operatorSturmP (M + 1) x) = -1 :=
+    operatorSturmSign_eq_neg_one_of_neg hp1
+  have hp2_nonneg : 0 ≤ operatorSturmP (M + 2) x := by
+    by_contra hp2_neg
+    have hs2 : operatorSturmSign (operatorSturmP (M + 2) x) = -1 :=
+      operatorSturmSign_eq_neg_one_of_neg (lt_of_not_ge hp2_neg)
+    exact hflip (by simpa [hs1, hs2])
+  have hcpos : 0 < operatorCenterAt (M + 1) - x := sub_pos.mpr hcx
+  have hdpos : 0 < (operatorSturmOff ^ (2 : ℕ)) := operatorSturmOff_sq_pos
+  have hrec := operatorSturmP_step_center M x
+  have hrhs_neg :
+      (operatorCenterAt (M + 1) - x) * operatorSturmP (M + 1) x
+        - operatorSturmP (M + 2) x < 0 := by
+    have hmulneg : (operatorCenterAt (M + 1) - x) * operatorSturmP (M + 1) x < 0 :=
+      mul_neg_of_pos_of_neg hcpos hp1
+    linarith
+  have hmul_neg : (operatorSturmOff ^ (2 : ℕ)) * operatorSturmP M x < 0 := by
+    linarith [hrec, hrhs_neg]
+  nlinarith [hdpos, hmul_neg]
+
+/-- Recurrence-local sign lock below the next center:
+if the terminal edge flips and `p_{M+1}(x) ≠ 0`, then `p_M(x)` and `p_{M+1}(x)`
+have the same sign. -/
+theorem operatorSturm_prev_sign_eq_of_center_gt_and_flip
+    (M : ℕ) (x : ℝ)
+    (hcx : x < operatorCenterAt (M + 1))
+    (hflip : operatorSturmSign (operatorSturmP (M + 1) x) ≠
+      operatorSturmSign (operatorSturmP (M + 2) x))
+    (hp1nz : operatorSturmP (M + 1) x ≠ 0) :
+    operatorSturmSign (operatorSturmP M x) =
+      operatorSturmSign (operatorSturmP (M + 1) x) := by
+  have hp1_cases :
+      operatorSturmP (M + 1) x < 0 ∨ 0 < operatorSturmP (M + 1) x :=
+    lt_or_gt_of_ne hp1nz
+  rcases hp1_cases with hp1_neg | hp1_pos
+  · have hp0_neg : operatorSturmP M x < 0 :=
+      operatorSturm_prev_neg_of_center_gt_and_flip_neg M x hcx hp1_neg hflip
+    have hs0 : operatorSturmSign (operatorSturmP M x) = -1 :=
+      operatorSturmSign_eq_neg_one_of_neg hp0_neg
+    have hs1 : operatorSturmSign (operatorSturmP (M + 1) x) = -1 :=
+      operatorSturmSign_eq_neg_one_of_neg hp1_neg
+    simpa [hs0, hs1]
+  · have hp0_pos : 0 < operatorSturmP M x :=
+      operatorSturm_prev_pos_of_center_gt_and_flip_pos M x hcx hp1_pos hflip
+    have hs0 : operatorSturmSign (operatorSturmP M x) = 1 :=
+      operatorSturmSign_eq_one_of_pos hp0_pos
+    have hs1 : operatorSturmSign (operatorSturmP (M + 1) x) = 1 :=
+      operatorSturmSign_eq_one_of_pos hp1_pos
+    simpa [hs0, hs1]
+
+/-- Indicator form of the previous-sign lock:
+below the next center, if the terminal edge flips and `p_{M+1}(x) ≠ 0`, then
+the previous edge indicator is forced to `0`. -/
+theorem operatorSturm_prev_edge_indicator_zero_of_center_gt_and_flip
+    (M : ℕ) (x : ℝ)
+    (hcx : x < operatorCenterAt (M + 1))
+    (hflip : operatorSturmSign (operatorSturmP (M + 1) x) ≠
+      operatorSturmSign (operatorSturmP (M + 2) x))
+    (hp1nz : operatorSturmP (M + 1) x ≠ 0) :
+    (if operatorSturmSign (operatorSturmP M x) ≠
+          operatorSturmSign (operatorSturmP (M + 1) x) then 1 else 0) = 0 := by
+  have hsame :
+      operatorSturmSign (operatorSturmP M x) =
+        operatorSturmSign (operatorSturmP (M + 1) x) :=
+    operatorSturm_prev_sign_eq_of_center_gt_and_flip M x hcx hflip hp1nz
+  simp [hsame]
 
 /-- Finite sign-variation count on consecutive Sturm recurrence values
 `p₀(x), p₁(x), ..., p_{M+1}(x)`. -/
