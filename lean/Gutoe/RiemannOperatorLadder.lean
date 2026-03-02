@@ -1399,6 +1399,98 @@ theorem summable_one_div_normSq_criticalLine_operatorLargeOrdinate :
   exact Summable.of_nonneg_of_le hnonneg hle
     summable_one_div_abs_sq_operatorLargeOrdinate
 
+/-- Path-B finite-level full-spectrum bound under indexed linear growth:
+if each indexed operator eigenvalue at level `M+1` has linear lower growth,
+then the complete inverse-square sum over `operatorSpecN M` is uniformly bounded in `M`. -/
+theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_indexed_linear_growth
+    (hlin : ∀ M : ℕ, ∀ i : Fin (M + 1),
+      (((i.1 + 1 : ℕ) : ℝ) / 2) ≤ operatorEigenvalues M i) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
+  let a : ℕ → ℝ := fun n => (4 : ℝ) * ((1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ)))
+  have ha_nonneg : ∀ n : ℕ, 0 ≤ a n := by
+    intro n
+    dsimp [a]
+    positivity
+  have hsum_a : Summable a := by
+    have hbase0 : Summable (fun n : ℕ => (1 : ℝ) / ((n : ℝ) ^ (2 : ℕ))) :=
+      (Real.summable_one_div_nat_pow).2 (by norm_num)
+    have hshift : Summable (fun n : ℕ => (1 : ℝ) / (((n + 1 : ℕ) : ℝ) ^ (2 : ℕ))) := by
+      simpa [Nat.cast_add, add_assoc, add_comm, add_left_comm] using
+        (summable_nat_add_iff 1).2 hbase0
+    simpa [a] using hshift.mul_left (4 : ℝ)
+  refine ⟨∑' n : ℕ, a n, tsum_nonneg ha_nonneg, ?_⟩
+  intro M
+  classical
+  have himage_le :
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ)))
+        ≤ Finset.sum Finset.univ
+            (fun i : Fin (M + 1) =>
+              (1 : ℝ) / (‖criticalLinePoint (operatorEigenvalues M i)‖ ^ (2 : ℕ))) := by
+    unfold operatorSpecN
+    simpa using
+      (Finset.sum_image_le_of_nonneg
+        (s := (Finset.univ : Finset (Fin (M + 1))))
+        (g := fun i : Fin (M + 1) => operatorEigenvalues M i)
+        (f := fun t : ℝ => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ)))
+        (by intro u hu; positivity))
+  have hindex_le :
+      Finset.sum Finset.univ
+          (fun i : Fin (M + 1) =>
+            (1 : ℝ) / (‖criticalLinePoint (operatorEigenvalues M i)‖ ^ (2 : ℕ)))
+        ≤ Finset.sum Finset.univ (fun i : Fin (M + 1) => a i.1) := by
+    refine Finset.sum_le_sum (fun i _ => ?_)
+    let t : ℝ := operatorEigenvalues M i
+    have hlin_i : (((i.1 + 1 : ℕ) : ℝ) / 2) ≤ t := hlin M i
+    have hnonneg_half : 0 ≤ (((i.1 + 1 : ℕ) : ℝ) / 2) := by positivity
+    have hnonneg_t : 0 ≤ t := le_trans hnonneg_half hlin_i
+    have hnorm_ge_t : t ≤ ‖criticalLinePoint t‖ := by
+      have him_abs : |(criticalLinePoint t).im| ≤ ‖criticalLinePoint t‖ :=
+        Complex.abs_im_le_norm (criticalLinePoint t)
+      have him_eq : |(criticalLinePoint t).im| = t := by
+        simpa [criticalLinePoint_im, abs_of_nonneg hnonneg_t]
+      simpa [him_eq] using him_abs
+    have hnorm_lower : (((i.1 + 1 : ℕ) : ℝ) / 2) ≤ ‖criticalLinePoint t‖ :=
+      le_trans hlin_i hnorm_ge_t
+    have hpow_lower :
+        ((((i.1 + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ))
+          ≤ ‖criticalLinePoint t‖ ^ (2 : ℕ) := by
+      exact pow_le_pow_left₀ hnonneg_half hnorm_lower (2 : ℕ)
+    have hpow_half_pos : 0 < ((((i.1 + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ)) := by
+      positivity
+    have hrecip :
+        (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))
+          ≤ (1 : ℝ) / ((((i.1 + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ)) := by
+      exact one_div_le_one_div_of_le hpow_half_pos hpow_lower
+    have hi1_ne : (((i.1 + 1 : ℕ) : ℝ)) ≠ 0 := by
+      exact_mod_cast Nat.succ_ne_zero i.1
+    have hrewrite :
+        (1 : ℝ) / ((((i.1 + 1 : ℕ) : ℝ) / 2) ^ (2 : ℕ)) = a i.1 := by
+      dsimp [a]
+      field_simp [hi1_ne]
+      ring
+    have hmain :
+        (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ)) ≤ a i.1 := by
+      rw [← hrewrite]
+      exact hrecip
+    simpa [t] using hmain
+  have hsum_range :
+      Finset.sum Finset.univ (fun i : Fin (M + 1) => a i.1)
+        = Finset.sum (Finset.range (M + 1)) a := by
+    simpa using (Fin.sum_univ_eq_sum_range (f := fun n : ℕ => a n) (n := M + 1))
+  have hrange_le_tsum :
+      Finset.sum (Finset.range (M + 1)) a ≤ ∑' n : ℕ, a n := by
+    exact Summable.sum_le_tsum (s := Finset.range (M + 1)) (f := a)
+      (hs := by intro n hn; exact ha_nonneg n) hsum_a
+  calc
+    Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ)))
+        ≤ Finset.sum Finset.univ
+            (fun i : Fin (M + 1) =>
+              (1 : ℝ) / (‖criticalLinePoint (operatorEigenvalues M i)‖ ^ (2 : ℕ))) := himage_le
+    _ ≤ Finset.sum Finset.univ (fun i : Fin (M + 1) => a i.1) := hindex_le
+    _ = Finset.sum (Finset.range (M + 1)) a := hsum_range
+    _ ≤ ∑' n : ℕ, a n := hrange_le_tsum
+
 /-- Cardinality growth control for the concrete operator spectral ladder. -/
 theorem card_operatorSpecN_le (N : ℕ) :
     (operatorSpecN N).card ≤ N + 1 := by
