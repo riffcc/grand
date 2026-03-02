@@ -746,6 +746,20 @@ theorem operatorSturmSignVariationCount_succ_eq_add_indicator (M : ℕ) (x : ℝ
     simpa [P, hP] using hcard
   · simp [P, hP]
 
+/-- Recurrence-explicit form of the successor decomposition:
+the new terminal-edge indicator is written using the concrete three-term recurrence
+for `p_{M+2}`. -/
+theorem operatorSturmSignVariationCount_succ_eq_add_indicator_recurrence (M : ℕ) (x : ℝ) :
+    operatorSturmSignVariationCount (M + 1) x =
+      operatorSturmSignVariationCount M x +
+        (if operatorSturmSign (operatorSturmP (M + 1) x) ≠
+              operatorSturmSign
+                ((operatorSturmDiag (M + 1) - x) * operatorSturmP (M + 1) x
+                  - (operatorSturmOff ^ (2 : ℕ)) * operatorSturmP M x)
+         then 1 else 0) := by
+  simpa [operatorSturmP_step] using
+    operatorSturmSignVariationCount_succ_eq_add_indicator M x
+
 /-- Gershgorin-window separation geometry used by the Sturm route:
 if indices are at least `3` apart (forward), radius-`12/11` windows are strictly separated. -/
 theorem operatorCenterWindow_separated_of_add_three_le
@@ -1076,7 +1090,8 @@ theorem sturmCenter_gap_step_preserved_of_stepCompatibility
   let b : ℕ := if operatorCenterAt (M + 1) ≤ x then 1 else 0
   have hA' : operatorSturmSignVariationCount (M + 1) x = A + a := by
     unfold A a
-    simpa using operatorSturmSignVariationCount_succ_eq_add_indicator M x
+    simpa [operatorSturmP_step] using
+      operatorSturmSignVariationCount_succ_eq_add_indicator_recurrence M x
   have hB' : operatorCenterCountLE (M + 1) x = B + b := by
     unfold B b
     simpa using operatorCenterCountLE_succ_eq_add_indicator M x
@@ -1133,19 +1148,7 @@ theorem operatorSturmCountContract_of_signVariationBridge_and_edgeLock
   have hGapSC : operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
       operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1 := by
     induction' M with M ih
-    · have hA0 : operatorSturmSignVariationCount 0 x ≤ 1 := by
-        simpa using operatorSturmSignVariationCount_le 0 x
-      have hB0 : operatorCenterCountLE 0 x ≤ 1 := by
-        rw [operatorCenterCountLE_eq_range_filter_card]
-        calc
-          ((Finset.range (0 + 1)).filter (fun k => operatorCenterAt k ≤ x)).card
-              ≤ (Finset.range (0 + 1)).card := by
-                simpa using (Finset.card_filter_le (s := Finset.range (0 + 1))
-                  (p := fun k => operatorCenterAt k ≤ x))
-          _ = 1 := by simp
-      constructor
-      · exact le_trans hA0 (by omega)
-      · exact le_trans hB0 (by omega)
+    · simpa using operatorSturmSignVariationCount_centerCount_gap_zero x
     · exact sturmCenter_gap_step_preserved M x ih (hEdgeLock M x)
   constructor
   · simpa [hEigSturm M x] using hGapSC.1
@@ -1162,19 +1165,7 @@ theorem operatorSturmCountContract_of_signVariationBridge_and_stepCompatibility
   have hGapSC : operatorSturmSignVariationCount M x ≤ operatorCenterCountLE M x + 1 ∧
       operatorCenterCountLE M x ≤ operatorSturmSignVariationCount M x + 1 := by
     induction' M with M ih
-    · have hA0 : operatorSturmSignVariationCount 0 x ≤ 1 := by
-        simpa using operatorSturmSignVariationCount_le 0 x
-      have hB0 : operatorCenterCountLE 0 x ≤ 1 := by
-        rw [operatorCenterCountLE_eq_range_filter_card]
-        calc
-          ((Finset.range (0 + 1)).filter (fun k => operatorCenterAt k ≤ x)).card
-              ≤ (Finset.range (0 + 1)).card := by
-                simpa using (Finset.card_filter_le (s := Finset.range (0 + 1))
-                  (p := fun k => operatorCenterAt k ≤ x))
-          _ = 1 := by simp
-      constructor
-      · exact le_trans hA0 (by omega)
-      · exact le_trans hB0 (by omega)
+    · simpa using operatorSturmSignVariationCount_centerCount_gap_zero x
     · exact sturmCenter_gap_step_preserved_of_stepCompatibility M x ih hCompat
   constructor
   · simpa [hEigSturm M x] using hGapSC.1
