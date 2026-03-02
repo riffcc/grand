@@ -2573,6 +2573,32 @@ def OperatorSameMinPlusOneNoPrevObligation : Prop :=
         (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 →
       ∀ i : ℕ, i < (j - 1) → operatorGreedyChoiceNat M i ≠ c
 
+/-- Bridge: same-min `min+1` availability implies the explicit no-previous-pick
+obligation for canonical `min+1`. -/
+theorem operatorSameMinPlusOneNoPrevObligation_of_plusOneAvailInSameMin
+    (hPlusOneAvailInSameMin :
+      ∀ M : ℕ, ∀ j : ℕ, ∀ hj : j < operatorGreedyCard M, ∀ hjpos : 0 < j,
+      ∀ hjm1 : j - 1 < operatorGreedyCard M,
+        (∀ k : ℕ, ∀ hk : k < j,
+          operatorEigenvalueOrderedCenterChoiceMin M ⟨k, lt_trans hk hj⟩ ∈
+            operatorGreedyAvailableNat M k) →
+        (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 =
+          (operatorEigenvalueOrderedCenterChoiceMin M ⟨j, hj⟩).1 →
+        ∃ c : Fin (M + 1),
+          c.1 =
+            (operatorEigenvalueOrderedCenterChoiceMin M ⟨j - 1, hjm1⟩).1 + 1 ∧
+          c ∈ operatorGreedyAvailableNat M (j - 1)) :
+    OperatorSameMinPlusOneNoPrevObligation := by
+  intro M j hj hjpos hjm1 hPrefix hSameMin c hcEq i hi
+  rcases hPlusOneAvailInSameMin M j hj hjpos hjm1 hPrefix hSameMin with
+    ⟨c', hc'Eq, hc'Avail⟩
+  have hcc' : c = c' := by
+    apply Fin.ext
+    omega
+  have hAvail : c ∈ operatorGreedyAvailableNat M (j - 1) := by
+    simpa [hcc'] using hc'Avail
+  exact (operatorAvailable_mem_iff_no_prev M (j - 1) (Nat.le_of_lt hjm1) c).1 hAvail i hi
+
 /-- Endgame closure from the explicit final seam:
 if same-min branches satisfy `max(j-1)>min(j-1)` and the no-previous-pick
 obligation for canonical `min+1`, then the greedy route closes
