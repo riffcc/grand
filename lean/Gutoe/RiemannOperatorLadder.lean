@@ -953,6 +953,124 @@ theorem operatorCenterCandidatesOrdered_width_le_two
       (i := operatorEigenvalueOrderedCenterChoiceMin M j) hmin_mem
   omega
 
+/-- Arithmetic overlap kernel for the structural radius `12/11` and unit center spacing:
+if `|y| ≤ 12/11`, then at least one shifted neighbor is also within `12/11`. -/
+theorem abs_shift_neighbor_le_twelve_over_eleven
+    (y : ℝ) (hy : |y| ≤ (12 : ℝ) / 11) :
+    |y + 1| ≤ (12 : ℝ) / 11 ∨ |y - 1| ≤ (12 : ℝ) / 11 := by
+  by_contra h
+  have hplus : ¬ |y + 1| ≤ (12 : ℝ) / 11 := by
+    exact (not_or.mp h).1
+  have hminus : ¬ |y - 1| ≤ (12 : ℝ) / 11 := by
+    exact (not_or.mp h).2
+  have hylo : -((12 : ℝ) / 11) ≤ y := by
+    linarith [(abs_le.mp hy).1]
+  have hyhi : y ≤ (12 : ℝ) / 11 := by
+    linarith [(abs_le.mp hy).2]
+  have hy_gt_one_over_eleven : (1 : ℝ) / 11 < y := by
+    by_cases hnonneg : 0 ≤ y + 1
+    · have hAbsEq : |y + 1| = y + 1 := abs_of_nonneg hnonneg
+      have hgt : (12 : ℝ) / 11 < y + 1 := by
+        simpa [hAbsEq] using (lt_of_not_ge hplus)
+      linarith [hgt]
+    · have hy1lt : y + 1 < 0 := lt_of_not_ge hnonneg
+      have hAbsEq : |y + 1| = -(y + 1) := abs_of_neg hy1lt
+      have hgt : (12 : ℝ) / 11 < -(y + 1) := by simpa [hAbsEq] using (lt_of_not_ge hplus)
+      linarith [hgt, hylo]
+  have hy_lt_neg_one_over_eleven : y < -((1 : ℝ) / 11) := by
+    by_cases hnonneg : 0 ≤ y - 1
+    · have hAbsEq : |y - 1| = y - 1 := abs_of_nonneg hnonneg
+      have hgt : (12 : ℝ) / 11 < y - 1 := by
+        simpa [hAbsEq] using (lt_of_not_ge hminus)
+      linarith [hgt, hyhi]
+    · have hy1lt : y - 1 < 0 := lt_of_not_ge hnonneg
+      have hAbsEq : |y - 1| = -(y - 1) := abs_of_neg hy1lt
+      have hgt : (12 : ℝ) / 11 < -(y - 1) := by simpa [hAbsEq] using (lt_of_not_ge hminus)
+      linarith [hgt]
+  linarith
+
+/-- Interior ordered candidate intervals cannot collapse to a singleton:
+if the minimum candidate index is strictly inside `0..M`, then the maximum is
+strictly larger than the minimum. -/
+theorem operatorCenterCandidatesOrdered_min_lt_max_of_interior
+    (M : ℕ) (j : Fin (Fintype.card (Fin (M + 1))))
+    (hmin_pos : 0 < (operatorEigenvalueOrderedCenterChoiceMin M j).1)
+    (hmax_lt : (operatorEigenvalueOrderedCenterChoiceMax M j).1 < M) :
+    (operatorEigenvalueOrderedCenterChoiceMin M j).1 <
+      (operatorEigenvalueOrderedCenterChoiceMax M j).1 := by
+  let m : Fin (M + 1) := operatorEigenvalueOrderedCenterChoiceMin M j
+  let kmax : Fin (M + 1) := operatorEigenvalueOrderedCenterChoiceMax M j
+  let x : ℝ := operatorEigenvaluesOrdered M j
+  have hm_mem : m ∈ operatorCenterCandidatesOrdered M j :=
+    operatorEigenvalueOrderedCenterChoiceMin_mem M j
+  have hkmax_mem : kmax ∈ operatorCenterCandidatesOrdered M j :=
+    operatorEigenvalueOrderedCenterChoiceMax_mem M j
+  have hmin_le_max_fin : m ≤ kmax := by
+    exact Finset.min'_le (operatorCenterCandidatesOrdered M j) kmax hkmax_mem
+  have hmin_le_max : m.1 ≤ kmax.1 := hmin_le_max_fin
+  have hm_lt_M : m.1 < M := lt_of_le_of_lt hmin_le_max hmax_lt
+  let kPrev : Fin (M + 1) := ⟨m.1 - 1, by omega⟩
+  let kNext : Fin (M + 1) := ⟨m.1 + 1, by omega⟩
+  have hy_center :
+      |x - ((m.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+    simpa [x, m] using (Finset.mem_filter.mp hm_mem).2
+  let y : ℝ := x - ((m.1 : ℝ) + (29 : ℝ) / 16)
+  have hy : |y| ≤ (12 : ℝ) / 11 := by
+    simpa [y] using hy_center
+  have hneighbor :
+      |x - ((kPrev.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 ∨
+        |x - ((kNext.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 := by
+    have hshift := abs_shift_neighbor_le_twelve_over_eleven y hy
+    have hshift' :
+        |(x - ((m.1 : ℝ) + (29 : ℝ) / 16)) + 1| ≤ (12 : ℝ) / 11 ∨
+          |(x - ((m.1 : ℝ) + (29 : ℝ) / 16)) - 1| ≤ (12 : ℝ) / 11 := by
+      simpa [y] using hshift
+    rcases hshift' with hprev | hnext
+    · left
+      have hprev_rewrite :
+          x - ((kPrev.1 : ℝ) + (29 : ℝ) / 16) =
+            (x - ((m.1 : ℝ) + (29 : ℝ) / 16)) + 1 := by
+        have hkPrev_val : (kPrev.1 : ℝ) = (m.1 : ℝ) - 1 := by
+          have hm_pos : 0 < m.1 := by simpa [m] using hmin_pos
+          have hm1_le : 1 ≤ m.1 := Nat.succ_le_of_lt hm_pos
+          have hkPrev_nat : kPrev.1 = m.1 - 1 := by simp [kPrev]
+          rw [hkPrev_nat, Nat.cast_sub hm1_le]
+          norm_num
+        linarith [hkPrev_val]
+      simpa [hprev_rewrite] using hprev
+    · right
+      simpa [kNext, sub_eq_add_neg, add_assoc, add_left_comm, add_comm] using hnext
+  have hsingleton_impossible : kmax.1 ≠ m.1 := by
+    intro hEq
+    have hprev_not_mem : kPrev ∉ operatorCenterCandidatesOrdered M j := by
+      intro hkPrev_mem
+      have hle : m ≤ kPrev := Finset.min'_le (operatorCenterCandidatesOrdered M j) kPrev hkPrev_mem
+      have hkPrev_lt : kPrev.1 < m.1 := by
+        have hm_pos : 0 < m.1 := by simpa [m] using hmin_pos
+        have hkPrev_val : kPrev.1 = m.1 - 1 := by
+          simp [kPrev]
+        rw [hkPrev_val]
+        omega
+      exact (not_lt_of_ge hle) hkPrev_lt
+    have hnext_not_mem : kNext ∉ operatorCenterCandidatesOrdered M j := by
+      intro hkNext_mem
+      have hle : kNext ≤ kmax := Finset.le_max' (operatorCenterCandidatesOrdered M j) kNext hkNext_mem
+      have hkNext_gt : kmax.1 < kNext.1 := by
+        have hm_lt : m.1 < m.1 + 1 := Nat.lt_succ_self m.1
+        simpa [hEq, kNext] using hm_lt
+      exact (not_lt_of_ge hle) hkNext_gt
+    rcases hneighbor with hprev_abs | hnext_abs
+    · have hkPrev_mem : kPrev ∈ operatorCenterCandidatesOrdered M j := by
+        exact Finset.mem_filter.mpr ⟨by simp [kPrev], by simpa [x, kPrev] using hprev_abs⟩
+      exact hprev_not_mem hkPrev_mem
+    · have hkNext_mem : kNext ∈ operatorCenterCandidatesOrdered M j := by
+        exact Finset.mem_filter.mpr ⟨by simp [kNext], by simpa [x, kNext] using hnext_abs⟩
+      exact hnext_not_mem hkNext_mem
+  have hkmax_not_le_m : ¬ kmax.1 ≤ m.1 := by
+    intro hkmax_le_m
+    exact hsingleton_impossible (le_antisymm hkmax_le_m hmin_le_max)
+  exact lt_of_not_ge hkmax_not_le_m
+
 /-- Monotonicity of the canonical minimal ordered-lane center selector:
 as ordered eigenvalue index increases, the selected center index cannot increase. -/
 theorem operatorEigenvalueOrderedCenterChoiceMin_antitone
