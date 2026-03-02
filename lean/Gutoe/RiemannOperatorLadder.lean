@@ -5164,6 +5164,58 @@ theorem operatorCenterCandidatesOrdered_singleton_bottom_reflect_exists_top
       M j j' hRef hMinBot hMaxBot
   exact ⟨j', hRef, hTop.1, hTop.2⟩
 
+/-- Quantitative consequence of a bottom-collapsed ordered candidate interval:
+for `M ≥ 4`, the corresponding ordered eigenvalue lies strictly below the
+structural center half. -/
+theorem operatorEigenvaluesOrdered_lt_centerHalf_of_singleton_bottom
+    (M : ℕ)
+    (j : Fin (Fintype.card (Fin (M + 1))))
+    (hM4 : 4 ≤ M)
+    (hMinBot : (operatorEigenvalueOrderedCenterChoiceMin M j).1 = 0)
+    (hMaxBot : (operatorEigenvalueOrderedCenterChoiceMax M j).1 = 0) :
+    operatorEigenvaluesOrdered M j < (structuralCenterQ (M + 1) : ℝ) / 2 := by
+  let kBot : Fin (M + 1) := ⟨0, Nat.succ_pos M⟩
+  have hkBot_mem : kBot ∈ operatorCenterCandidatesOrdered M j := by
+    have hmem : operatorEigenvalueOrderedCenterChoiceMax M j ∈ operatorCenterCandidatesOrdered M j :=
+      operatorEigenvalueOrderedCenterChoiceMax_mem M j
+    have hEqBot : operatorEigenvalueOrderedCenterChoiceMax M j = kBot := by
+      apply Fin.ext
+      simpa [kBot] using hMaxBot
+    simpa [hEqBot] using hmem
+  have hkAbs :
+      |operatorEigenvaluesOrdered M j - ((kBot.1 : ℝ) + (29 : ℝ) / 16)| ≤ (12 : ℝ) / 11 :=
+    (Finset.mem_filter.mp hkBot_mem).2
+  have hupper :
+      operatorEigenvaluesOrdered M j ≤ (637 : ℝ) / 176 := by
+    have hright : operatorEigenvaluesOrdered M j - (29 : ℝ) / 16 ≤ (12 : ℝ) / 11 := by
+      simpa [kBot] using (abs_le.mp hkAbs).2
+    have hconst : (29 : ℝ) / 16 + (12 : ℝ) / 11 = (637 : ℝ) / 176 := by norm_num
+    have : operatorEigenvaluesOrdered M j ≤ (29 : ℝ) / 16 + (12 : ℝ) / 11 := by linarith
+    simpa [hconst] using this
+  have hhalf_lower : (637 : ℝ) / 176 < (structuralCenterQ (M + 1) : ℝ) / 2 := by
+    have hMreal : (4 : ℝ) ≤ M := by exact_mod_cast hM4
+    norm_num [structuralCenterQ, timelikeOffsetQ]
+    linarith
+  exact lt_of_le_of_lt hupper hhalf_lower
+
+/-- Reflected-index localization from a bottom-collapsed ordered candidate
+interval (for `M ≥ 4`): the reflected ordered partner lies strictly earlier in
+the antitone ordered lane. -/
+theorem operatorEigenvaluesOrdered_reflect_index_lt_of_singleton_bottom
+    (M : ℕ)
+    (j : Fin (Fintype.card (Fin (M + 1))))
+    (hM4 : 4 ≤ M)
+    (hMinBot : (operatorEigenvalueOrderedCenterChoiceMin M j).1 = 0)
+    (hMaxBot : (operatorEigenvalueOrderedCenterChoiceMax M j).1 = 0) :
+    ∃ j' : Fin (Fintype.card (Fin (M + 1))),
+      operatorEigenvaluesOrdered M j' =
+        (structuralCenterQ (M + 1) : ℝ) - operatorEigenvaluesOrdered M j ∧
+      j' < j := by
+  have hHalf :
+      operatorEigenvaluesOrdered M j < (structuralCenterQ (M + 1) : ℝ) / 2 :=
+    operatorEigenvaluesOrdered_lt_centerHalf_of_singleton_bottom M j hM4 hMinBot hMaxBot
+  exact operatorEigenvaluesOrdered_reflect_index_lt_of_lt_centerHalf M j hHalf
+
 /-- Index-order bridge for the antitone ordered eigenvalue lane:
 if one ordered value is strictly smaller than another, then its index is
 strictly larger. -/
