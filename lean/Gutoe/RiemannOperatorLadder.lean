@@ -719,6 +719,19 @@ theorem operatorEigenvalueOrderedCenterChoiceMax_no_up_jump_three
     (hSpec := operatorEigenvalueOrderedCenterChoiceMax_spec M)
     hij hjump
 
+/-- Ordered-lane jump exclusion for the canonical minimal center selector. -/
+theorem operatorEigenvalueOrderedCenterChoiceMin_no_up_jump_three
+    (M : ℕ)
+    {i j : Fin (Fintype.card (Fin (M + 1)))} (hij : i < j)
+    (hjump :
+      (operatorEigenvalueOrderedCenterChoiceMin M i).1 + 3
+        ≤ (operatorEigenvalueOrderedCenterChoiceMin M j).1) :
+    False := by
+  exact operatorEigenvalueOrdered_no_up_jump_three_of_spec M
+    (f := operatorEigenvalueOrderedCenterChoiceMin M)
+    (hSpec := operatorEigenvalueOrderedCenterChoiceMin_spec M)
+    hij hjump
+
 /-- Monotonicity of the canonical maximal ordered-lane center selector:
 as ordered eigenvalue index increases, the selected center index cannot increase. -/
 theorem operatorEigenvalueOrderedCenterChoiceMax_antitone
