@@ -3521,6 +3521,16 @@ theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_centerGapPermut
     _ = Finset.sum (Finset.range (M + 1)) a := hsum_range
     _ ≤ ∑' n : ℕ, a n := hrange_le_tsum
 
+/-- Static (non-recurrence) summability route:
+the finite-level uniform inverse-square bound follows directly from
+permutation-invariant center-gap geometry, with no Sturm step-exclusion
+induction required. -/
+theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_static_center_gap_geometry
+    (hP : OperatorCenterGapPermutationInvariant) :
+    ∃ C : ℝ, 0 ≤ C ∧ ∀ M : ℕ,
+      Finset.sum (operatorSpecN M) (fun t => (1 : ℝ) / (‖criticalLinePoint t‖ ^ (2 : ℕ))) ≤ C := by
+  exact exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_centerGapPermutationInvariant hP
+
 /-- One-assumption Weyl reduction:
 the Weyl center-gap contract directly yields the finite-level uniform inverse-square bound. -/
 theorem exists_uniform_bound_sum_one_div_normSq_operatorSpecN_of_weylCenterGap
@@ -4068,6 +4078,39 @@ theorem mathlibRH_of_operator_hurwitzKernel_and_limitExists_uniqueness
   exact mathlibRH_of_operator_hurwitzKernel_and_locallyUniform hKernel
     (operatorXiFiniteLocallyUniformConvergence_of_limitExists_and_uniqueness
       hExist hUnique)
+
+/-- Endgame surface (overconstrained-limit route):
+1) concrete operator Hurwitz kernel, and
+2) existence + uniqueness of a locally-uniform limit of the operator finite ladder.
+
+This packages the final analytic burden in one named obligation bundle. -/
+def OperatorOverconstrainedEndgameObligation : Prop :=
+  OperatorHurwitzKernel ∧
+  OperatorXiFiniteLocallyUniformLimitExists ∧
+  OperatorXiFiniteLocallyUniformLimitUniqueness
+
+/-- RH closure from the overconstrained endgame surface. -/
+theorem mathlibRH_of_operator_overconstrained_endgame
+    (hEnd : OperatorOverconstrainedEndgameObligation) :
+    RiemannHypothesis := by
+  rcases hEnd with ⟨hKernel, hExist, hUnique⟩
+  exact mathlibRH_of_operator_hurwitzKernel_and_limitExists_uniqueness
+    hKernel hExist hUnique
+
+/-- Single hard obligation once Hurwitz kernel is fixed:
+existence + uniqueness of the locally-uniform operator-ladder limit. -/
+def OperatorSingleHardObligation : Prop :=
+  OperatorXiFiniteLocallyUniformLimitExists ∧
+  OperatorXiFiniteLocallyUniformLimitUniqueness
+
+/-- RH closure from a fixed Hurwitz kernel plus the single hard obligation. -/
+theorem mathlibRH_of_operator_hurwitzKernel_and_single_hard_obligation
+    (hKernel : OperatorHurwitzKernel)
+    (hHard : OperatorSingleHardObligation) :
+    RiemannHypothesis := by
+  rcases hHard with ⟨hExist, hUnique⟩
+  exact mathlibRH_of_operator_hurwitzKernel_and_limitExists_uniqueness
+    hKernel hExist hUnique
 
 /-- Zero-tolerance operator approximation already implies the Hurwitz-output
 surface (with exact finite-level zeros at the target point itself). -/
