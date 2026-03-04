@@ -98,6 +98,14 @@ theorem exists_ordinateEnumeration_of_semantic_bridge
       exact htXi
     exact hne ⟨t, htH⟩
 
+/-- Compatibility surface for the original endgame gap name:
+    Weyl/m-function contract obligations imply nontrivial-zero ordinate
+    enumeration. -/
+theorem ordinateEnumeration_of_weyl_and_m
+    (hC : RiemannWeylIdentityContract) :
+    ∃ ρ : ℕ → ℝ, RiemannNontrivialZeroOrdinateEnumeration ρ := by
+  exact exists_ordinateEnumeration_of_semantic_bridge hC
+
 /-- RH closure from the Weyl/m-function endgame contract. -/
 theorem mathlibRH_of_weyl_identity_contract
     (hC : RiemannWeylIdentityContract) :
