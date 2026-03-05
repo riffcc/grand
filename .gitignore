@@ -22,3 +22,8 @@ venv/
 
 AGENTS.md
 SPEC.md
+
+# Local Codex probe artifacts
+lean/Gutoe/codex_test_signal.lean
+lean/Gutoe/codex_test_signal_2.lean
+lean/Gutoe/probe.txt
