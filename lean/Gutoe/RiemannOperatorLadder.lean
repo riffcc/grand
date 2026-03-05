@@ -6905,6 +6905,34 @@ def OperatorApproxZeroConvergence : Prop :=
     operatorXiFiniteLadder
     Gutoe.RiemannTargetFiniteLadder.tolZero
 
+/-- Explicit exact-zero form of `OperatorApproxZeroConvergence`. -/
+theorem operatorApproxZeroConvergence_iff_eventual_exact_zero :
+    OperatorApproxZeroConvergence ↔
+      (∀ s : ℂ, XiTarget s = 0 → ∃ N : ℕ, operatorXiFiniteLadder N s = 0) := by
+  constructor
+  · intro hApprox s hs
+    rcases hApprox s hs with ⟨N, hN⟩
+    have hnorm0 : ‖operatorXiFiniteLadder N s‖ = 0 :=
+      le_antisymm hN (norm_nonneg _)
+    exact ⟨N, norm_eq_zero.mp hnorm0⟩
+  · intro hExact s hs
+    rcases hExact s hs with ⟨N, hN0⟩
+    refine ⟨N, ?_⟩
+    simp [Gutoe.RiemannTargetFiniteLadder.tolZero, hN0]
+
+/-- Canonical convergence-transfer contract on the concrete operator lane,
+assembled from `OperatorApproxZeroConvergence`. -/
+def operatorConvergenceTransferContract_of_operatorApproxZero
+    (hApprox : OperatorApproxZeroConvergence) :
+    RHConvergenceTransferContract XiTarget where
+  XiN := operatorXiFiniteLadder
+  specN := operatorSpecN
+  finiteBridge := finiteBridgeFamily_XiFiniteLadder operatorSpecN
+  tol := Gutoe.RiemannTargetFiniteLadder.tolZero
+  tolNonneg := Gutoe.RiemannTargetFiniteLadder.zeroTol_tolZero
+  approxZero := hApprox
+  rigidity := rigidity_tolZero operatorXiFiniteLadder
+
 /-- For the concrete operator ladder, zero-tolerance approximation is exactly
 finite-ladder `XiTarget` zero-capture. -/
 theorem operatorApproxZero_iff_xiTarget_capture :
